@@ -47,6 +47,25 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+@theme {
+  /* SYNESI colour tokens */
+  --color-synesi-bg: #0A0A0C;
+  --color-synesi-surface: #141418;
+  --color-synesi-elevated: #1C1C22;
+  --color-synesi-border: #2A2A32;
+  --color-synesi-text: #F0F0F0;
+  --color-synesi-muted: #6B6B7B;
+  --color-synesi-accent: #FFFFFF;
+  --color-synesi-accent-hover: #E8E8E8;
+  --color-synesi-intact: #00D1B2;
+  --color-synesi-at-risk: #FFB800;
+  --color-synesi-broken: #FF3B30;
+
+  /* SYNESI font tokens */
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains), monospace;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -126,4 +145,13 @@
   html {
     @apply font-sans;
   }
+}
+
+/* SYNESI base styles */
+body {
+  background-color: #0A0A0C;
+  color: #F0F0F0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
