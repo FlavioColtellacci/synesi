@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient<Database>(
@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
       .from('profiles')
       .select('subscription_status')
       .eq('id', user.id)
-      .single()
+      .single<{ subscription_status: string | null }>()
 
     if (profile?.subscription_status !== 'active') {
       supabaseResponse = NextResponse.redirect(new URL('/pricing', request.url))
