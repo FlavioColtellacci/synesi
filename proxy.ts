@@ -5,6 +5,10 @@ import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === '/api/stripe/webhook') {
+    return NextResponse.next()
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient<Database>(
@@ -54,5 +58,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/api/:path*'],
+  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook).*)'],
 }
