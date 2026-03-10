@@ -37,6 +37,7 @@ function getSubscriptionId(
 }
 
 export async function POST(request: Request) {
+  console.log('[Webhook] Received request, method:', request.method)
   const rawBody = await request.text()
   const signature = request.headers.get('stripe-signature')
 
@@ -52,7 +53,10 @@ export async function POST(request: Request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
     )
-  } catch {
+    console.log('[Webhook] Event type:', event.type)
+    console.log('[Webhook] Event id:', event.id)
+  } catch (err) {
+    console.error('[Webhook] Error:', err instanceof Error ? err.message : String(err))
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -62,6 +66,7 @@ export async function POST(request: Request) {
         const checkoutEvent = event as Stripe.CheckoutSessionCompletedEvent
         const session = checkoutEvent.data.object
         const customerId = getCustomerId(session.customer)
+        console.log('[Webhook] Customer ID from session:', customerId)
         const subscriptionId = getSubscriptionId(session.subscription)
 
         if (!customerId || !subscriptionId) {
@@ -82,7 +87,7 @@ export async function POST(request: Request) {
           : new Date().toISOString()
         const admin = createAdminClient()
 
-        await admin
+        const { data, error } = await admin
           .from('profiles')
           .update({
             subscription_status: 'active',
@@ -91,8 +96,15 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_customer_id', customerId)
-      } catch (error) {
-        console.error('Webhook checkout.session.completed handling failed:', error)
+        console.log(
+          '[Webhook] Supabase update result:',
+          JSON.stringify(data),
+          'error:',
+          JSON.stringify(error)
+        )
+      } catch (err) {
+        console.error('[Webhook] Error:', err instanceof Error ? err.message : String(err))
+        console.error('Webhook checkout.session.completed handling failed:', err)
       }
       break
     }
