@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
       .from('profiles')
       .select('subscription_status')
       .eq('id', user.id)
-      .single<{ subscription_status: string | null }>()
+      .single()
 
     if (profile?.subscription_status !== 'active') {
       supabaseResponse = NextResponse.redirect(new URL('/pricing', request.url))

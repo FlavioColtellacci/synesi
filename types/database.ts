@@ -1,5 +1,3 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
-
 export type Database = {
   public: {
     Tables: {
@@ -9,19 +7,19 @@ export type Database = {
           email: string
           full_name: string | null
           stripe_customer_id: string | null
-          subscription_status: 'active' | 'inactive' | 'cancelled'
-          subscription_plan: 'monthly' | 'annual' | null
+          subscription_status: string
+          subscription_plan: string | null
           subscription_period_end: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
-          id?: string
+          id: string
           email: string
           full_name?: string | null
           stripe_customer_id?: string | null
-          subscription_status?: 'active' | 'inactive' | 'cancelled'
-          subscription_plan?: 'monthly' | 'annual' | null
+          subscription_status?: string
+          subscription_plan?: string | null
           subscription_period_end?: string | null
           created_at?: string
           updated_at?: string
@@ -31,12 +29,13 @@ export type Database = {
           email?: string
           full_name?: string | null
           stripe_customer_id?: string | null
-          subscription_status?: 'active' | 'inactive' | 'cancelled'
-          subscription_plan?: 'monthly' | 'annual' | null
+          subscription_status?: string
+          subscription_plan?: string | null
           subscription_period_end?: string | null
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       theses: {
         Row: {
@@ -45,13 +44,13 @@ export type Database = {
           ticker: string
           company_name: string
           thesis_statement: string
-          investing_style: 'value' | 'growth' | 'income' | 'turnaround' | 'macro' | null
+          investing_style: string | null
           bull_case: string | null
           base_case: string | null
           bear_case: string | null
           exit_criteria: string | null
-          confidence_level: 'high' | 'medium' | 'low'
-          status: 'intact' | 'at_risk' | 'broken'
+          confidence_level: string
+          status: string
           purchase_date: string | null
           purchase_price: number | null
           created_at: string
@@ -63,13 +62,13 @@ export type Database = {
           ticker: string
           company_name: string
           thesis_statement: string
-          investing_style?: 'value' | 'growth' | 'income' | 'turnaround' | 'macro' | null
+          investing_style?: string | null
           bull_case?: string | null
           base_case?: string | null
           bear_case?: string | null
           exit_criteria?: string | null
-          confidence_level?: 'high' | 'medium' | 'low'
-          status?: 'intact' | 'at_risk' | 'broken'
+          confidence_level: string
+          status?: string
           purchase_date?: string | null
           purchase_price?: number | null
           created_at?: string
@@ -81,25 +80,26 @@ export type Database = {
           ticker?: string
           company_name?: string
           thesis_statement?: string
-          investing_style?: 'value' | 'growth' | 'income' | 'turnaround' | 'macro' | null
+          investing_style?: string | null
           bull_case?: string | null
           base_case?: string | null
           bear_case?: string | null
           exit_criteria?: string | null
-          confidence_level?: 'high' | 'medium' | 'low'
-          status?: 'intact' | 'at_risk' | 'broken'
+          confidence_level?: string
+          status?: string
           purchase_date?: string | null
           purchase_price?: number | null
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       assumptions: {
         Row: {
           id: string
           thesis_id: string
           user_id: string
-          category: 'growth' | 'economics' | 'moat' | 'management' | 'macro' | 'valuation'
+          category: string
           statement: string
           evidence: string | null
           kpi_label: string | null
@@ -113,7 +113,7 @@ export type Database = {
           id?: string
           thesis_id: string
           user_id: string
-          category: 'growth' | 'economics' | 'moat' | 'management' | 'macro' | 'valuation'
+          category: string
           statement: string
           evidence?: string | null
           kpi_label?: string | null
@@ -127,7 +127,7 @@ export type Database = {
           id?: string
           thesis_id?: string
           user_id?: string
-          category?: 'growth' | 'economics' | 'moat' | 'management' | 'macro' | 'valuation'
+          category?: string
           statement?: string
           evidence?: string | null
           kpi_label?: string | null
@@ -137,13 +137,14 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       thesis_updates: {
         Row: {
           id: string
           thesis_id: string
           user_id: string
-          update_type: 'status_change' | 'note' | 'ai_analysis' | 'edit'
+          update_type: string
           old_status: string | null
           new_status: string | null
           note: string | null
@@ -153,7 +154,7 @@ export type Database = {
           id?: string
           thesis_id: string
           user_id: string
-          update_type: 'status_change' | 'note' | 'ai_analysis' | 'edit'
+          update_type: string
           old_status?: string | null
           new_status?: string | null
           note?: string | null
@@ -163,19 +164,20 @@ export type Database = {
           id?: string
           thesis_id?: string
           user_id?: string
-          update_type?: 'status_change' | 'note' | 'ai_analysis' | 'edit'
+          update_type?: string
           old_status?: string | null
           new_status?: string | null
           note?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       events: {
         Row: {
           id: string
           thesis_id: string
           user_id: string
-          event_type: 'price_move' | 'earnings'
+          event_type: string
           event_detail: string | null
           is_reviewed: boolean
           created_at: string
@@ -184,7 +186,7 @@ export type Database = {
           id?: string
           thesis_id: string
           user_id: string
-          event_type: 'price_move' | 'earnings'
+          event_type: string
           event_detail?: string | null
           is_reviewed?: boolean
           created_at?: string
@@ -193,11 +195,12 @@ export type Database = {
           id?: string
           thesis_id?: string
           user_id?: string
-          event_type?: 'price_move' | 'earnings'
+          event_type?: string
           event_detail?: string | null
           is_reviewed?: boolean
           created_at?: string
         }
+        Relationships: []
       }
     }
     Views: {

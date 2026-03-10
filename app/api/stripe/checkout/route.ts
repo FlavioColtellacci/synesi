@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       .from('profiles')
       .select('stripe_customer_id, email')
       .eq('id', user.id)
-      .single<{ stripe_customer_id: string | null; email: string }>()
+      .single()
 
     if (profileError || !profile?.email) {
       throw new Error(profileError?.message ?? 'Profile not found')
