@@ -74,7 +74,13 @@ User input: ${rawInput}`,
       .join("")
       .trim()
 
-    const parsed = JSON.parse(responseText) as ExtractedThesis
+    const raw = responseText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim()
+
+    const parsed = JSON.parse(raw) as ExtractedThesis
 
     return NextResponse.json({ data: parsed })
   } catch (error) {
