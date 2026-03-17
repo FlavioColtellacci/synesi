@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 
 const STEPS = [
   { number: 1, label: "POSITION" },
@@ -86,6 +86,12 @@ export default function NewThesisPage() {
       breakCondition: "",
     },
   })
+  const [expanded, setExpanded] = React.useState({
+    growth: false,
+    economics: false,
+    moat: false,
+    management: false,
+  })
 
   const isStepOneValid = useMemo(() => {
     return (
@@ -156,77 +162,6 @@ export default function NewThesisPage() {
 
                   <div>
                     <label
-                      htmlFor={`${category.key}-evidence`}
-                      className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
-                    >
-                      WHY I BELIEVE THIS
-                    </label>
-                    <textarea
-                      id={`${category.key}-evidence`}
-                      rows={2}
-                      value={assumptions[category.key].evidence}
-                      onChange={(e) =>
-                        updateAssumptionField(
-                          category.key,
-                          "evidence",
-                          e.target.value,
-                        )
-                      }
-                      placeholder="Optional — what makes you confident in this assumption?"
-                      className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor={`${category.key}-kpi-label`}
-                        className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
-                      >
-                        KPI
-                      </label>
-                      <input
-                        id={`${category.key}-kpi-label`}
-                        type="text"
-                        value={assumptions[category.key].kpiLabel}
-                        onChange={(e) =>
-                          updateAssumptionField(
-                            category.key,
-                            "kpiLabel",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="Revenue growth YoY"
-                        className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor={`${category.key}-kpi-threshold`}
-                        className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
-                      >
-                        THRESHOLD
-                      </label>
-                      <input
-                        id={`${category.key}-kpi-threshold`}
-                        type="text"
-                        value={assumptions[category.key].kpiThreshold}
-                        onChange={(e) =>
-                          updateAssumptionField(
-                            category.key,
-                            "kpiThreshold",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="> 10% annually"
-                        className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
                       htmlFor={`${category.key}-break-condition`}
                       className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
                     >
@@ -247,6 +182,94 @@ export default function NewThesisPage() {
                       className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
                     />
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpanded((prev) => ({
+                        ...prev,
+                        [category.key]: !prev[category.key],
+                      }))
+                    }
+                    className="mt-2 cursor-pointer font-[var(--font-mono)] text-xs tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                  >
+                    {expanded[category.key] ? "− Hide detail" : "+ Add detail"}
+                  </button>
+
+                  {expanded[category.key] ? (
+                    <>
+                      <div>
+                        <label
+                          htmlFor={`${category.key}-evidence`}
+                          className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
+                        >
+                          WHY I BELIEVE THIS
+                        </label>
+                        <textarea
+                          id={`${category.key}-evidence`}
+                          rows={2}
+                          value={assumptions[category.key].evidence}
+                          onChange={(e) =>
+                            updateAssumptionField(
+                              category.key,
+                              "evidence",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Optional — what makes you confident in this assumption?"
+                          className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label
+                            htmlFor={`${category.key}-kpi-label`}
+                            className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
+                          >
+                            KPI
+                          </label>
+                          <input
+                            id={`${category.key}-kpi-label`}
+                            type="text"
+                            value={assumptions[category.key].kpiLabel}
+                            onChange={(e) =>
+                              updateAssumptionField(
+                                category.key,
+                                "kpiLabel",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Revenue growth YoY"
+                            className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor={`${category.key}-kpi-threshold`}
+                            className="mb-2 block text-xs tracking-widest text-[#6B6B7B] uppercase"
+                          >
+                            THRESHOLD
+                          </label>
+                          <input
+                            id={`${category.key}-kpi-threshold`}
+                            type="text"
+                            value={assumptions[category.key].kpiThreshold}
+                            onChange={(e) =>
+                              updateAssumptionField(
+                                category.key,
+                                "kpiThreshold",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="> 10% annually"
+                            className="w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
