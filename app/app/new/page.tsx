@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 type PageState = "input" | "loading" | "review"
 
@@ -36,8 +37,10 @@ const fieldClassName =
   "w-full rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
 
 export default function NewThesisPage() {
+  const router = useRouter()
   const [pageState, setPageState] = useState<PageState>("input")
   const [rawInput, setRawInput] = useState("")
+  const [saving, setSaving] = useState(false)
   const [extractedData, setExtractedData] =
     useState<ExtractedThesis>(emptyExtractedData)
 
@@ -74,6 +77,32 @@ export default function NewThesisPage() {
     setPageState("input")
     setExtractedData(emptyExtractedData)
     setRawInput("")
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+
+    try {
+      const response = await fetch("/api/theses/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ thesis: extractedData }),
+      })
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null
+        throw new Error(payload?.error ?? "Failed to save thesis")
+      }
+
+      router.push("/app/dashboard")
+    } catch (error) {
+      setSaving(false)
+      console.error("Save failed:", error)
+    }
   }
 
   return (
@@ -328,10 +357,11 @@ export default function NewThesisPage() {
 
               <button
                 type="button"
-                onClick={() => console.log("saving:", extractedData)}
+                onClick={handleSave}
+                disabled={saving}
                 className="bg-[#F0F0F0] text-[#0A0A0C] rounded-full px-6 py-2.5 text-sm font-mono tracking-widest hover:bg-[#E8E8E8] transition-colors"
               >
-                SAVE THESIS →
+                {saving ? "SAVING..." : "SAVE THESIS →"}
               </button>
             </div>
           </>
