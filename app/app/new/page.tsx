@@ -106,8 +106,8 @@ export default function NewThesisPage() {
   }
 
   return (
-    <main className="bg-[#0A0A0C] min-h-screen flex items-center justify-center px-4">
-      <section className="bg-[#141418] border border-[#2A2A32] rounded-xl p-8 w-full max-w-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-4 md:px-10">
+      <section className="w-full max-w-2xl rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-8">
         {pageState === "input" ? (
           <>
             <h1 className="font-mono uppercase text-[#F0F0F0] text-xl tracking-widest mb-2">
@@ -155,19 +155,19 @@ export default function NewThesisPage() {
               value={rawInput}
               onChange={(event) => setRawInput(event.target.value)}
               placeholder="Example: I own NVDA because I believe we are in the early innings of the AI compute buildout. Jensen Huang has proven he can execute through multiple cycles. The key assumption is that hyperscaler capex keeps growing. I'd sell if AMD closes the performance gap or if cloud capex starts declining."
-              className={`${fieldClassName} resize-none leading-relaxed`}
+              className={`${fieldClassName} min-h-[160px] resize-none leading-relaxed`}
             />
 
             <p className="mt-2 text-right text-xs text-[#6B6B7B]">
               {rawInput.length} characters
             </p>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex">
               <button
                 type="button"
                 onClick={handleAnalyse}
                 disabled={!canAnalyse}
-                className="bg-[#F0F0F0] text-[#0A0A0C] rounded-full px-6 py-2.5 text-sm font-mono tracking-widest hover:bg-[#E8E8E8] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-[#F0F0F0] px-6 py-2.5 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] disabled:cursor-not-allowed disabled:opacity-30 md:w-auto"
               >
                 ANALYSE THESIS →
               </button>
@@ -207,7 +207,7 @@ export default function NewThesisPage() {
                       ticker: event.target.value.toUpperCase(),
                     }))
                   }
-                  className={`${fieldClassName} w-40 font-mono uppercase`}
+                  className={`${fieldClassName} w-full font-mono uppercase md:w-40`}
                 />
               </div>
 
@@ -305,7 +305,7 @@ export default function NewThesisPage() {
                 <label className="text-xs text-[#6B6B7B] font-mono uppercase tracking-widest mb-2 block">
                   CONFIDENCE
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center">
                   {(["high", "medium", "low"] as const).map((level) => (
                     <button
                       key={level}
@@ -346,11 +346,11 @@ export default function NewThesisPage() {
               </div>
             </div>
 
-            <div className="mt-8 flex items-center justify-between">
+            <div className="mt-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <button
                 type="button"
                 onClick={handleStartOver}
-                className="text-sm text-[#6B6B7B] font-mono hover:text-[#F0F0F0] cursor-pointer transition-colors"
+                className="cursor-pointer self-start font-mono text-sm text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
               >
                 ← Start over
               </button>
@@ -359,7 +359,7 @@ export default function NewThesisPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-[#F0F0F0] text-[#0A0A0C] rounded-full px-6 py-2.5 text-sm font-mono tracking-widest hover:bg-[#E8E8E8] transition-colors"
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-[#F0F0F0] px-6 py-2.5 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:w-auto"
               >
                 {saving ? "SAVING..." : "SAVE THESIS →"}
               </button>

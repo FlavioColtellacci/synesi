@@ -64,7 +64,7 @@ export default function UpdateStatusModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.6)]"
+        className="mx-4 w-full max-w-md rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.6)] md:mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
@@ -115,11 +115,11 @@ export default function UpdateStatusModal({
           />
         </div>
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-col gap-3 md:flex-row">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-[#2A2A32] py-3 font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
+            className="w-full rounded-lg border border-[#2A2A32] py-3 font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0] md:flex-1"
           >
             CANCEL
           </button>
@@ -129,7 +129,7 @@ export default function UpdateStatusModal({
             onClick={() => {
               void handleUpdate()
             }}
-            className="flex-1 rounded-lg bg-[#FFFFFF] py-3 font-mono text-xs font-medium uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] disabled:opacity-50"
+            className="w-full rounded-lg bg-[#FFFFFF] py-3 font-mono text-xs font-medium uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] disabled:opacity-50 md:flex-1"
           >
             {isLoading ? "SAVING..." : "UPDATE"}
           </button>

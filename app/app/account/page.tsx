@@ -46,35 +46,35 @@ export default async function AccountPage() {
   const renews = formatRenewalDate(profile?.subscription_period_end ?? null)
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-6 py-12">
-      <section className="w-full max-w-lg rounded-xl border border-[#2A2A32] bg-[#141418] p-8 md:p-10">
+    <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-4 py-12 md:px-10">
+      <section className="w-full max-w-lg rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
         <h1 className="font-mono text-2xl uppercase tracking-wide text-[#F0F0F0]">ACCOUNT</h1>
 
         <div className="mt-8 space-y-5">
-          <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-6">
             <p className="font-sans text-xs uppercase tracking-[0.16em] text-[#6B6B7B]">Email</p>
             <p className="font-sans text-sm text-[#F0F0F0]">{email}</p>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-6">
             <p className="font-sans text-xs uppercase tracking-[0.16em] text-[#6B6B7B]">Plan</p>
             <p className="font-sans text-sm text-[#F0F0F0]">{plan}</p>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-6">
             <p className="font-sans text-xs uppercase tracking-[0.16em] text-[#6B6B7B]">Status</p>
             <p className={`font-sans text-sm ${statusActive ? 'text-[#00D1B2]' : 'text-[#6B6B7B]'}`}>
               {statusActive ? 'Active' : 'Inactive'}
             </p>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-6">
             <p className="font-sans text-xs uppercase tracking-[0.16em] text-[#6B6B7B]">Renews</p>
             <p className="font-sans text-sm text-[#F0F0F0]">{renews}</p>
           </div>
         </div>
 
-        <div className="mt-10">
+        <div className="mt-10 w-full [&>button]:min-h-[44px] [&>button]:w-full md:[&>button]:w-auto">
           <ManageSubscriptionButton />
         </div>
 

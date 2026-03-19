@@ -115,8 +115,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const statusMeta = getStatusMeta(thesis.status)
 
   return (
-    <main className="bg-[#0A0A0C] min-h-screen px-6 py-10 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+    <main className="mx-auto min-h-screen max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/app/dashboard"
           className="text-sm font-mono text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
@@ -131,8 +131,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         </span>
       </div>
 
-      <section className="bg-[#141418] border border-[#2A2A32] rounded-xl p-6 mb-6">
-        <div className="flex justify-between items-start mb-4">
+      <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="font-mono font-medium text-[#F0F0F0] text-2xl tracking-widest">
               {thesis.ticker}
@@ -148,9 +148,11 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-2">
           THESIS STATEMENT
         </p>
-        <p className="text-sm text-[#F0F0F0] leading-relaxed mb-4">{thesis.thesis_statement}</p>
+        <p className="mb-4 break-words text-sm leading-relaxed text-[#F0F0F0]">
+          {thesis.thesis_statement}
+        </p>
 
-        <div className="flex gap-6">
+        <div className="flex flex-col gap-3 md:flex-row md:gap-6">
           <div>
             <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
               INVESTING STYLE
@@ -175,7 +177,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         {assumptions.map((assumption) => (
           <article
             key={assumption.id}
-            className="bg-[#141418] border border-[#2A2A32] rounded-xl p-5 mb-3"
+            className="mb-3 w-full rounded-xl border border-[#2A2A32] bg-[#141418] p-5"
           >
             <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-3">
               {assumption.category}
@@ -212,8 +214,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           const updateMeta = getUpdateTypeMeta(update.update_type)
 
           return (
-            <div key={update.id} className="flex items-start gap-4 mb-4">
-              <p className="font-mono text-xs text-[#6B6B7B] w-24 shrink-0 pt-0.5">
+            <div key={update.id} className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
+              <p className="w-auto shrink-0 pt-0.5 font-mono text-xs text-[#6B6B7B] md:w-24">
                 {formatDate(update.created_at)}
               </p>
 
@@ -240,7 +242,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <AnalysisButton thesisId={thesis.id} />
       </section>
 
-      <section className="mt-12 border-t border-[#2A2A32] pt-6">
+      <section className="mt-12 border-t border-[#2A2A32] pt-6 [&_button]:min-h-[44px]">
         <DeleteThesisButton thesisId={thesis.id} ticker={thesis.ticker} />
       </section>
     </main>

@@ -122,25 +122,25 @@ export default function Page() {
     <main className="mx-auto min-h-screen max-w-4xl bg-[#0A0A0C] px-6 py-10">
       <ThesisChallengeBanner events={challengeEvents} />
 
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="font-mono text-2xl uppercase tracking-widest text-[#F0F0F0]">
           CONVICTIONS
         </h1>
         <Link
           href="/app/new"
-          className="rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:w-auto"
         >
           + NEW THESIS
         </Link>
       </div>
 
       {theses.length > 0 ? (
-        <div className="mb-8 font-mono text-xs tracking-widest">
-          <span className="text-[#00D1B2]">{intactCount} INTACT</span>
-          <span className="text-[#2A2A32]"> · </span>
-          <span className="text-[#FFB800]">{atRiskCount} AT RISK</span>
-          <span className="text-[#2A2A32]"> · </span>
-          <span className="text-[#FF3B30]">{brokenCount} BROKEN</span>
+        <div className="mb-8 flex flex-wrap gap-x-2 gap-y-2 font-mono text-xs tracking-widest">
+          <span className="whitespace-nowrap text-[#00D1B2]">{intactCount} INTACT</span>
+          <span className="text-[#2A2A32]">·</span>
+          <span className="whitespace-nowrap text-[#FFB800]">{atRiskCount} AT RISK</span>
+          <span className="text-[#2A2A32]">·</span>
+          <span className="whitespace-nowrap text-[#FF3B30]">{brokenCount} BROKEN</span>
         </div>
       ) : null}
 
@@ -150,7 +150,7 @@ export default function Page() {
           <p className="mb-6 text-sm text-[#6B6B7B]">No convictions tracked yet.</p>
           <Link
             href="/app/new"
-            className="rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:w-auto"
           >
             + ADD YOUR FIRST THESIS
           </Link>
@@ -163,10 +163,10 @@ export default function Page() {
             return (
               <article
                 key={thesis.id}
-                className="cursor-pointer rounded-xl border border-[#2A2A32] bg-[#141418] p-6 transition-colors hover:border-[#F0F0F0]/20"
+                className="w-full cursor-pointer rounded-xl border border-[#2A2A32] bg-[#141418] p-4 transition-colors hover:border-[#F0F0F0]/20 md:p-6"
               >
                 <Link href={`/app/thesis/${thesis.id}`}>
-                  <div className="mb-3 flex items-start justify-between">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-mono text-xl font-medium tracking-widest text-[#F0F0F0]">
                         {thesis.ticker}
@@ -183,12 +183,12 @@ export default function Page() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <p className="max-w-[60%] truncate text-sm text-[#6B6B7B]">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <p className="break-words text-sm text-[#6B6B7B] md:max-w-[60%] md:truncate">
                       {thesis.thesis_statement}
                     </p>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-3 md:gap-4">
                       <span className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
                         {thesis.confidence_level}
                       </span>
@@ -213,7 +213,7 @@ export default function Page() {
                         ticker: thesis.ticker,
                       })
                     }
-                    className="cursor-pointer rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
+                    className="cursor-pointer rounded border border-[#2A2A32] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
                   >
                     UPDATE STATUS
                   </button>
