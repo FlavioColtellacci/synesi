@@ -1,10 +1,15 @@
+"use client"
+
 import Link from "next/link"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { createBrowserClient } from "@supabase/ssr"
 import {
   ThesisChallengeBanner,
   type ThesisChallengeEvent,
 } from "@/components/thesis/ThesisChallengeBanner"
-import { createClient } from "@/lib/supabase/server"
+import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
+import type { Database } from "@/types/database"
 
 type DashboardThesis = {
   id: string
@@ -13,7 +18,14 @@ type DashboardThesis = {
   status: string
   confidence_level: string
   created_at: string
+  updated_at: string
   thesis_statement: string
+}
+
+type ModalThesis = {
+  id: string
+  status: string
+  ticker: string
 }
 
 const getStatusMeta = (status: string) => {
@@ -37,55 +49,86 @@ const getStatusMeta = (status: string) => {
   }
 }
 
-export default async function Page() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function Page() {
+  const router = useRouter()
+  const [theses, setTheses] = useState<DashboardThesis[]>([])
+  const [challengeEvents, setChallengeEvents] = useState<ThesisChallengeEvent[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [modalThesis, setModalThesis] = useState<ModalThesis | null>(null)
 
-  if (!user) {
-    redirect("/login")
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createBrowserClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      const [thesesResult, eventsResult] = await Promise.all([
+        supabase
+          .from("theses")
+          .select(
+            "id, ticker, company_name, status, confidence_level, created_at, updated_at, thesis_statement",
+          )
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("events")
+          .select("id, thesis_id, event_detail")
+          .eq("user_id", user.id)
+          .eq("is_reviewed", false)
+          .order("created_at", { ascending: false }),
+      ])
+
+      setTheses(thesesResult.data ?? [])
+
+      setChallengeEvents(
+        (eventsResult.data ?? []).map((e) => ({
+          id: e.id,
+          thesisId: e.thesis_id,
+          eventDetail: e.event_detail ?? "",
+        })),
+      )
+
+      setIsLoading(false)
+    }
+
+    void load()
+  }, [router])
+
+  const intactCount = theses.filter((t) => t.status === "intact").length
+  const atRiskCount = theses.filter((t) => t.status === "at_risk").length
+  const brokenCount = theses.filter((t) => t.status === "broken").length
+
+  if (isLoading) {
+    return (
+      <main className="mx-auto min-h-screen max-w-4xl bg-[#0A0A0C] px-6 py-10">
+        <div className="flex items-center justify-center pt-20">
+          <span className="font-mono text-sm text-[#6B6B7B]">Loading…</span>
+        </div>
+      </main>
+    )
   }
 
-  let theses: DashboardThesis[] = []
-  const { data } = await supabase
-    .from("theses")
-    .select(
-      "id, ticker, company_name, status, confidence_level, created_at, thesis_statement",
-    )
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-
-  theses = data ?? []
-
-  const { data: events } = await supabase
-    .from("events")
-    .select("id, thesis_id, event_detail")
-    .eq("user_id", user.id)
-    .eq("is_reviewed", false)
-    .order("created_at", { ascending: false })
-
-  const challengeEvents: ThesisChallengeEvent[] = (events ?? []).map((e) => ({
-    id: e.id,
-    thesisId: e.thesis_id,
-    eventDetail: e.event_detail ?? "",
-  }))
-
-  const intactCount = theses.filter((thesis) => thesis.status === "intact").length
-  const atRiskCount = theses.filter((thesis) => thesis.status === "at_risk").length
-  const brokenCount = theses.filter((thesis) => thesis.status === "broken").length
-
   return (
-    <main className="bg-[#0A0A0C] min-h-screen px-6 py-10 max-w-4xl mx-auto">
+    <main className="mx-auto min-h-screen max-w-4xl bg-[#0A0A0C] px-6 py-10">
       <ThesisChallengeBanner events={challengeEvents} />
 
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="font-mono uppercase text-[#F0F0F0] text-2xl tracking-widest">
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="font-mono text-2xl uppercase tracking-widest text-[#F0F0F0]">
           CONVICTIONS
         </h1>
         <Link
           href="/app/new"
-          className="bg-[#F0F0F0] text-[#0A0A0C] rounded-full px-5 py-2 text-sm font-mono tracking-widest hover:bg-[#E8E8E8] transition-colors"
+          className="rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
         >
           + NEW THESIS
         </Link>
@@ -103,11 +146,11 @@ export default async function Page() {
 
       {theses.length === 0 ? (
         <div className="mt-20 text-center">
-          <p className="font-mono text-4xl text-[#2A2A32] mb-4">Σ</p>
-          <p className="text-[#6B6B7B] text-sm mb-6">No convictions tracked yet.</p>
+          <p className="mb-4 font-mono text-4xl text-[#2A2A32]">Σ</p>
+          <p className="mb-6 text-sm text-[#6B6B7B]">No convictions tracked yet.</p>
           <Link
             href="/app/new"
-            className="bg-[#F0F0F0] text-[#0A0A0C] rounded-full px-5 py-2 text-sm font-mono tracking-widest hover:bg-[#E8E8E8] transition-colors"
+            className="rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
           >
             + ADD YOUR FIRST THESIS
           </Link>
@@ -118,32 +161,35 @@ export default async function Page() {
             const statusMeta = getStatusMeta(thesis.status)
 
             return (
-              <Link key={thesis.id} href={`/app/thesis/${thesis.id}`}>
-                <article className="bg-[#141418] border border-[#2A2A32] rounded-xl p-6 hover:border-[#F0F0F0]/20 transition-colors cursor-pointer">
-                  <div className="flex justify-between items-start mb-3">
+              <article
+                key={thesis.id}
+                className="cursor-pointer rounded-xl border border-[#2A2A32] bg-[#141418] p-6 transition-colors hover:border-[#F0F0F0]/20"
+              >
+                <Link href={`/app/thesis/${thesis.id}`}>
+                  <div className="mb-3 flex items-start justify-between">
                     <div>
-                      <p className="font-mono font-medium text-[#F0F0F0] text-xl tracking-widest">
+                      <p className="font-mono text-xl font-medium tracking-widest text-[#F0F0F0]">
                         {thesis.ticker}
                       </p>
-                      <p className="text-sm text-[#6B6B7B] mt-0.5">
+                      <p className="mt-0.5 text-sm text-[#6B6B7B]">
                         {thesis.company_name}
                       </p>
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-mono tracking-widest ${statusMeta.className}`}
+                      className={`rounded-full px-3 py-1 font-mono text-xs tracking-widest ${statusMeta.className}`}
                     >
                       {statusMeta.label}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-[#6B6B7B] truncate max-w-[60%]">
+                  <div className="flex items-center justify-between">
+                    <p className="max-w-[60%] truncate text-sm text-[#6B6B7B]">
                       {thesis.thesis_statement}
                     </p>
 
-                    <div className="flex gap-4 items-center">
-                      <span className="font-mono text-xs text-[#6B6B7B] uppercase tracking-widest">
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
                         {thesis.confidence_level}
                       </span>
                       <span className="text-xs text-[#6B6B7B]">
@@ -155,11 +201,44 @@ export default async function Page() {
                       </span>
                     </div>
                   </div>
-                </article>
-              </Link>
+                </Link>
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setModalThesis({
+                        id: thesis.id,
+                        status: thesis.status,
+                        ticker: thesis.ticker,
+                      })
+                    }
+                    className="cursor-pointer rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
+                  >
+                    UPDATE STATUS
+                  </button>
+                </div>
+              </article>
             )
           })}
         </div>
+      )}
+
+      {modalThesis && (
+        <UpdateStatusModal
+          thesisId={modalThesis.id}
+          currentStatus={modalThesis.status}
+          ticker={modalThesis.ticker}
+          onClose={() => setModalThesis(null)}
+          onUpdated={(newStatus) => {
+            setTheses((prev) =>
+              prev.map((t) =>
+                t.id === modalThesis.id ? { ...t, status: newStatus } : t,
+              ),
+            )
+            setModalThesis(null)
+          }}
+        />
       )}
     </main>
   )
