@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
 import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import { createClient } from "@/lib/supabase/server"
@@ -94,7 +94,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     .maybeSingle()
 
   if (!thesis) {
-    redirect("/app/dashboard")
+    notFound()
   }
 
   const [{ data: assumptionsData }, { data: updatesData }] = await Promise.all([
