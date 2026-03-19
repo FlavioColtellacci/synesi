@@ -1,4 +1,9 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
+import {
+  ThesisChallengeBanner,
+  type ThesisChallengeEvent,
+} from "@/components/thesis/ThesisChallengeBanner"
 import { createClient } from "@/lib/supabase/server"
 
 type DashboardThesis = {
@@ -38,19 +43,33 @@ export default async function Page() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  let theses: DashboardThesis[] = []
-
-  if (user) {
-    const { data } = await supabase
-      .from("theses")
-      .select(
-        "id, ticker, company_name, status, confidence_level, created_at, thesis_statement",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-
-    theses = data ?? []
+  if (!user) {
+    redirect("/login")
   }
+
+  let theses: DashboardThesis[] = []
+  const { data } = await supabase
+    .from("theses")
+    .select(
+      "id, ticker, company_name, status, confidence_level, created_at, thesis_statement",
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+
+  theses = data ?? []
+
+  const { data: events } = await supabase
+    .from("events")
+    .select("id, thesis_id, event_detail")
+    .eq("user_id", user.id)
+    .eq("is_reviewed", false)
+    .order("created_at", { ascending: false })
+
+  const challengeEvents: ThesisChallengeEvent[] = (events ?? []).map((e) => ({
+    id: e.id,
+    thesisId: e.thesis_id,
+    eventDetail: e.event_detail ?? "",
+  }))
 
   const intactCount = theses.filter((thesis) => thesis.status === "intact").length
   const atRiskCount = theses.filter((thesis) => thesis.status === "at_risk").length
@@ -58,6 +77,8 @@ export default async function Page() {
 
   return (
     <main className="bg-[#0A0A0C] min-h-screen px-6 py-10 max-w-4xl mx-auto">
+      <ThesisChallengeBanner events={challengeEvents} />
+
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-mono uppercase text-[#F0F0F0] text-2xl tracking-widest">
           CONVICTIONS
