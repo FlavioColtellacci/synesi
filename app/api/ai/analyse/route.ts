@@ -1,4 +1,140 @@
-import { NextResponse } from 'next/server'
-export async function GET() {
-  return NextResponse.json({ ok: true })
+import { NextResponse } from "next/server"
+import { anthropic } from "@/lib/anthropic"
+import { createClient } from "@/lib/supabase/server"
+import type { Database } from "@/types/database"
+
+type Thesis = Database["public"]["Tables"]["theses"]["Row"]
+type Assumption = Database["public"]["Tables"]["assumptions"]["Row"]
+
+function buildUserPrompt(thesis: Thesis, assumptions: Assumption[]) {
+  return `Analyse this investment thesis and return a JSON object with exactly 5 keys: clarityCheck, stressTest, biasScan, monitoringPlan, researchQuestions.
+
+Each key should have this shape:
+{ summary: string, points: string[] }
+Where summary is 1-2 sentences and points is an array of 3-5 specific bullet points.
+
+Guidelines per section:
+- clarityCheck: Is the thesis specific, internally consistent, and falsifiable? Flag vague or unmeasurable elements.
+- stressTest: For each assumption, what could realistically break it? What is the downstream impact on the thesis?
+- biasScan: Identify overconfidence, confirmation bias, anchoring, or one-sided thinking in the investor's own language.
+- monitoringPlan: For each assumption, suggest a specific KPI and a review moment (e.g. next earnings, quarterly check).
+- researchQuestions: 3-5 specific questions this investor should research to stress-test or strengthen the thesis.
+
+Never give buy/sell advice. Never predict prices. Always reference the investor's own words. Add a footer key:
+footer: 'This analysis is not financial advice. It is a thinking tool to help you stress-test your own reasoning.'
+
+THESIS DATA:
+Stock: ${thesis.ticker} — ${thesis.company_name}
+Thesis statement: ${thesis.thesis_statement}
+Investing style: ${thesis.investing_style ?? "Not provided"}
+Confidence: ${thesis.confidence_level}
+Bull case: ${thesis.bull_case || "Not provided"}
+Bear case: ${thesis.bear_case || "Not provided"}
+Exit criteria: ${thesis.exit_criteria || "Not provided"}
+
+Assumptions:
+${assumptions
+  .map(
+    (a, i) => `
+${i + 1}. [${a.category}] ${a.statement}
+Break condition: ${a.break_condition || "Not specified"}
+`,
+  )
+  .join("")}
+`
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as { thesisId?: string }
+    const thesisId = body.thesisId?.trim()
+
+    if (!thesisId) {
+      return NextResponse.json({ error: "Missing thesisId" }, { status: 400 })
+    }
+
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { data: existingAnalyses } = await supabase
+      .from("thesis_updates")
+      .select("id")
+      .eq("thesis_id", thesisId)
+      .eq("user_id", user.id)
+      .eq("update_type", "ai_analysis")
+      .gt("created_at", last24Hours)
+      .limit(1)
+
+    if ((existingAnalyses ?? []).length > 0) {
+      return NextResponse.json(
+        { error: "Analysis already run in the last 24 hours" },
+        { status: 429 },
+      )
+    }
+
+    const { data: thesis } = await supabase
+      .from("theses")
+      .select("*")
+      .eq("id", thesisId)
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (!thesis) {
+      return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+    }
+
+    const { data: assumptionsData } = await supabase
+      .from("assumptions")
+      .select("*")
+      .eq("thesis_id", thesisId)
+      .order("sort_order", { ascending: true })
+
+    const assumptions = assumptionsData ?? []
+    const userPrompt = buildUserPrompt(thesis, assumptions)
+
+    const completion = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2000,
+      system:
+        "You are a rigorous thinking partner helping a long-term investor stress-test their investment thesis. Your job is NOT to give investment advice or predict stock performance. Your job is to help the investor think more clearly about their own reasoning. Always respond with valid JSON only. No explanation, no markdown.",
+      messages: [{ role: "user", content: userPrompt }],
+    })
+
+    const responseText = completion.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+      .trim()
+
+    const raw = responseText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim()
+
+    const analysis = JSON.parse(raw)
+
+    const { error: insertError } = await supabase.from("thesis_updates").insert({
+      thesis_id: thesisId,
+      user_id: user.id,
+      update_type: "ai_analysis",
+      note: JSON.stringify(analysis),
+    })
+
+    if (insertError) {
+      throw insertError
+    }
+
+    return NextResponse.json({ analysis })
+  } catch (error) {
+    console.error("Analysis failed:", error)
+    return NextResponse.json({ error: "Analysis failed" }, { status: 500 })
+  }
 }
