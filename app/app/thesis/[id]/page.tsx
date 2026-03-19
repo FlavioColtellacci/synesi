@@ -11,9 +11,9 @@ type ThesisUpdate = Pick<
 >
 
 type PageProps = {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 function getStatusMeta(status: string) {
@@ -74,6 +74,7 @@ function formatDate(value: string) {
 }
 
 export default async function ThesisDetailPage({ params }: PageProps) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
@@ -86,7 +87,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const { data: thesis } = await supabase
     .from("theses")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle()
 
@@ -98,12 +99,12 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     supabase
       .from("assumptions")
       .select("*")
-      .eq("thesis_id", params.id)
+      .eq("thesis_id", id)
       .order("sort_order", { ascending: true }),
     supabase
       .from("thesis_updates")
       .select("id, update_type, note, old_status, new_status, created_at")
-      .eq("thesis_id", params.id)
+      .eq("thesis_id", id)
       .order("created_at", { ascending: false }),
   ])
 
