@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
+import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -237,6 +238,10 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           AI ANALYSIS
         </p>
         <AnalysisButton thesisId={thesis.id} />
+      </section>
+
+      <section className="mt-12 border-t border-[#2A2A32] pt-6">
+        <DeleteThesisButton thesisId={thesis.id} ticker={thesis.ticker} />
       </section>
     </main>
   )
