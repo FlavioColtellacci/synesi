@@ -17,16 +17,64 @@ export default function AppleIcon() {
           background: '#0A0A0C',
         }}
       >
-        <span
+        <div
           style={{
-            fontSize: 120,
-            fontWeight: 700,
-            color: '#FFFFFF',
-            lineHeight: 1,
+            width: 130,
+            height: 130,
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          Σ
-        </span>
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 118,
+              fontWeight: 700,
+              color: 'rgba(255, 50, 50, 0.75)',
+              lineHeight: 1,
+              transform: 'translateX(-4px)',
+            }}
+          >
+            Σ
+          </span>
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 118,
+              fontWeight: 700,
+              color: 'rgba(0, 200, 200, 0.75)',
+              lineHeight: 1,
+              transform: 'translateX(4px)',
+            }}
+          >
+            Σ
+          </span>
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 118,
+              fontWeight: 700,
+              color: '#FFFFFF',
+              lineHeight: 1,
+            }}
+          >
+            Σ
+          </span>
+        </div>
       </div>
     ),
     { ...size }

@@ -14,28 +14,62 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'transparent',
+          background: '#0A0A0C',
         }}
       >
         <div
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            background: '#0A0A0C',
+            width: 22,
+            height: 22,
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: '1px solid #2A2A32',
           }}
         >
           <span
             style={{
-              fontSize: 17,
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 20,
+              fontWeight: 700,
+              color: 'rgba(255, 50, 50, 0.8)',
+              lineHeight: 1,
+              transform: 'translateX(-1px)',
+            }}
+          >
+            Σ
+          </span>
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 20,
+              fontWeight: 700,
+              color: 'rgba(0, 200, 200, 0.8)',
+              lineHeight: 1,
+              transform: 'translateX(1px)',
+            }}
+          >
+            Σ
+          </span>
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 20,
               fontWeight: 700,
               color: '#FFFFFF',
               lineHeight: 1,
-              marginTop: 1,
             }}
           >
             Σ
