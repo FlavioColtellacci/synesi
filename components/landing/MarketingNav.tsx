@@ -33,7 +33,7 @@ export default function MarketingNav() {
             Pricing
           </Link>
           <Link
-            href="/#manifesto"
+            href="/manifesto"
             className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             Manifesto
