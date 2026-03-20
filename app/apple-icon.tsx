@@ -9,47 +9,20 @@ export default function AppleIcon() {
     (
       <div
         style={{
-          background: '#0A0A0C',
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          position: 'relative',
+          background: '#0A0A0C',
         }}
       >
         <span
           style={{
-            position: 'absolute',
-            left: 28,
-            top: 30,
-            fontSize: 120,
-            fontWeight: 700,
-            color: 'rgba(255, 50, 50, 0.75)',
-          }}
-        >
-          Σ
-        </span>
-        <span
-          style={{
-            position: 'absolute',
-            left: 36,
-            top: 30,
-            fontSize: 120,
-            fontWeight: 700,
-            color: 'rgba(0, 200, 200, 0.75)',
-          }}
-        >
-          Σ
-        </span>
-        <span
-          style={{
-            position: 'absolute',
-            left: 32,
-            top: 30,
             fontSize: 120,
             fontWeight: 700,
             color: '#FFFFFF',
+            lineHeight: 1,
           }}
         >
           Σ

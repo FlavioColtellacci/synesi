@@ -9,51 +9,38 @@ export default function Icon() {
     (
       <div
         style={{
-          background: '#0A0A0C',
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          position: 'relative',
+          background: 'transparent',
         }}
       >
-        <span
+        <div
           style={{
-            position: 'absolute',
-            left: 4,
-            top: 3,
-            fontSize: 22,
-            fontWeight: 700,
-            color: 'rgba(255, 50, 50, 0.8)',
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            background: '#0A0A0C',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid #2A2A32',
           }}
         >
-          Σ
-        </span>
-        <span
-          style={{
-            position: 'absolute',
-            left: 8,
-            top: 3,
-            fontSize: 22,
-            fontWeight: 700,
-            color: 'rgba(0, 200, 200, 0.8)',
-          }}
-        >
-          Σ
-        </span>
-        <span
-          style={{
-            position: 'absolute',
-            left: 6,
-            top: 3,
-            fontSize: 22,
-            fontWeight: 700,
-            color: '#FFFFFF',
-          }}
-        >
-          Σ
-        </span>
+          <span
+            style={{
+              fontSize: 17,
+              fontWeight: 700,
+              color: '#FFFFFF',
+              lineHeight: 1,
+              marginTop: 1,
+            }}
+          >
+            Σ
+          </span>
+        </div>
       </div>
     ),
     { ...size }
