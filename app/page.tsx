@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
 import FAQSection from "@/components/landing/FAQSection"
 import FeaturesSection from "@/components/landing/FeaturesSection"
 import HeroSection from "@/components/landing/HeroSection"
@@ -18,6 +19,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams
   if (params.code) {
     redirect(`/auth/callback?code=${params.code}`)
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    redirect('/app/dashboard')
   }
 
   return (
