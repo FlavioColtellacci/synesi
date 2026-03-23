@@ -46,8 +46,18 @@ export default async function AccountPage() {
   const renews = formatRenewalDate(profile?.subscription_period_end ?? null)
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-4 py-12 md:px-10">
-      <section className="w-full max-w-lg rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
+    <main className="mx-auto min-h-screen w-full max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
+      <div className="mb-6">
+        <Link
+          href="/app/dashboard"
+          className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+        >
+          ← CONVICTIONS
+        </Link>
+      </div>
+
+      <section className="w-full rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
+
         <h1 className="font-mono text-2xl uppercase tracking-wide text-[#F0F0F0]">ACCOUNT</h1>
 
         <div className="mt-8 space-y-5">
@@ -78,11 +88,6 @@ export default async function AccountPage() {
           <ManageSubscriptionButton />
         </div>
 
-        <div className="mt-6">
-          <Link href="/app/dashboard" className="font-sans text-sm text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]">
-            ← Back to dashboard
-          </Link>
-        </div>
       </section>
     </main>
   )

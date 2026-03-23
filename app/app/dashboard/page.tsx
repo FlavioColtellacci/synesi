@@ -316,7 +316,7 @@ export default function Page() {
                       </p>
                     </div>
 
-                    <div className="flex shrink-0 flex-col items-end gap-1">
+                    <div className="flex shrink-0 flex-col items-end gap-2">
                       <span
                         className={`rounded-full px-3 py-1 font-mono text-xs tracking-widest ${statusMeta.className}`}
                       >
@@ -324,7 +324,7 @@ export default function Page() {
                       </span>
                       {thesis.latest_status_note ? (
                         <p
-                          className={`max-w-[200px] text-right font-mono text-[10px] leading-relaxed ${STATUS_CHANGE_NOTE_COLOR}`}
+                          className={`mt-1 max-w-[200px] text-right font-mono text-[10px] leading-relaxed ${STATUS_CHANGE_NOTE_COLOR}`}
                         >
                           {thesis.latest_status_note}
                         </p>
