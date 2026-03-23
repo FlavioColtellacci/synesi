@@ -4,7 +4,7 @@ import { ManageSubscriptionButton } from './manage-subscription-button'
 
 function formatRenewalDate(date: string | null) {
   if (!date) {
-    return '—'
+    return 'N/A'
   }
 
   return new Date(date).toLocaleDateString('en-GB', {
@@ -23,7 +23,7 @@ function formatPlan(plan: string | null) {
     return 'Pro Annual'
   }
 
-  return '—'
+  return 'N/A'
 }
 
 export default async function AccountPage() {
@@ -40,7 +40,7 @@ export default async function AccountPage() {
         .single()
     : { data: null }
 
-  const email = profile?.email ?? user?.email ?? '—'
+  const email = profile?.email ?? user?.email ?? 'N/A'
   const plan = formatPlan(profile?.subscription_plan ?? null)
   const statusActive = profile?.subscription_status === 'active'
   const renews = formatRenewalDate(profile?.subscription_period_end ?? null)

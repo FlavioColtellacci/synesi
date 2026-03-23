@@ -18,32 +18,32 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://synesi.app'),
   title: {
-    default: 'SYNESI — Your Conviction, Tracked.',
+    default: 'SYNESI, Your Conviction, Tracked.',
     template: '%s | SYNESI',
   },
   description:
-    'The app that answers why you own a stock — and tells you when the answer has changed. Document, track, and get AI-powered alerts on your investment theses.',
+    'The app that answers why you own a stock, and tells you when the answer has changed. Document, track, and get AI-powered alerts on your investment theses.',
   openGraph: {
     type: 'website',
     url: 'https://synesi.app',
     siteName: 'SYNESI',
-    title: 'SYNESI — Your Conviction, Tracked.',
+    title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The app that answers why you own a stock — and tells you when the answer has changed.',
+      'The app that answers why you own a stock, and tells you when the answer has changed.',
     images: [
       {
         url: '/opengraph-image',
         width: 1200,
         height: 630,
-        alt: 'SYNESI — Your Conviction, Tracked.',
+        alt: 'SYNESI, Your Conviction, Tracked.',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SYNESI — Your Conviction, Tracked.',
+    title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The app that answers why you own a stock — and tells you when the answer has changed.',
+      'The app that answers why you own a stock, and tells you when the answer has changed.',
     images: ['/opengraph-image'],
   },
 }

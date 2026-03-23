@@ -46,7 +46,7 @@ export default function FeaturesSection() {
             </h3>
             <p className="font-sans text-sm leading-relaxed text-[#6B6B7B]">
               Every update, status change, and AI analysis is logged. A full
-              audit trail of your conviction per holding — months and years of
+              audit trail of your conviction per holding, months and years of
               your own thinking, reviewable.
             </p>
           </article>

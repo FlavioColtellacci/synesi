@@ -4,7 +4,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "AI-Powered Investment Thesis Validation",
   description:
-    "SYNESI uses AI to stress-test your investment thesis against your own reasoning. Surface biases, validate assumptions, and get a monitoring plan — without buy/sell advice.",
+    "SYNESI uses AI to stress-test your investment thesis against your own reasoning. Surface biases, validate assumptions, and get a monitoring plan, without buy/sell advice.",
 }
 
 export default function ThesisValidationPage() {
@@ -42,7 +42,7 @@ export default function ThesisValidationPage() {
         </h1>
         <p className="mb-12 font-sans text-lg leading-relaxed text-[#6B6B7B]">
           Your best investment decisions come from rigorous thinking. SYNESI&apos;s AI acts as a
-          thinking partner — not an oracle.
+          thinking partner, not an oracle.
         </p>
 
         <div className="space-y-10 text-[#A0A0A8] leading-relaxed">
@@ -54,7 +54,7 @@ export default function ThesisValidationPage() {
               When you trigger an analysis, the AI reviews your thesis across five dimensions:
               clarity check, assumption stress-test, cognitive bias scan, monitoring plan, and
               research questions. Each surfaces specific, actionable insights grounded in your own
-              words — not generic market commentary.
+              words, not generic market commentary.
             </p>
           </div>
 
@@ -63,7 +63,7 @@ export default function ThesisValidationPage() {
               Bias detection you can act on
             </h2>
             <p>
-              Overconfidence, confirmation bias, anchoring — SYNESI scans your thesis language for
+              Overconfidence, confirmation bias, anchoring, SYNESI scans your thesis language for
               patterns that signal one-sided thinking. It doesn&apos;t just name the bias; it points to
               the specific assumption or phrasing that triggered it.
             </p>
@@ -74,7 +74,7 @@ export default function ThesisValidationPage() {
               Falsifiability as a feature
             </h2>
             <p>
-              Good theses are falsifiable — they state conditions under which the investment case
+              Good theses are falsifiable, they state conditions under which the investment case
               breaks. SYNESI structures this explicitly with &ldquo;break conditions&rdquo; per
               assumption, so you always know what to watch for.
             </p>
@@ -82,11 +82,11 @@ export default function ThesisValidationPage() {
 
           <div>
             <h2 className="mb-3 font-mono text-xl font-medium tracking-wide text-[#F0F0F0]">
-              No buy/sell advice — ever
+              No buy/sell advice, ever
             </h2>
             <p>
               SYNESI never predicts prices, recommends trades, or tells you what to do. It
-              strengthens how you think about positions you already own or are considering — the
+              strengthens how you think about positions you already own or are considering, the
               decision is always yours.
             </p>
           </div>

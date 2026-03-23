@@ -3,7 +3,7 @@ export default function ProductProofSection() {
     <section id="proof" className="px-6 py-32 md:px-10">
       <div className="mx-auto max-w-6xl">
         <p className="mb-4 text-center font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
-          LIVE NOW — NO WAITLIST
+          LIVE NOW, NO WAITLIST
         </p>
         <h2 className="mb-16 text-center font-mono text-2xl font-medium tracking-wide text-[#F0F0F0] md:text-3xl">
           See the engine behind your conviction
@@ -83,7 +83,7 @@ export default function ProductProofSection() {
         </div>
 
         <p className="mt-8 text-center font-sans text-xs text-[#6B6B7B]">
-          Start tracking today — your first thesis takes under 60 seconds.
+          Start tracking today, your first thesis takes under 60 seconds.
         </p>
       </div>
     </section>

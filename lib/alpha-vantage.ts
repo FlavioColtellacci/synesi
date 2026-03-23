@@ -1,4 +1,4 @@
-// Server-only — do not import in client components
+// Server-only, do not import in client components
 
 export type PriceChangeResult =
   | { ok: true; ticker: string; changePercent: number; latestTradingDay: string }
@@ -33,7 +33,7 @@ export async function getDailyPriceChange(ticker: string): Promise<PriceChangeRe
       return {
         ok: false,
         ticker,
-        error: "No data returned — ticker may be invalid or market is closed",
+        error: "No data returned, ticker may be invalid or market is closed",
       }
     }
 

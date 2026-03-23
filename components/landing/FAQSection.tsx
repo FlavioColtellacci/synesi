@@ -6,17 +6,17 @@ const faqs = [
   {
     question: "What is conviction tracking?",
     answer:
-      "Conviction tracking is the practice of documenting why you own a stock — your thesis, assumptions, and exit criteria — and reviewing that reasoning as new information arrives. SYNESI automates this so your conviction is structured, auditable, and stress-tested over time.",
+      "Conviction tracking is the practice of documenting why you own a stock, your thesis, assumptions, and exit criteria, and reviewing that reasoning as new information arrives. SYNESI automates this so your conviction is structured, auditable, and stress-tested over time.",
   },
   {
     question: "How is SYNESI different from a trading journal?",
     answer:
-      "Most trading journals track what you bought and when. SYNESI tracks why you bought it and whether those reasons are still valid. It structures your thesis into falsifiable assumptions, monitors price-based signals, and uses AI to challenge your logic — not just record it.",
+      "Most trading journals track what you bought and when. SYNESI tracks why you bought it and whether those reasons are still valid. It structures your thesis into falsifiable assumptions, monitors price-based signals, and uses AI to challenge your logic, not just record it.",
   },
   {
     question: "How does the AI thesis analysis work?",
     answer:
-      "When you request an analysis, SYNESI sends your thesis, assumptions, and exit criteria to an AI thinking partner. It checks clarity, stress-tests each assumption, scans for cognitive biases, suggests monitoring KPIs, and surfaces research questions — all without giving buy/sell advice.",
+      "When you request an analysis, SYNESI sends your thesis, assumptions, and exit criteria to an AI thinking partner. It checks clarity, stress-tests each assumption, scans for cognitive biases, suggests monitoring KPIs, and surfaces research questions, all without giving buy/sell advice.",
   },
   {
     question: "What happens when a stock moves significantly?",
@@ -26,7 +26,7 @@ const faqs = [
   {
     question: "Is SYNESI a financial advisor?",
     answer:
-      "No. SYNESI never gives buy, sell, or hold recommendations and never predicts prices. It is a thinking tool that helps you stress-test your own reasoning — the decisions are always yours.",
+      "No. SYNESI never gives buy, sell, or hold recommendations and never predicts prices. It is a thinking tool that helps you stress-test your own reasoning, the decisions are always yours.",
   },
   {
     question: "Why is there no free tier?",

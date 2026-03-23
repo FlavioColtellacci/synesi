@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og'
 
-export const alt = 'SYNESI — Your Conviction, Tracked.'
+export const alt = 'SYNESI, Your Conviction, Tracked.'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -60,7 +60,7 @@ export default function Image() {
         </div>
 
         <span style={{ fontSize: 26, color: '#6B6B7B', lineHeight: 1.5 }}>
-          The app that answers why you own a stock — and tells you when the answer has changed.
+          The app that answers why you own a stock, and tells you when the answer has changed.
         </span>
       </div>
     ),

@@ -9,7 +9,7 @@ export const metadata = {
 export default function ManifestoPage() {
   return (
     <main className="min-h-screen bg-[#0A0A0C] text-[#F0F0F0]">
-      {/* Nav — same pattern as landing page */}
+      {/* Nav, same pattern as landing page */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-5 bg-[#0A0A0C]/80 backdrop-blur-sm border-b border-[#2A2A32]">
         <Link href="/" className="flex items-center gap-3">
           <span className="font-mono text-xl font-bold text-white">Σ</span>
@@ -51,7 +51,7 @@ export default function ManifestoPage() {
       </nav>
 
       {/* Page content */}
-      <div className="max-w-2xl mx-auto px-6 pt-40 pb-32">
+      <div className="max-w-2xl mx-auto px-6 pt-40 pb-48">
         {/* Header */}
         <div className="mb-20">
           <p className="font-mono text-xs tracking-[0.3em] text-[#6B6B7B] mb-6">
@@ -87,7 +87,7 @@ export default function ManifestoPage() {
               This isn&apos;t just disorganised. It&apos;s dangerous. When the price
               drops, you have nothing to check your panic against. When the
               fundamentals quietly shift, you have no process to notice. You hold
-              because you remember buying — not because you remember why.
+              because you remember buying, not because you remember why.
             </p>
           </div>
 
@@ -110,7 +110,7 @@ export default function ManifestoPage() {
               The conviction principle
             </p>
             <p>
-              Conviction is not a feeling. It is a thesis — a structured,
+              Conviction is not a feeling. It is a thesis, a structured,
               falsifiable argument about why a business will be worth more than the
               market thinks, over a time horizon you&apos;ve defined.
             </p>
@@ -127,13 +127,13 @@ export default function ManifestoPage() {
               What SYNESI is
             </p>
             <p>
-              SYNESI captures your conviction at the moment of purchase — the
+              SYNESI captures your conviction at the moment of purchase, the
               thesis, the assumptions behind it, the conditions under which you&apos;d
               sell. Then it keeps those convictions alive as the story unfolds.
             </p>
             <p>
               When a significant event touches one of your assumptions, you are
-              prompted to revisit your reasoning — not your P&amp;L.
+              prompted to revisit your reasoning, not your P&amp;L.
             </p>
           </div>
 
@@ -176,7 +176,7 @@ export default function ManifestoPage() {
               The name
             </p>
             <p>
-              SYNESI. From σύνεσις — the Greek for understanding, insight, the
+              SYNESI. From σύνεσις, the Greek for understanding, insight, the
               junction of thoughts. The moment disparate observations converge into
               a complete picture.
             </p>
@@ -210,7 +210,7 @@ export default function ManifestoPage() {
         </div>
 
         {/* Footer note */}
-        <p className="mt-16 text-xs text-[#2A2A32] font-mono tracking-widest">
+        <p className="mt-12 text-xs text-[#2A2A32] font-mono tracking-widest">
           SYNESI IS NOT A FINANCIAL ADVISOR AND DOES NOT PROVIDE INVESTMENT ADVICE.
         </p>
       </div>

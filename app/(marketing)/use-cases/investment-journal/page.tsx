@@ -41,7 +41,7 @@ export default function InvestmentJournalPage() {
           The Investment Journal That Challenges You Back
         </h1>
         <p className="mb-12 font-sans text-lg leading-relaxed text-[#6B6B7B]">
-          Most journals record what happened. SYNESI records why you believed what you believed — then
+          Most journals record what happened. SYNESI records why you believed what you believed, then
           checks whether it still holds.
         </p>
 
@@ -51,10 +51,10 @@ export default function InvestmentJournalPage() {
               Beyond the spreadsheet
             </h2>
             <p>
-              Notebooks, Google Docs, scattered notes — they capture your thinking once, then go
+              Notebooks, Google Docs, scattered notes, they capture your thinking once, then go
               silent. Six months later, you remember you bought the stock but not why. SYNESI
               replaces that with a structured thesis: ticker, thesis statement, falsifiable
-              assumptions, exit criteria, and confidence level — captured in under 60 seconds.
+              assumptions, exit criteria, and confidence level, captured in under 60 seconds.
             </p>
           </div>
 
@@ -65,7 +65,7 @@ export default function InvestmentJournalPage() {
             <p>
               Every thesis rests on assumptions. SYNESI breaks them out explicitly so you can track
               each one. When you run an AI analysis, it pressure-tests those assumptions against
-              your own logic — surfacing overconfidence, blind spots, and unstated dependencies.
+              your own logic, surfacing overconfidence, blind spots, and unstated dependencies.
             </p>
           </div>
 
@@ -75,7 +75,7 @@ export default function InvestmentJournalPage() {
             </h2>
             <p>
               Every status change, edit, and AI analysis is timestamped and stored. Over months and
-              years, you build a personal record of how your thinking evolved — reviewable, honest,
+              years, you build a personal record of how your thinking evolved, reviewable, honest,
               and structured for learning.
             </p>
           </div>
@@ -86,7 +86,7 @@ export default function InvestmentJournalPage() {
             </h2>
             <p>
               When a stock in your portfolio moves 5% or more in a single day, SYNESI creates a
-              review event and asks: does this change anything? It&apos;s not a price alert — it&apos;s a
+              review event and asks: does this change anything? It&apos;s not a price alert, it&apos;s a
               conviction check.
             </p>
           </div>

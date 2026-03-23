@@ -168,7 +168,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
             <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
               INVESTING STYLE
             </p>
-            <p className="text-sm text-[#F0F0F0] mt-1">{thesis.investing_style ?? "—"}</p>
+            <p className="text-sm text-[#F0F0F0] mt-1">{thesis.investing_style ?? "N/A"}</p>
           </div>
 
           <div>

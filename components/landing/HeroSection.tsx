@@ -78,7 +78,7 @@ export default function HeroSection() {
         </div>
         <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-center px-6 md:px-10">
           <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2 md:gap-8">
-            {/* Left column — Copy and CTA */}
+            {/* Left column, Copy and CTA */}
             <div>
               <h1 className="font-mono text-5xl font-medium uppercase leading-none tracking-widest text-[#F0F0F0] md:text-7xl">
                 YOUR CONVICTION
@@ -87,7 +87,7 @@ export default function HeroSection() {
               </h1>
 
               <p className="mt-6 max-w-sm font-sans text-base leading-relaxed text-[#6B6B7B] md:text-lg">
-                The app that answers &ldquo;why you own a stock&rdquo; — and
+                The app that answers &ldquo;why you own a stock&rdquo;, and
                 tells you when the answer has changed.
               </p>
 
@@ -103,7 +103,7 @@ export default function HeroSection() {
               </p>
             </div>
 
-            {/* Right column — Broken Column Visual */}
+            {/* Right column, Broken Column Visual */}
             <div className="relative flex h-[480px] items-center justify-center md:h-[560px]">
               {/* Ambient glow */}
               <div

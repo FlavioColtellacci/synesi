@@ -10,7 +10,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">1. Who We Are</h2>
-            <p>SYNESI ("we", "us", "our") is an investment thesis tracking tool operated as a sole-trader business. We are not a financial advisor, broker, or investment firm. Our service is designed to help investors organise and review their own thinking — not to provide investment recommendations.</p>
+            <p>SYNESI ("we", "us", "our") is an investment thesis tracking tool operated as a sole-trader business. We are not a financial advisor, broker, or investment firm. Our service is designed to help investors organise and review their own thinking, not to provide investment recommendations.</p>
             <p className="mt-3">Contact: support@synesi.app</p>
           </section>
 
@@ -18,20 +18,20 @@ export default function PrivacyPage() {
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">2. What Data We Collect</h2>
             <p>We collect only what is necessary to provide the service:</p>
             <ul className="mt-3 space-y-2 list-none">
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Account data:</strong> Your email address and encrypted password, collected at signup.</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Thesis data:</strong> Investment theses, assumptions, status updates, and notes you enter into the app. This data belongs to you.</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Payment data:</strong> Billing is handled entirely by Stripe. We never store your card number or payment details.</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Usage data:</strong> Basic analytics (page views, session counts) via Vercel Analytics. No personal identifiers attached.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Account data:</strong> Your email address and encrypted password, collected at signup.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Thesis data:</strong> Investment theses, assumptions, status updates, and notes you enter into the app. This data belongs to you.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Payment data:</strong> Billing is handled entirely by Stripe. We never store your card number or payment details.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Usage data:</strong> Basic analytics (page views, session counts) via Vercel Analytics. No personal identifiers attached.</span></li>
             </ul>
           </section>
 
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">3. How We Use Your Data</h2>
             <ul className="mt-3 space-y-2 list-none">
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span>To provide and maintain the service</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span>To process your subscription via Stripe</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span>To run AI analysis on your thesis data using the Anthropic API (your data is sent to Anthropic's API solely to generate the analysis — it is not used to train their models under our current agreement)</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span>To send transactional emails (email confirmation, subscription receipts) — no marketing emails without your explicit consent</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To provide and maintain the service</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To process your subscription via Stripe</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To run AI analysis on your thesis data using the Anthropic API (your data is sent to Anthropic's API solely to generate the analysis, it is not used to train their models under our current agreement)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To send transactional emails (email confirmation, subscription receipts), no marketing emails without your explicit consent</span></li>
             </ul>
           </section>
 
@@ -43,11 +43,11 @@ export default function PrivacyPage() {
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">5. Third-Party Services</h2>
             <ul className="mt-3 space-y-2 list-none">
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Supabase</strong> — database and authentication</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Stripe</strong> — payment processing</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Anthropic</strong> — AI analysis (your thesis content is sent to their API to generate analysis)</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Vercel</strong> — hosting and anonymous usage analytics</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">—</span><span><strong className="text-[#F0F0F0]">Alpha Vantage</strong> — stock price data (only your ticker symbols are sent, no personal data)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Supabase</strong>, database and authentication</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Stripe</strong>, payment processing</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Anthropic</strong>, AI analysis (your thesis content is sent to their API to generate analysis)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Vercel</strong>, hosting and anonymous usage analytics</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Alpha Vantage</strong>, stock price data (only your ticker symbols are sent, no personal data)</span></li>
             </ul>
           </section>
 

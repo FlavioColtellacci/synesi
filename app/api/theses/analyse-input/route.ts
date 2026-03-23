@@ -49,14 +49,14 @@ export async function POST(request: Request) {
           role: "user",
           content: `Extract the investment thesis from this input and return a JSON object with exactly these fields:
 {
-  ticker: string (uppercase stock ticker, e.g. AAPL — infer if not explicit),
+  ticker: string (uppercase stock ticker, e.g. AAPL, infer if not explicit),
   companyName: string (full company name),
   thesisStatement: string (1-3 sentence summary of why they own this stock),
   investingStyle: string (one of: value, growth, income, turnaround, macro),
   assumptions: array of up to 4 objects, each with:
     category: one of: growth, economics, moat, management,
-    statement: string (what must be true — one sentence),
-    breakCondition: string (what would break this assumption — one sentence)
+    statement: string (what must be true, one sentence),
+    breakCondition: string (what would break this assumption, one sentence)
   bullCase: string (brief best case scenario, or empty string if not mentioned),
   bearCase: string (brief worst case scenario, or empty string if not mentioned),
   exitCriteria: string (when they would sell, or empty string if not mentioned),

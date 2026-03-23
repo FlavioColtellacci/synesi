@@ -24,7 +24,7 @@ Never give buy/sell advice. Never predict prices. Always reference the investor'
 footer: 'This analysis is not financial advice. It is a thinking tool to help you stress-test your own reasoning.'
 
 THESIS DATA:
-Stock: ${thesis.ticker} — ${thesis.company_name}
+Stock: ${thesis.ticker}, ${thesis.company_name}
 Thesis statement: ${thesis.thesis_statement}
 Investing style: ${thesis.investing_style ?? "Not provided"}
 Confidence: ${thesis.confidence_level}
