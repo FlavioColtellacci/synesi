@@ -19,5 +19,4 @@ export const supabaseCookieOptions = {
   path: '/',
   sameSite: 'lax' as const,
   secure: !isLocalHost,
-  domain: !isLocalHost ? appHostname : undefined,
 }

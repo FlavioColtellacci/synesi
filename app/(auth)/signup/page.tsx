@@ -25,6 +25,8 @@ export default function SignupPage() {
     setSuccess(false)
     setIsLoading(true)
 
+    const canonicalAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? window.location.origin
+
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -32,7 +34,7 @@ export default function SignupPage() {
         data: {
           full_name: fullName,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${canonicalAppUrl}/auth/callback`,
       },
     })
 
