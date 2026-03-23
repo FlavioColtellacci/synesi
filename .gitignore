@@ -48,3 +48,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Reference / private notes (never commit)
+/cto_reference_ai_pricing_and_margin.md
