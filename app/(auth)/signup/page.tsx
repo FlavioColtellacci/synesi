@@ -25,18 +25,42 @@ export default function SignupPage() {
     setSuccess(false)
     setIsLoading(true)
 
-    const canonicalAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? window.location.origin
+    const canonicalAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+    const fallbackOriginUrl = window.location.origin.replace(/\/$/, '')
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const baseOptions = {
+      data: {
+        full_name: fullName,
+      },
+    }
+
+    let { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          full_name: fullName,
-        },
-        emailRedirectTo: `${canonicalAppUrl}/auth/callback`,
+        ...baseOptions,
+        emailRedirectTo: `${(canonicalAppUrl ?? fallbackOriginUrl)}/auth/callback`,
       },
     })
+
+    // If the configured canonical redirect URL is not allowlisted in Supabase,
+    // retry with the current host to avoid blocking signup confirmations.
+    if (
+      signUpError &&
+      canonicalAppUrl &&
+      canonicalAppUrl !== fallbackOriginUrl &&
+      /redirect|allow.?list|not allowed|invalid/i.test(signUpError.message)
+    ) {
+      const retry = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          ...baseOptions,
+          emailRedirectTo: `${fallbackOriginUrl}/auth/callback`,
+        },
+      })
+      signUpError = retry.error
+    }
 
     if (signUpError) {
       setError(signUpError.message)
