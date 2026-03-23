@@ -15,6 +15,7 @@ type AnalysisResult = {
 type AnalysisButtonProps = {
   thesisId: string
   initialLastAnalysedAt?: string | null
+  initialAnalysis?: AnalysisResult | null
 }
 
 type Status = "idle" | "loading" | "done"
@@ -40,9 +41,13 @@ function formatDateTime(value: string) {
   })
 }
 
-export function AnalysisButton({ thesisId, initialLastAnalysedAt = null }: AnalysisButtonProps) {
-  const [status, setStatus] = useState<Status>("idle")
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
+export function AnalysisButton({
+  thesisId,
+  initialLastAnalysedAt = null,
+  initialAnalysis = null,
+}: AnalysisButtonProps) {
+  const [status, setStatus] = useState<Status>(initialAnalysis ? "done" : "idle")
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(initialAnalysis)
   const [error, setError] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [lastAnalysedAt, setLastAnalysedAt] = useState<string | null>(initialLastAnalysedAt)

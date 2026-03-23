@@ -13,6 +13,7 @@ type ThesisUpdate = Pick<
 
 type ParsedAnalysisSection = {
   summary?: string
+  points?: string[]
 }
 
 type ParsedAnalysisNote = {
@@ -21,6 +22,7 @@ type ParsedAnalysisNote = {
   biasScan?: ParsedAnalysisSection
   monitoringPlan?: ParsedAnalysisSection
   researchQuestions?: ParsedAnalysisSection
+  footer?: string
 }
 
 type PageProps = {
@@ -86,33 +88,38 @@ function formatDate(value: string) {
   })
 }
 
-function getHistoryNote(update: ThesisUpdate): string | null {
-  if (!update.note) {
+function getSectionContent(analysis: ParsedAnalysisNote) {
+  return [
+    { title: "Clarity Check", section: analysis.clarityCheck },
+    { title: "Assumption Stress-Test", section: analysis.stressTest },
+    { title: "Bias Scan", section: analysis.biasScan },
+    { title: "Monitoring Plan", section: analysis.monitoringPlan },
+    { title: "Research Questions", section: analysis.researchQuestions },
+  ]
+}
+
+function parseAnalysisNote(note: string | null): ParsedAnalysisNote | null {
+  if (!note) {
     return null
   }
 
-  if (update.update_type !== "ai_analysis") {
-    return update.note
-  }
-
   try {
-    const parsed = JSON.parse(update.note) as ParsedAnalysisNote
-    const summaries = [
-      parsed.clarityCheck?.summary,
-      parsed.stressTest?.summary,
-      parsed.biasScan?.summary,
-      parsed.monitoringPlan?.summary,
-      parsed.researchQuestions?.summary,
-    ].filter(Boolean)
-
-    if (summaries.length === 0) {
-      return "AI analysis generated."
-    }
-
-    return summaries[0] ?? "AI analysis generated."
+    return JSON.parse(note) as ParsedAnalysisNote
   } catch {
+    return null
+  }
+}
+
+function getAnalysisPreview(analysis: ParsedAnalysisNote | null): string {
+  if (!analysis) {
     return "AI analysis generated."
   }
+
+  const summaries = getSectionContent(analysis)
+    .map((item) => item.section?.summary)
+    .filter(Boolean)
+
+  return summaries[0] ?? "AI analysis generated."
 }
 
 export default async function ThesisDetailPage({ params }: PageProps) {
@@ -155,8 +162,9 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const assumptions: Assumption[] = assumptionsData ?? []
   const updates: ThesisUpdate[] = updatesData ?? []
   const statusMeta = getStatusMeta(thesis.status)
-  const lastAiAnalysisAt =
-    updates.find((update) => update.update_type === "ai_analysis")?.created_at ?? null
+  const latestAiUpdate = updates.find((update) => update.update_type === "ai_analysis")
+  const latestSavedAnalysis = parseAnalysisNote(latestAiUpdate?.note ?? null)
+  const lastAiAnalysisAt = latestAiUpdate?.created_at ?? null
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
@@ -264,7 +272,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
 
         {updates.map((update) => {
           const updateMeta = getUpdateTypeMeta(update.update_type)
-          const historyNote = getHistoryNote(update)
+          const parsedAnalysis = update.update_type === "ai_analysis" ? parseAnalysisNote(update.note) : null
+          const historyPreview = getAnalysisPreview(parsedAnalysis)
 
           return (
             <div key={update.id} className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
@@ -279,8 +288,51 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                   {updateMeta.label}
                 </span>
 
-                {historyNote ? (
-                  <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{historyNote}</p>
+                {update.update_type === "ai_analysis" ? (
+                  <div className="mt-1">
+                    <p className="text-sm text-[#6B6B7B] leading-relaxed">{historyPreview}</p>
+                    {parsedAnalysis ? (
+                      <details className="mt-2 group">
+                        <summary className="cursor-pointer list-none inline-flex items-center gap-2 font-mono text-xs tracking-widest uppercase text-[#8B5CF6] hover:text-[#A78BFA] transition-colors">
+                          <span className="text-sm leading-none">+</span>
+                          <span>Read more</span>
+                        </summary>
+                        <div className="mt-3 space-y-3 rounded-lg border border-[#2A2A32] bg-[#141418] p-4">
+                          {getSectionContent(parsedAnalysis).map(({ title, section }) => {
+                            if (!section?.summary && (!section?.points || section.points.length === 0)) {
+                              return null
+                            }
+
+                            return (
+                              <div key={title}>
+                                <p className="font-mono text-[11px] text-[#6B6B7B] tracking-widest uppercase mb-1">
+                                  {title}
+                                </p>
+                                {section.summary ? (
+                                  <p className="text-sm text-[#6B6B7B] leading-relaxed">{section.summary}</p>
+                                ) : null}
+                                {section.points?.length ? (
+                                  <ul className="mt-2 space-y-1.5">
+                                    {section.points.map((point) => (
+                                      <li key={`${title}-${point}`} className="flex items-start gap-2">
+                                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#6B6B7B]" />
+                                        <span className="text-sm text-[#F0F0F0] leading-relaxed">{point}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+                          {parsedAnalysis.footer ? (
+                            <p className="text-xs text-[#6B6B7B] italic">{parsedAnalysis.footer}</p>
+                          ) : null}
+                        </div>
+                      </details>
+                    ) : null}
+                  </div>
+                ) : update.note ? (
+                  <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{update.note}</p>
                 ) : null}
               </div>
             </div>
@@ -292,7 +344,11 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
           AI ANALYSIS
         </p>
-        <AnalysisButton thesisId={thesis.id} initialLastAnalysedAt={lastAiAnalysisAt} />
+        <AnalysisButton
+          thesisId={thesis.id}
+          initialLastAnalysedAt={lastAiAnalysisAt}
+          initialAnalysis={latestSavedAnalysis}
+        />
       </section>
 
       <section className="mt-12 border-t border-[#2A2A32] pt-6 [&_button]:min-h-[44px]">
