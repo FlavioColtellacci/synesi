@@ -24,12 +24,20 @@ export default function InvestmentJournalPage() {
             </span>{" "}
             SYNESI
           </Link>
-          <Link
-            href="/signup"
-            className="rounded-lg bg-[#FFFFFF] px-5 py-2.5 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
-          >
-            GET STARTED →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
+            >
+              ← Back to Home
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-lg bg-[#FFFFFF] px-5 py-2.5 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
+            >
+              GET STARTED →
+            </Link>
+          </div>
         </div>
       </nav>
 

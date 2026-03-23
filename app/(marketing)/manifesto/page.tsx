@@ -36,6 +36,12 @@ export default function ManifestoPage() {
         </div>
         <div className="flex items-center gap-4">
           <Link
+            href="/"
+            className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
+          >
+            ← Back to Home
+          </Link>
+          <Link
             href="/login"
             className="text-sm text-[#6B6B7B] hover:text-white transition-colors"
           >
