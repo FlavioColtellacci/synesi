@@ -1,8 +1,7 @@
 'use client'
 
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import type { Database } from '@/types/database'
+import { createClient } from '@/lib/supabase/client'
 
 type SignOutButtonProps = {
   className?: string
@@ -12,10 +11,7 @@ export default function SignOutButton({ className }: SignOutButtonProps) {
   const router = useRouter()
 
   const handleSignOut = async (): Promise<void> => {
-    const supabase = createBrowserClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }

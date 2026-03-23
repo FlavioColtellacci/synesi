@@ -3,12 +3,12 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { createBrowserClient } from "@supabase/ssr"
 import {
   ThesisChallengeBanner,
   type ThesisChallengeEvent,
 } from "@/components/thesis/ThesisChallengeBanner"
 import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
+import { createClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/database"
 
 type DashboardThesis = {
@@ -102,10 +102,7 @@ export default function Page() {
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createBrowserClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      )
+      const supabase = createClient()
 
       const {
         data: { user },
