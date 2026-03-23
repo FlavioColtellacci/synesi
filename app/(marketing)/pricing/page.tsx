@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { trackFunnelEvent } from '@/lib/analytics'
+import LandingFooter from '@/components/landing/LandingFooter'
 
 type Plan = 'monthly' | 'annual'
 
@@ -58,8 +59,8 @@ export default function PricingPage() {
 
   return (
     <main className="min-h-screen bg-synesi-bg text-synesi-text">
-      <div className="mx-auto w-full max-w-6xl px-4 pt-6">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-4 md:pt-6">
+        <div className="flex items-center justify-between">
           <Link
             href="/"
             className="inline-flex items-center gap-2 font-[var(--font-mono)] text-xs tracking-widest text-synesi-text"
@@ -75,11 +76,104 @@ export default function PricingPage() {
             </span>
             <span>SYNESI</span>
           </Link>
+
+          <div className="hidden md:flex items-center gap-6">
+            <Link
+              href="/#features"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Product
+            </Link>
+            <Link
+              href="/pricing"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/manifesto"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Manifesto
+            </Link>
+            <Link
+              href="/use-cases/investment-journal"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Investment Journal
+            </Link>
+            <Link
+              href="/use-cases/thesis-validation"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              AI Thesis Validation
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center rounded-lg border border-synesi-border px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-synesi-muted transition-colors hover:border-white hover:text-white"
+            >
+              ← Back to Home
+            </Link>
+            <Link
+              href="/login"
+              className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              LOG IN
+            </Link>
+            <Link
+              href="/signup"
+              className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
+            >
+              GET STARTED →
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-5 overflow-x-auto pb-1 md:hidden">
           <Link
-            href="/"
-            className="inline-flex items-center rounded-lg border border-synesi-border px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-synesi-muted transition-colors hover:border-white hover:text-white"
+            href="/#features"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
-            ← Back to Home
+            Product
+          </Link>
+          <Link
+            href="/pricing"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors"
+          >
+            Pricing
+          </Link>
+          <Link
+            href="/manifesto"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            Manifesto
+          </Link>
+          <Link
+            href="/use-cases/investment-journal"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            Investment Journal
+          </Link>
+          <Link
+            href="/use-cases/thesis-validation"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            AI Thesis Validation
+          </Link>
+          <Link
+            href="/login"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            LOG IN
+          </Link>
+          <Link
+            href="/signup"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
+          >
+            GET STARTED →
           </Link>
         </div>
       </div>
@@ -154,11 +248,9 @@ export default function PricingPage() {
             </article>
           </section>
 
-          <p className="mt-12 text-center font-[var(--font-sans)] text-xs text-synesi-muted">
-            Not financial advice. Built for conviction.
-          </p>
         </div>
       </div>
+      <LandingFooter />
     </main>
   )
 }

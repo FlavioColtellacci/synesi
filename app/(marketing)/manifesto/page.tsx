@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import LandingFooter from '@/components/landing/LandingFooter'
 
 export const metadata = {
   title: 'Manifesto | SYNESI',
@@ -10,46 +11,110 @@ export default function ManifestoPage() {
   return (
     <main className="min-h-screen bg-[#0A0A0C] text-[#F0F0F0]">
       {/* Nav, same pattern as landing page */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-5 bg-[#0A0A0C]/80 backdrop-blur-sm border-b border-[#2A2A32]">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="font-mono text-xl font-bold text-white">Σ</span>
-          <span className="font-mono text-sm tracking-[0.2em] text-[#6B6B7B]">
-            SYNESI
-          </span>
-        </Link>
-        <div className="hidden md:flex items-center gap-8">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/80 px-4 py-4 backdrop-blur-sm md:px-8 md:py-5">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="font-mono text-xl font-bold text-white">Σ</span>
+            <span className="font-mono text-sm tracking-[0.2em] text-[#6B6B7B]">
+              SYNESI
+            </span>
+          </Link>
+
+          <div className="hidden md:flex items-center gap-6">
+            <Link
+              href="/#features"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Product
+            </Link>
+            <Link
+              href="/pricing"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/manifesto"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors"
+            >
+              Manifesto
+            </Link>
+            <Link
+              href="/use-cases/investment-journal"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              Investment Journal
+            </Link>
+            <Link
+              href="/use-cases/thesis-validation"
+              className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              AI Thesis Validation
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
+            >
+              ← Back to Home
+            </Link>
+            <Link
+              href="/login"
+              className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            >
+              LOG IN
+            </Link>
+            <Link
+              href="/signup"
+              className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
+            >
+              GET STARTED →
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-5 overflow-x-auto pb-1 md:hidden">
           <Link
-            href="/#product"
-            className="text-sm text-[#6B6B7B] hover:text-white transition-colors"
+            href="/#features"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             Product
           </Link>
           <Link
             href="/pricing"
-            className="text-sm text-[#6B6B7B] hover:text-white transition-colors"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             Pricing
           </Link>
-          <Link href="/manifesto" className="text-sm text-white transition-colors">
+          <Link
+            href="/manifesto"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors"
+          >
             Manifesto
           </Link>
-        </div>
-        <div className="flex items-center gap-4">
           <Link
-            href="/"
-            className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
+            href="/use-cases/investment-journal"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
-            ← Back to Home
+            Investment Journal
+          </Link>
+          <Link
+            href="/use-cases/thesis-validation"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            AI Thesis Validation
           </Link>
           <Link
             href="/login"
-            className="text-sm text-[#6B6B7B] hover:text-white transition-colors"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             LOG IN
           </Link>
           <Link
             href="/signup"
-            className="text-sm font-mono bg-white text-[#0A0A0C] px-4 py-2 rounded-lg hover:bg-[#E8E8E8] transition-colors"
+            className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
           >
             GET STARTED →
           </Link>
@@ -215,11 +280,8 @@ export default function ManifestoPage() {
           </span>
         </div>
 
-        {/* Footer note */}
-        <p className="mt-12 text-xs text-[#2A2A32] font-mono tracking-widest">
-          SYNESI IS NOT A FINANCIAL ADVISOR AND DOES NOT PROVIDE INVESTMENT ADVICE.
-        </p>
       </div>
+      <LandingFooter />
     </main>
   )
 }
