@@ -14,7 +14,7 @@ export default function ManifestoPage() {
       <MarketingPageNav activeItem="manifesto" />
 
       {/* Page content */}
-      <div className="max-w-2xl mx-auto px-6 pt-40 pb-48">
+      <div className="mx-auto max-w-3xl px-6 pb-48 pt-32">
         {/* Header */}
         <div className="mb-20">
           <p className="font-mono text-xs tracking-[0.3em] text-[#6B6B7B] mb-6">
