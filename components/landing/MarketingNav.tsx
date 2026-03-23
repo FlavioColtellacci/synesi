@@ -38,6 +38,18 @@ export default function MarketingNav() {
           >
             Manifesto
           </Link>
+          <Link
+            href="/use-cases/investment-journal"
+            className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            Investment Journal
+          </Link>
+          <Link
+            href="/use-cases/thesis-validation"
+            className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            AI Thesis Validation
+          </Link>
         </div>
 
         <div className="hidden items-center gap-4 md:flex">
