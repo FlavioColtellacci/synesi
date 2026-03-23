@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
+import { AnalysisHistoryReadMore } from "@/components/thesis/AnalysisHistoryReadMore"
 import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
@@ -336,48 +337,9 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                 </span>
 
                 {update.update_type === "ai_analysis" ? (
-                  <div className="mt-1">
-                    <p className="text-sm text-[#6B6B7B] leading-relaxed">{historyPreview}</p>
-                    {parsedAnalysis ? (
-                      <details className="mt-2 group">
-                        <summary className="cursor-pointer list-none inline-flex items-center gap-2 font-mono text-xs tracking-widest uppercase text-[#8B5CF6] hover:text-[#A78BFA] transition-colors">
-                          <span className="text-sm leading-none">+</span>
-                          <span>Read more</span>
-                        </summary>
-                        <div className="mt-3 space-y-3 rounded-lg border border-[#2A2A32] bg-[#141418] p-4">
-                          {getSectionContent(parsedAnalysis).map(({ title, section }) => {
-                            if (!section?.summary && (!section?.points || section.points.length === 0)) {
-                              return null
-                            }
-
-                            return (
-                              <div key={title}>
-                                <p className="font-mono text-[11px] text-[#6B6B7B] tracking-widest uppercase mb-1">
-                                  {title}
-                                </p>
-                                {section.summary ? (
-                                  <p className="text-sm text-[#6B6B7B] leading-relaxed">{section.summary}</p>
-                                ) : null}
-                                {section.points?.length ? (
-                                  <ul className="mt-2 space-y-1.5">
-                                    {section.points.map((point) => (
-                                      <li key={`${title}-${point}`} className="flex items-start gap-2">
-                                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#6B6B7B]" />
-                                        <span className="text-sm text-[#F0F0F0] leading-relaxed">{point}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : null}
-                              </div>
-                            )
-                          })}
-                          {parsedAnalysis.footer ? (
-                            <p className="text-xs text-[#6B6B7B] italic">{parsedAnalysis.footer}</p>
-                          ) : null}
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
+                  parsedAnalysis ? (
+                    <AnalysisHistoryReadMore preview={historyPreview} analysis={parsedAnalysis} />
+                  ) : null
                 ) : update.note ? (
                   <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{update.note}</p>
                 ) : null}

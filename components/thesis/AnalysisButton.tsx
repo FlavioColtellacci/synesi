@@ -41,13 +41,46 @@ function formatDateTime(value: string) {
   })
 }
 
+function sanitizeAnalysisText(text: string) {
+  // Ensure the UI never shows em-dashes coming from model output.
+  return text.replaceAll("—", "-").replaceAll("–", "-")
+}
+
+function sanitizeAnalysisResult(analysis: AnalysisResult): AnalysisResult {
+  return {
+    clarityCheck: {
+      summary: sanitizeAnalysisText(analysis.clarityCheck.summary),
+      points: analysis.clarityCheck.points.map(sanitizeAnalysisText),
+    },
+    stressTest: {
+      summary: sanitizeAnalysisText(analysis.stressTest.summary),
+      points: analysis.stressTest.points.map(sanitizeAnalysisText),
+    },
+    biasScan: {
+      summary: sanitizeAnalysisText(analysis.biasScan.summary),
+      points: analysis.biasScan.points.map(sanitizeAnalysisText),
+    },
+    monitoringPlan: {
+      summary: sanitizeAnalysisText(analysis.monitoringPlan.summary),
+      points: analysis.monitoringPlan.points.map(sanitizeAnalysisText),
+    },
+    researchQuestions: {
+      summary: sanitizeAnalysisText(analysis.researchQuestions.summary),
+      points: analysis.researchQuestions.points.map(sanitizeAnalysisText),
+    },
+    footer: sanitizeAnalysisText(analysis.footer),
+  }
+}
+
 export function AnalysisButton({
   thesisId,
   initialLastAnalysedAt = null,
   initialAnalysis = null,
 }: AnalysisButtonProps) {
   const [status, setStatus] = useState<Status>(initialAnalysis ? "done" : "idle")
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(initialAnalysis)
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(
+    initialAnalysis ? sanitizeAnalysisResult(initialAnalysis) : null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [lastAnalysedAt, setLastAnalysedAt] = useState<string | null>(initialLastAnalysedAt)
@@ -87,7 +120,7 @@ export function AnalysisButton({
         return
       }
 
-      setAnalysis(payload.analysis)
+      setAnalysis(sanitizeAnalysisResult(payload.analysis))
       if (payload.analysedAt) {
         setLastAnalysedAt(payload.analysedAt)
       }
