@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
+import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === '/api/stripe/webhook' || request.nextUrl.pathname.startsWith('/api/cron/')) {
@@ -16,6 +17,7 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: supabaseCookieOptions,
       cookies: {
         getAll() {
           return request.cookies.getAll()
