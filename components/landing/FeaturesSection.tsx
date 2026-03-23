@@ -15,26 +15,6 @@ export default function FeaturesSection() {
 
   return (
     <section id="features" className="px-6 py-32 md:px-10">
-      <style jsx>{`
-        @keyframes synesi-icon-glitch {
-          0%,
-          100% {
-            transform: translate(0, 0);
-          }
-          20% {
-            transform: translate(-1px, 0);
-          }
-          40% {
-            transform: translate(1px, 0);
-          }
-          60% {
-            transform: translate(-1px, 1px);
-          }
-          80% {
-            transform: translate(1px, -1px);
-          }
-        }
-      `}</style>
       <div className="mx-auto max-w-6xl">
         <p className="mb-16 text-center font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
           WHAT SYNESI DOES
