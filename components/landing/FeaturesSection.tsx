@@ -23,8 +23,8 @@ export default function FeaturesSection() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
             <p
-              className="mb-6 font-mono text-3xl leading-none text-[#F0F0F0]"
-              style={glitchStyle}
+              className="mb-6 inline-block font-mono text-[2rem] leading-none text-[#F0F0F0]"
+              style={glitchAnimatedStyle}
             >
               Σ
             </p>
