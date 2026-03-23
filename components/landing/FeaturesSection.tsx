@@ -1,6 +1,40 @@
+import type { CSSProperties } from 'react'
+
 export default function FeaturesSection() {
+  const glitchTextShadow: CSSProperties['textShadow'] =
+    '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)'
+
+  const glitchAnimatedStyle: CSSProperties = {
+    textShadow: glitchTextShadow,
+    // Small jitter to make the "glitch" feel alive.
+    animation: 'synesi-icon-glitch 2.5s infinite steps(2, end)',
+    willChange: 'transform',
+  }
+
+  const glitchStyle: CSSProperties = { textShadow: glitchTextShadow }
+
   return (
     <section id="features" className="px-6 py-32 md:px-10">
+      <style jsx>{`
+        @keyframes synesi-icon-glitch {
+          0%,
+          100% {
+            transform: translate(0, 0);
+          }
+          20% {
+            transform: translate(-1px, 0);
+          }
+          40% {
+            transform: translate(1px, 0);
+          }
+          60% {
+            transform: translate(-1px, 1px);
+          }
+          80% {
+            transform: translate(1px, -1px);
+          }
+        }
+      `}</style>
       <div className="mx-auto max-w-6xl">
         <p className="mb-16 text-center font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
           WHAT SYNESI DOES
@@ -9,11 +43,8 @@ export default function FeaturesSection() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
             <p
-              className="mb-6 font-mono text-3xl text-[#F0F0F0]"
-              style={{
-                textShadow:
-                  "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
-              }}
+              className="mb-6 font-mono text-3xl leading-none text-[#F0F0F0]"
+              style={glitchStyle}
             >
               Σ
             </p>
@@ -28,7 +59,12 @@ export default function FeaturesSection() {
           </article>
 
           <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
-            <p className="mb-6 font-mono text-3xl text-[#F0F0F0]">⚡</p>
+            <p
+              className="mb-6 inline-block font-mono text-[2rem] leading-none text-[#F0F0F0]"
+              style={glitchAnimatedStyle}
+            >
+              ⚡
+            </p>
             <h3 className="mb-3 font-mono text-base font-medium tracking-wide text-[#F0F0F0]">
               Get challenged, not just notified
             </h3>
@@ -40,7 +76,12 @@ export default function FeaturesSection() {
           </article>
 
           <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
-            <p className="mb-6 font-mono text-3xl text-[#F0F0F0]">↗</p>
+            <p
+              className="mb-6 inline-block font-mono text-[2rem] leading-none text-[#F0F0F0]"
+              style={glitchAnimatedStyle}
+            >
+              ↗
+            </p>
             <h3 className="mb-3 font-mono text-base font-medium tracking-wide text-[#F0F0F0]">
               Watch your thinking evolve
             </h3>
