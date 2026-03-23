@@ -11,6 +11,18 @@ type ThesisUpdate = Pick<
   "id" | "update_type" | "note" | "old_status" | "new_status" | "created_at"
 >
 
+type ParsedAnalysisSection = {
+  summary?: string
+}
+
+type ParsedAnalysisNote = {
+  clarityCheck?: ParsedAnalysisSection
+  stressTest?: ParsedAnalysisSection
+  biasScan?: ParsedAnalysisSection
+  monitoringPlan?: ParsedAnalysisSection
+  researchQuestions?: ParsedAnalysisSection
+}
+
 type PageProps = {
   params: Promise<{
     id: string
@@ -72,6 +84,35 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   })
+}
+
+function getHistoryNote(update: ThesisUpdate): string | null {
+  if (!update.note) {
+    return null
+  }
+
+  if (update.update_type !== "ai_analysis") {
+    return update.note
+  }
+
+  try {
+    const parsed = JSON.parse(update.note) as ParsedAnalysisNote
+    const summaries = [
+      parsed.clarityCheck?.summary,
+      parsed.stressTest?.summary,
+      parsed.biasScan?.summary,
+      parsed.monitoringPlan?.summary,
+      parsed.researchQuestions?.summary,
+    ].filter(Boolean)
+
+    if (summaries.length === 0) {
+      return "AI analysis generated."
+    }
+
+    return summaries[0] ?? "AI analysis generated."
+  } catch {
+    return "AI analysis generated."
+  }
 }
 
 export default async function ThesisDetailPage({ params }: PageProps) {
@@ -223,6 +264,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
 
         {updates.map((update) => {
           const updateMeta = getUpdateTypeMeta(update.update_type)
+          const historyNote = getHistoryNote(update)
 
           return (
             <div key={update.id} className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
@@ -237,8 +279,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                   {updateMeta.label}
                 </span>
 
-                {update.note ? (
-                  <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{update.note}</p>
+                {historyNote ? (
+                  <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{historyNote}</p>
                 ) : null}
               </div>
             </div>
