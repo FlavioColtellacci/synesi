@@ -51,11 +51,7 @@ const getStatusMeta = (status: string) => {
   }
 }
 
-const getStatusNoteColor = (status: string) => {
-  if (status === "at_risk") return "text-[#FFB800]"
-  if (status === "broken") return "text-[#FF3B30]"
-  return "text-[#00D1B2]"
-}
+const STATUS_CHANGE_NOTE_COLOR = "text-[#FFB800]"
 
 export default function Page() {
   const router = useRouter()
@@ -212,7 +208,7 @@ export default function Page() {
                       </span>
                       {thesis.latest_status_note ? (
                         <p
-                          className={`max-w-[220px] text-right font-mono text-[10px] leading-relaxed ${getStatusNoteColor(thesis.latest_status_note_status ?? thesis.status)}`}
+                          className={`max-w-[220px] text-right font-mono text-[10px] leading-relaxed ${STATUS_CHANGE_NOTE_COLOR}`}
                         >
                           NOTE: {thesis.latest_status_note}
                         </p>
