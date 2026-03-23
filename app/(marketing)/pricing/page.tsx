@@ -11,6 +11,13 @@ type Plan = 'monthly' | 'annual'
 export default function PricingPage() {
   const [monthlyLoading, setMonthlyLoading] = useState(false)
   const [annualLoading, setAnnualLoading] = useState(false)
+  const features = [
+    "Unlimited thesis positions",
+    "AI thesis analysis",
+    "Event-triggered review prompts",
+    "Full audit trail",
+    "Thesis health dashboard",
+  ]
 
   useEffect(() => {
     trackFunnelEvent("pricing_view")
@@ -74,60 +81,65 @@ export default function PricingPage() {
             </p>
           </header>
 
-          <section className="flex w-full max-w-2xl flex-col gap-6 md:flex-row">
-            <article className="flex-1 rounded-xl border border-synesi-border bg-synesi-surface p-8">
-              <p className="font-[var(--font-mono)] text-xs tracking-widest text-synesi-muted uppercase">
+          <section className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-6 md:grid-cols-2">
+            <article className="flex flex-col rounded-xl border border-[#2A2A32] bg-[#141418] p-8">
+              <p className="mb-4 font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
                 PRO MONTHLY
               </p>
-              <div className="mt-4 flex items-end gap-2">
-                <p className="font-[var(--font-mono)] text-5xl text-synesi-text">$15</p>
-                <p className="pb-1 font-[var(--font-sans)] text-sm text-synesi-muted">/month</p>
+              <p className="mb-1 font-mono text-4xl font-medium text-[#F0F0F0]">$15</p>
+              <p className="mb-8 font-mono text-xs tracking-wide text-[#6B6B7B]">per month</p>
+
+              <div className="mb-10 flex flex-1 flex-col gap-3">
+                {features.map((feature) => (
+                  <div key={feature} className="flex items-start">
+                    <span className="mr-3 font-mono text-xs text-[#00D1B2]">✓</span>
+                    <span className="font-sans text-sm text-[#6B6B7B]">{feature}</span>
+                  </div>
+                ))}
               </div>
-              <div className="my-6 border-t border-synesi-border" />
-              <ul className="space-y-2 font-[var(--font-sans)] text-sm text-synesi-muted">
-                <li>Unlimited thesis positions</li>
-                <li>AI thesis analysis</li>
-                <li>Event-triggered review prompts</li>
-                <li>Full audit trail</li>
-              </ul>
+
               <button
                 type="button"
                 onClick={() => handleSubscribe('monthly')}
                 disabled={isEitherLoading}
-                className="mt-8 w-full rounded-lg bg-synesi-accent p-3 font-[var(--font-sans)] text-sm font-medium text-black transition hover:bg-synesi-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-auto block w-full rounded-lg border border-[#2A2A32] py-3.5 text-center font-mono text-xs uppercase tracking-widest text-[#F0F0F0] transition-colors hover:border-[#F0F0F0] hover:bg-[#1C1C22] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {monthlyLoading ? 'LOADING...' : 'SUBSCRIBE →'}
+                {monthlyLoading ? 'LOADING...' : 'GET STARTED →'}
               </button>
             </article>
 
-            <article className="flex-1 rounded-xl border-2 border-synesi-accent bg-synesi-surface p-8">
-              <span className="mb-4 inline-block rounded-full border border-synesi-border bg-synesi-elevated px-3 py-1 font-[var(--font-mono)] text-xs tracking-widest text-synesi-text">
+            <article className="relative flex flex-col rounded-xl border border-[#F0F0F0] bg-[#141418] p-8">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#F0F0F0] px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C]">
                 BEST VALUE
               </span>
-              <p className="font-[var(--font-mono)] text-xs tracking-widest text-synesi-muted uppercase">
+
+              <p className="mb-4 font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
                 PRO ANNUAL
               </p>
-              <div className="mt-4 flex items-end gap-2">
-                <p className="font-[var(--font-mono)] text-5xl text-synesi-text">$99</p>
-                <p className="pb-1 font-[var(--font-sans)] text-sm text-synesi-muted">/year</p>
-              </div>
-              <p className="mt-1 font-[var(--font-sans)] text-xs text-synesi-muted">
-                ~$8.25/month · save 45%
+              <p className="mb-1 font-mono text-4xl font-medium text-[#F0F0F0]">$99</p>
+              <p className="font-mono text-xs tracking-wide text-[#6B6B7B]">
+                per year · ~$8.25/month
               </p>
-              <div className="my-6 border-t border-synesi-border" />
-              <ul className="space-y-2 font-[var(--font-sans)] text-sm text-synesi-muted">
-                <li>Unlimited thesis positions</li>
-                <li>AI thesis analysis</li>
-                <li>Event-triggered review prompts</li>
-                <li>Full audit trail</li>
-              </ul>
+              <p className="mb-8 mt-2 font-mono text-[10px] tracking-widest text-[#00D1B2]">
+                SAVE ~45% VS MONTHLY
+              </p>
+
+              <div className="mb-10 flex flex-1 flex-col gap-3">
+                {features.map((feature) => (
+                  <div key={feature} className="flex items-start">
+                    <span className="mr-3 font-mono text-xs text-[#00D1B2]">✓</span>
+                    <span className="font-sans text-sm text-[#6B6B7B]">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
               <button
                 type="button"
                 onClick={() => handleSubscribe('annual')}
                 disabled={isEitherLoading}
-                className="mt-8 w-full rounded-lg bg-synesi-accent p-3 font-[var(--font-sans)] text-sm font-medium text-black transition hover:bg-synesi-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-auto block w-full rounded-lg bg-[#FFFFFF] py-3.5 text-center font-mono text-xs font-medium uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {annualLoading ? 'LOADING...' : 'SUBSCRIBE →'}
+                {annualLoading ? 'LOADING...' : 'GET STARTED →'}
               </button>
             </article>
           </section>
