@@ -40,14 +40,11 @@ export async function PATCH(
       .from("theses")
       .select("id, status, user_id")
       .eq("id", thesisId)
+      .eq("user_id", user.id)
       .single()
 
     if (fetchError || !thesis) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
-    }
-
-    if (thesis.user_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const oldStatus = thesis.status
@@ -56,6 +53,7 @@ export async function PATCH(
       .from("theses")
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", thesisId)
+      .eq("user_id", user.id)
 
     if (updateError) {
       throw updateError

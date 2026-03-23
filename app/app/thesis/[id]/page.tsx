@@ -5,7 +5,6 @@ import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
-type Thesis = Database["public"]["Tables"]["theses"]["Row"]
 type Assumption = Database["public"]["Tables"]["assumptions"]["Row"]
 type ThesisUpdate = Pick<
   Database["public"]["Tables"]["thesis_updates"]["Row"],
@@ -102,11 +101,13 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .from("assumptions")
       .select("*")
       .eq("thesis_id", id)
+      .eq("user_id", user.id)
       .order("sort_order", { ascending: true }),
     supabase
       .from("thesis_updates")
       .select("id, update_type, note, old_status, new_status, created_at")
       .eq("thesis_id", id)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
   ])
 

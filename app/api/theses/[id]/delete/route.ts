@@ -30,6 +30,7 @@ export async function DELETE(_request: Request, { params }: DeleteRouteContext) 
       .from("theses")
       .select("id, user_id")
       .eq("id", id)
+      .eq("user_id", user.id)
       .maybeSingle<ThesisOwnership>()
 
     if (fetchError) {
@@ -40,11 +41,11 @@ export async function DELETE(_request: Request, { params }: DeleteRouteContext) 
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
     }
 
-    if (thesis.user_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    const { error: deleteError } = await supabase.from("theses").delete().eq("id", id)
+    const { error: deleteError } = await supabase
+      .from("theses")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id)
 
     if (deleteError) {
       throw deleteError

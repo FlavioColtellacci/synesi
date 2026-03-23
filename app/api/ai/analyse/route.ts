@@ -94,6 +94,7 @@ export async function POST(request: Request) {
       .from("assumptions")
       .select("*")
       .eq("thesis_id", thesisId)
+      .eq("user_id", user.id)
       .order("sort_order", { ascending: true })
 
     const assumptions = assumptionsData ?? []
