@@ -76,9 +76,9 @@ export default function InvestmentJournalPage() {
         <div className="mt-16 flex flex-col gap-4 border-t border-[#2A2A32] pt-12 sm:flex-row sm:items-center">
           <Link
             href="/signup"
-            className="inline-block rounded-lg bg-[#FFFFFF] px-6 py-3 font-mono text-sm uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
+            className="inline-block whitespace-nowrap rounded-lg bg-[#FFFFFF] px-6 py-3 font-mono text-sm uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
           >
-            START YOUR CONVICTION JOURNAL →
+            START YOUR CONVICTION JOURNAL&nbsp;→
           </Link>
           <span className="font-sans text-sm text-[#6B6B7B]">
             $15/month · No free tier · Cancel anytime
