@@ -27,7 +27,7 @@ export default function MarketingNav() {
             Product
           </Link>
           <Link
-            href="/#pricing"
+            href="/pricing"
             className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             Pricing
