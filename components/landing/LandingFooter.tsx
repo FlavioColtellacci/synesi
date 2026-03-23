@@ -62,9 +62,9 @@ export default function LandingFooter() {
           </Link>
         </div>
 
-        <div className="text-right font-sans text-[11px] leading-relaxed text-[#6B6B7B] md:shrink-0 lg:text-xs">
+        <div className="text-right font-sans text-[11px] leading-tight text-[#6B6B7B] md:shrink-0 md:pt-[2px] lg:text-xs lg:pt-0">
           <p className="whitespace-nowrap">Not financial advice. Built for conviction.</p>
-          <p>© 2026 SYNESI</p>
+          <p className="mt-1">© 2026 SYNESI</p>
         </div>
       </div>
     </footer>
