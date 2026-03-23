@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { useEffect, useRef } from "react"
-import { SmokeBackground } from "@/components/ui/spooky-smoke-animation"
 import { trackFunnelEvent } from "@/lib/analytics"
 
 export default function HeroSection() {
@@ -73,9 +72,6 @@ export default function HeroSection() {
       `}</style>
 
       <section id="hero" className="relative min-h-screen overflow-hidden pt-16">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.12]">
-          <SmokeBackground smokeColor="#C8C8C8" />
-        </div>
         <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-center px-6 md:px-10">
           <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2 md:gap-8">
             {/* Left column, Copy and CTA */}
