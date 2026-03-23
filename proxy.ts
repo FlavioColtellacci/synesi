@@ -46,11 +46,8 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    const loginRedirect = NextResponse.redirect(new URL('/login', request.url))
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
-      loginRedirect.cookies.set(name, value)
-    })
-    return loginRedirect
+    supabaseResponse = NextResponse.redirect(new URL('/login', request.url))
+    return supabaseResponse
   }
 
   if (request.nextUrl.pathname === '/app' || request.nextUrl.pathname.startsWith('/app/')) {
@@ -61,11 +58,8 @@ export async function proxy(request: NextRequest) {
       .single()
 
     if (profile?.subscription_status !== 'active') {
-      const pricingRedirect = NextResponse.redirect(new URL('/pricing', request.url))
-      supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
-        pricingRedirect.cookies.set(name, value)
-      })
-      return pricingRedirect
+      supabaseResponse = NextResponse.redirect(new URL('/pricing', request.url))
+      return supabaseResponse
     }
   }
 
