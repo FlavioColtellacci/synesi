@@ -72,7 +72,16 @@ export default function PricingPage() {
       <div className="px-4 pb-12 pt-40 md:pb-16">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
           <header className="mb-16 text-center">
-            <p className="mb-4 font-[var(--font-mono)] text-2xl text-white">Σ</p>
+            <p
+              className="mb-4 font-[var(--font-mono)] text-2xl text-white"
+              aria-hidden="true"
+              style={{
+                textShadow:
+                  "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
+              }}
+            >
+              Σ
+            </p>
             <h1 className="font-[var(--font-mono)] text-3xl tracking-widest md:text-4xl">
               CONVICTION HAS A PRICE.
             </h1>
