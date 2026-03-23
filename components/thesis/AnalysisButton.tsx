@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { trackFunnelEvent } from "@/lib/analytics"
 
 type AnalysisResult = {
   clarityCheck: { summary: string; points: string[] }
@@ -85,6 +86,7 @@ export function AnalysisButton({ thesisId, initialLastAnalysedAt = null }: Analy
       if (payload.analysedAt) {
         setLastAnalysedAt(payload.analysedAt)
       }
+      trackFunnelEvent("first_ai_analysis")
       setExpandedSection(null)
       setStatus("done")
     } catch {

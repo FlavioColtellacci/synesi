@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { trackFunnelEvent } from "@/lib/analytics"
 
 type PageState = "input" | "loading" | "review"
 
@@ -98,6 +99,7 @@ export default function NewThesisPage() {
         throw new Error(payload?.error ?? "Failed to save thesis")
       }
 
+      trackFunnelEvent("first_thesis_saved")
       router.push("/app/dashboard")
     } catch (error) {
       setSaving(false)

@@ -1,11 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { trackFunnelEvent } from '@/lib/analytics'
 
 export default function SignupPage() {
   const supabase = useMemo(() => createClient(), [])
+
+  useEffect(() => {
+    trackFunnelEvent("signup_start")
+  }, [])
+
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

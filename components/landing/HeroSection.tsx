@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef } from "react"
 import { SmokeBackground } from "@/components/ui/spooky-smoke-animation"
+import { trackFunnelEvent } from "@/lib/analytics"
 
 export default function HeroSection() {
   const columnRef = useRef<HTMLDivElement>(null)
@@ -40,6 +41,7 @@ export default function HeroSection() {
       }, randomInterval())
     }
     scheduleGlitch()
+    trackFunnelEvent("landing_view")
 
     return () => clearTimeout(timeout)
   }, [])

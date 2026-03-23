@@ -1,12 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { trackFunnelEvent } from '@/lib/analytics'
 
 type Plan = 'monthly' | 'annual'
 
 export default function PricingPage() {
   const [monthlyLoading, setMonthlyLoading] = useState(false)
   const [annualLoading, setAnnualLoading] = useState(false)
+
+  useEffect(() => {
+    trackFunnelEvent("pricing_view")
+  }, [])
 
   async function handleSubscribe(plan: Plan) {
     setMonthlyLoading(plan === 'monthly')
@@ -38,6 +43,7 @@ export default function PricingPage() {
         throw new Error(message)
       }
 
+      trackFunnelEvent("checkout_start", { plan })
       window.location.href = data.url
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to start checkout.'
