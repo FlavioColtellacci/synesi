@@ -21,6 +21,7 @@ type DashboardThesis = {
   updated_at: string
   thesis_statement: string
   latest_status_note: string | null
+  latest_status_note_status: string | null
 }
 
 type ModalThesis = {
@@ -95,24 +96,25 @@ export default function Page() {
           .order("created_at", { ascending: false }),
         supabase
           .from("thesis_updates")
-          .select("thesis_id, note, created_at")
+          .select("thesis_id, note, created_at, new_status")
           .eq("user_id", user.id)
           .eq("update_type", "status_change")
           .not("note", "is", null)
           .order("created_at", { ascending: false }),
       ])
 
-      const latestNoteByThesis = new Map<string, string>()
+      const latestNoteByThesis = new Map<string, { note: string; status: string }>()
       for (const update of updatesResult.data ?? []) {
-        if (!latestNoteByThesis.has(update.thesis_id) && update.note) {
-          latestNoteByThesis.set(update.thesis_id, update.note)
+        if (!latestNoteByThesis.has(update.thesis_id) && update.note && update.new_status) {
+          latestNoteByThesis.set(update.thesis_id, { note: update.note, status: update.new_status })
         }
       }
 
       setTheses(
         (thesesResult.data ?? []).map((thesis) => ({
           ...thesis,
-          latest_status_note: latestNoteByThesis.get(thesis.id) ?? null,
+          latest_status_note: latestNoteByThesis.get(thesis.id)?.note ?? null,
+          latest_status_note_status: latestNoteByThesis.get(thesis.id)?.status ?? null,
         })),
       )
 
@@ -209,7 +211,9 @@ export default function Page() {
                         {statusMeta.label}
                       </span>
                       {thesis.latest_status_note ? (
-                        <p className={`max-w-[220px] text-right font-mono text-[10px] leading-relaxed ${getStatusNoteColor(thesis.status)}`}>
+                        <p
+                          className={`max-w-[220px] text-right font-mono text-[10px] leading-relaxed ${getStatusNoteColor(thesis.latest_status_note_status ?? thesis.status)}`}
+                        >
                           NOTE: {thesis.latest_status_note}
                         </p>
                       ) : null}
@@ -267,7 +271,12 @@ export default function Page() {
             setTheses((prev) =>
               prev.map((t) =>
                 t.id === modalThesis.id
-                  ? { ...t, status: newStatus, latest_status_note: newNote ?? t.latest_status_note }
+                  ? {
+                      ...t,
+                      status: newStatus,
+                      latest_status_note: newNote ?? t.latest_status_note,
+                      latest_status_note_status: newNote ? newStatus : t.latest_status_note_status,
+                    }
                   : t,
               ),
             )
