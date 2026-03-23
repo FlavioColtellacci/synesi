@@ -25,6 +25,15 @@ type ParsedAnalysisNote = {
   footer?: string
 }
 
+type AnalysisResult = {
+  clarityCheck: { summary: string; points: string[] }
+  stressTest: { summary: string; points: string[] }
+  biasScan: { summary: string; points: string[] }
+  monitoringPlan: { summary: string; points: string[] }
+  researchQuestions: { summary: string; points: string[] }
+  footer: string
+}
+
 type PageProps = {
   params: Promise<{
     id: string
@@ -110,6 +119,43 @@ function parseAnalysisNote(note: string | null): ParsedAnalysisNote | null {
   }
 }
 
+function isAnalysisSection(
+  section: ParsedAnalysisSection | undefined,
+): section is { summary: string; points: string[] } {
+  return (
+    !!section &&
+    typeof section.summary === "string" &&
+    Array.isArray(section.points) &&
+    section.points.every((point) => typeof point === "string")
+  )
+}
+
+function toAnalysisResult(input: ParsedAnalysisNote | null): AnalysisResult | null {
+  if (!input) {
+    return null
+  }
+
+  if (
+    !isAnalysisSection(input.clarityCheck) ||
+    !isAnalysisSection(input.stressTest) ||
+    !isAnalysisSection(input.biasScan) ||
+    !isAnalysisSection(input.monitoringPlan) ||
+    !isAnalysisSection(input.researchQuestions) ||
+    typeof input.footer !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    clarityCheck: input.clarityCheck,
+    stressTest: input.stressTest,
+    biasScan: input.biasScan,
+    monitoringPlan: input.monitoringPlan,
+    researchQuestions: input.researchQuestions,
+    footer: input.footer,
+  }
+}
+
 function getAnalysisPreview(analysis: ParsedAnalysisNote | null): string {
   if (!analysis) {
     return "AI analysis generated."
@@ -163,7 +209,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const updates: ThesisUpdate[] = updatesData ?? []
   const statusMeta = getStatusMeta(thesis.status)
   const latestAiUpdate = updates.find((update) => update.update_type === "ai_analysis")
-  const latestSavedAnalysis = parseAnalysisNote(latestAiUpdate?.note ?? null)
+  const latestParsedAnalysis = parseAnalysisNote(latestAiUpdate?.note ?? null)
+  const latestSavedAnalysis = toAnalysisResult(latestParsedAnalysis)
   const lastAiAnalysisAt = latestAiUpdate?.created_at ?? null
 
   return (
