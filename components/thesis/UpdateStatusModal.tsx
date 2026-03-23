@@ -7,7 +7,7 @@ interface UpdateStatusModalProps {
   currentStatus: string
   ticker: string
   onClose: () => void
-  onUpdated: (newStatus: string) => void
+  onUpdated: (newStatus: string, newNote: string | null) => void
 }
 
 const STATUS_OPTIONS = [
@@ -49,7 +49,7 @@ export default function UpdateStatusModal({
         throw new Error(data.error ?? "Update failed")
       }
 
-      onUpdated(selected)
+      onUpdated(selected, note.trim() || null)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")

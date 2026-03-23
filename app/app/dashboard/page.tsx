@@ -20,6 +20,7 @@ type DashboardThesis = {
   created_at: string
   updated_at: string
   thesis_statement: string
+  latest_status_note: string | null
 }
 
 type ModalThesis = {
@@ -49,6 +50,12 @@ const getStatusMeta = (status: string) => {
   }
 }
 
+const getStatusNoteColor = (status: string) => {
+  if (status === "at_risk") return "text-[#FFB800]"
+  if (status === "broken") return "text-[#FF3B30]"
+  return "text-[#00D1B2]"
+}
+
 export default function Page() {
   const router = useRouter()
   const [theses, setTheses] = useState<DashboardThesis[]>([])
@@ -72,7 +79,7 @@ export default function Page() {
         return
       }
 
-      const [thesesResult, eventsResult] = await Promise.all([
+      const [thesesResult, eventsResult, updatesResult] = await Promise.all([
         supabase
           .from("theses")
           .select(
@@ -86,9 +93,28 @@ export default function Page() {
           .eq("user_id", user.id)
           .eq("is_reviewed", false)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("thesis_updates")
+          .select("thesis_id, note, created_at")
+          .eq("user_id", user.id)
+          .eq("update_type", "status_change")
+          .not("note", "is", null)
+          .order("created_at", { ascending: false }),
       ])
 
-      setTheses(thesesResult.data ?? [])
+      const latestNoteByThesis = new Map<string, string>()
+      for (const update of updatesResult.data ?? []) {
+        if (!latestNoteByThesis.has(update.thesis_id) && update.note) {
+          latestNoteByThesis.set(update.thesis_id, update.note)
+        }
+      }
+
+      setTheses(
+        (thesesResult.data ?? []).map((thesis) => ({
+          ...thesis,
+          latest_status_note: latestNoteByThesis.get(thesis.id) ?? null,
+        })),
+      )
 
       setChallengeEvents(
         (eventsResult.data ?? []).map((e) => ({
@@ -176,11 +202,18 @@ export default function Page() {
                       </p>
                     </div>
 
-                    <span
-                      className={`rounded-full px-3 py-1 font-mono text-xs tracking-widest ${statusMeta.className}`}
-                    >
-                      {statusMeta.label}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`rounded-full px-3 py-1 font-mono text-xs tracking-widest ${statusMeta.className}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                      {thesis.latest_status_note ? (
+                        <p className={`max-w-[220px] text-right font-mono text-[10px] leading-relaxed ${getStatusNoteColor(thesis.status)}`}>
+                          NOTE: {thesis.latest_status_note}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -230,10 +263,12 @@ export default function Page() {
           currentStatus={modalThesis.status}
           ticker={modalThesis.ticker}
           onClose={() => setModalThesis(null)}
-          onUpdated={(newStatus) => {
+          onUpdated={(newStatus, newNote) => {
             setTheses((prev) =>
               prev.map((t) =>
-                t.id === modalThesis.id ? { ...t, status: newStatus } : t,
+                t.id === modalThesis.id
+                  ? { ...t, status: newStatus, latest_status_note: newNote ?? t.latest_status_note }
+                  : t,
               ),
             )
             setModalThesis(null)
