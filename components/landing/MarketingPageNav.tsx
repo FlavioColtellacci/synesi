@@ -44,9 +44,17 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/80 px-4 py-4 backdrop-blur-sm md:px-8 md:py-5">
       <div className="flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="font-mono text-xl font-bold text-white">Σ</span>
-          <span className="font-mono text-sm tracking-[0.2em] text-[#6B6B7B]">SYNESI</span>
+        <Link href="/" className="font-mono text-base font-medium text-[#F0F0F0]">
+          <span
+            aria-hidden="true"
+            style={{
+              textShadow:
+                "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
+            }}
+          >
+            Σ
+          </span>{" "}
+          <span>SYNESI</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
