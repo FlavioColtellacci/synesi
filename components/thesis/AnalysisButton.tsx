@@ -13,6 +13,7 @@ type AnalysisResult = {
 
 type AnalysisButtonProps = {
   thesisId: string
+  initialLastAnalysedAt?: string | null
 }
 
 type Status = "idle" | "loading" | "done"
@@ -28,11 +29,22 @@ const sections: Array<{
   { key: "researchQuestions", title: "RESEARCH QUESTIONS" },
 ]
 
-export function AnalysisButton({ thesisId }: AnalysisButtonProps) {
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+export function AnalysisButton({ thesisId, initialLastAnalysedAt = null }: AnalysisButtonProps) {
   const [status, setStatus] = useState<Status>("idle")
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [lastAnalysedAt, setLastAnalysedAt] = useState<string | null>(initialLastAnalysedAt)
 
   const handleAnalyse = async () => {
     try {
@@ -48,7 +60,7 @@ export function AnalysisButton({ thesisId }: AnalysisButtonProps) {
       })
 
       const payload = (await response.json().catch(() => null)) as
-        | { analysis?: AnalysisResult; error?: string }
+        | { analysis?: AnalysisResult; analysedAt?: string; error?: string }
         | null
 
       if (!response.ok) {
@@ -70,6 +82,9 @@ export function AnalysisButton({ thesisId }: AnalysisButtonProps) {
       }
 
       setAnalysis(payload.analysis)
+      if (payload.analysedAt) {
+        setLastAnalysedAt(payload.analysedAt)
+      }
       setExpandedSection(null)
       setStatus("done")
     } catch {
@@ -90,6 +105,9 @@ export function AnalysisButton({ thesisId }: AnalysisButtonProps) {
   if (status === "done" && analysis) {
     return (
       <div>
+        {lastAnalysedAt ? (
+          <p className="text-xs text-[#6B6B7B] mb-4">Last analysis: {formatDateTime(lastAnalysedAt)}</p>
+        ) : null}
         {sections.map((section) => {
           const isExpanded = expandedSection === section.key
           const sectionData = analysis[section.key]
@@ -136,6 +154,9 @@ export function AnalysisButton({ thesisId }: AnalysisButtonProps) {
 
   return (
     <div>
+      {lastAnalysedAt ? (
+        <p className="text-xs text-[#6B6B7B] mb-2">Last analysis: {formatDateTime(lastAnalysedAt)}</p>
+      ) : null}
       <button
         type="button"
         onClick={handleAnalyse}

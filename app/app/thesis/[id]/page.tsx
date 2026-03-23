@@ -114,6 +114,8 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const assumptions: Assumption[] = assumptionsData ?? []
   const updates: ThesisUpdate[] = updatesData ?? []
   const statusMeta = getStatusMeta(thesis.status)
+  const lastAiAnalysisAt =
+    updates.find((update) => update.update_type === "ai_analysis")?.created_at ?? null
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
@@ -144,6 +146,14 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           <span className="border border-[#2A2A32] rounded-full px-3 py-1 font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
             {thesis.confidence_level}
           </span>
+        </div>
+        <div className="mb-4">
+          <Link
+            href={`/app/thesis/${thesis.id}/edit`}
+            className="inline-flex items-center rounded-full border border-[#2A2A32] px-4 py-2 font-mono text-xs tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            EDIT THESIS
+          </Link>
         </div>
 
         <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-2">
@@ -240,7 +250,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
           AI ANALYSIS
         </p>
-        <AnalysisButton thesisId={thesis.id} />
+        <AnalysisButton thesisId={thesis.id} initialLastAnalysedAt={lastAiAnalysisAt} />
       </section>
 
       <section className="mt-12 border-t border-[#2A2A32] pt-6 [&_button]:min-h-[44px]">

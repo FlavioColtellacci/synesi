@@ -122,18 +122,22 @@ export async function POST(request: Request) {
 
     const analysis = JSON.parse(raw)
 
-    const { error: insertError } = await supabase.from("thesis_updates").insert({
-      thesis_id: thesisId,
-      user_id: user.id,
-      update_type: "ai_analysis",
-      note: JSON.stringify(analysis),
-    })
+    const { data: insertedUpdate, error: insertError } = await supabase
+      .from("thesis_updates")
+      .insert({
+        thesis_id: thesisId,
+        user_id: user.id,
+        update_type: "ai_analysis",
+        note: JSON.stringify(analysis),
+      })
+      .select("created_at")
+      .single()
 
     if (insertError) {
       throw insertError
     }
 
-    return NextResponse.json({ analysis })
+    return NextResponse.json({ analysis, analysedAt: insertedUpdate.created_at })
   } catch (error) {
     console.error("Analysis failed:", error)
     return NextResponse.json({ error: "Analysis failed" }, { status: 500 })
