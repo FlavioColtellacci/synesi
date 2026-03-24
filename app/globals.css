@@ -159,6 +159,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Keep horizontal nav swipeable on mobile without a visible scrollbar track. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes synesi-icon-glitch {
   0%,
   100% {

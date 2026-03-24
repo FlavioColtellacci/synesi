@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 
 function getLinkClassName(isActive: boolean): string {
   return [
-    'font-mono text-xs uppercase tracking-widest transition-colors duration-150',
+    'whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.14em] transition-colors duration-150 md:text-xs md:tracking-widest',
     isActive ? 'text-[#F0F0F0]' : 'text-[#6B6B7B] hover:text-[#F0F0F0]',
   ].join(' ')
 }
@@ -17,7 +17,7 @@ export default function NavLinks() {
   const accountActive = pathname === '/app/account'
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center gap-4 md:gap-6">
       <Link href="/app/dashboard" className={getLinkClassName(convictionsActive)}>
         CONVICTIONS
       </Link>

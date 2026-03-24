@@ -10,35 +10,37 @@ type AppLayoutProps = {
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <>
-      <nav className="fixed inset-x-0 top-0 z-50 h-14 border-b border-[#2A2A32] bg-[#141418] px-6 md:h-16 md:px-10">
-        <div className="mx-auto flex h-full w-full items-center justify-between">
-          <Link
-            href="/app/dashboard"
-            className="font-mono text-base font-medium text-[#F0F0F0]"
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                textShadow:
-                  '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
-              }}
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-[#2A2A32] bg-[#141418] px-4 py-3 md:h-16 md:px-10 md:py-0">
+        <div className="mx-auto flex w-full flex-col gap-2 md:h-full md:flex-row md:items-center md:justify-between md:gap-0">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/app/dashboard"
+              className="font-mono text-base font-medium text-[#F0F0F0]"
             >
-              Σ
-            </span>{' '}
-            <span>SYNESI</span>
-          </Link>
+              <span
+                aria-hidden="true"
+                style={{
+                  textShadow:
+                    '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
+                }}
+              >
+                Σ
+              </span>{' '}
+              <span>SYNESI</span>
+            </Link>
+            <SignOutButton className="md:hidden" />
+          </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden md:block">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 overflow-x-auto">
               <NavLinks />
             </div>
-            <SignOutButton className="md:hidden" />
             <SignOutButton className="hidden md:inline-flex" />
           </div>
         </div>
       </nav>
 
-      <main className="min-h-screen bg-[#0A0A0C] pt-14 md:pt-16">{children}</main>
+      <main className="min-h-screen bg-[#0A0A0C] pt-24 md:pt-16">{children}</main>
     </>
   )
 }

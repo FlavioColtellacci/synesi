@@ -18,13 +18,29 @@ export default function LoginPage() {
     setError('')
     setIsLoading(true)
 
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setError('Please enter your email.')
+      setIsLoading(false)
+      return
+    }
+
+    // Clear potentially stale local auth state before attempting a fresh sign-in.
+    await supabase.auth.signOut()
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     })
 
     if (signInError) {
-      setError(signInError.message)
+      if (signInError.message === 'Invalid login credentials') {
+        setError(
+          'Invalid login credentials. Check email/password, confirm your email if newly signed up, or reset your password.'
+        )
+      } else {
+        setError(signInError.message)
+      }
       setIsLoading(false)
       return
     }
