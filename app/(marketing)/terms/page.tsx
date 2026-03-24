@@ -5,7 +5,7 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0C] px-6 pb-24 pt-40 md:px-10">
       <MarketingPageNav activeItem="product" />
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto mb-20 md:mb-24">
         <p className="font-mono text-xs tracking-widest uppercase text-[#6B6B7B] mb-4">Legal</p>
         <h1 className="font-mono text-2xl md:text-3xl font-medium text-[#F0F0F0] mb-2 tracking-wide">Terms of Service</h1>
         <p className="font-sans text-xs text-[#6B6B7B] mb-12">Last updated: March 2026</p>
