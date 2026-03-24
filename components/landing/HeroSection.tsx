@@ -5,32 +5,41 @@ import { useEffect, useRef } from "react"
 import { trackFunnelEvent } from "@/lib/analytics"
 
 export default function HeroSection() {
-  const columnRef = useRef<HTMLDivElement>(null)
+  const sigmaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const columnEl = columnRef.current
-    if (!columnEl) return
+    const sigmaEl = sigmaRef.current
+    if (!sigmaEl) return
 
     const triggerGlitch = () => {
-      columnEl.style.cssText = `
-        filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.8)) drop-shadow(2px 0 0 rgba(0,210,255,0.8));
-        transform: translateX(2px);
+      sigmaEl.style.cssText = `
+        filter: drop-shadow(-4px 0 0 rgba(255,50,50,0.92)) drop-shadow(4px 0 0 rgba(0,210,255,0.92));
+        transform: translateX(3px) skewX(-2deg);
       `
       setTimeout(() => {
-        columnEl.style.cssText = ""
-      }, 80)
+        sigmaEl.style.cssText = ""
+      }, 90)
       setTimeout(() => {
-        columnEl.style.cssText = `
-          filter: drop-shadow(-1px 0 0 rgba(255,50,50,0.5)) drop-shadow(1px 0 0 rgba(0,210,255,0.5));
-          transform: translateX(-1px);
+        sigmaEl.style.cssText = `
+          filter: drop-shadow(-3px 0 0 rgba(255,50,50,0.78)) drop-shadow(3px 0 0 rgba(0,210,255,0.78));
+          transform: translateX(-2px) skewX(1.2deg);
         `
         setTimeout(() => {
-          columnEl.style.cssText = ""
-        }, 60)
-      }, 120)
+          sigmaEl.style.cssText = ""
+        }, 85)
+      }, 135)
+      setTimeout(() => {
+        sigmaEl.style.cssText = `
+          filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.62)) drop-shadow(2px 0 0 rgba(0,210,255,0.62));
+          transform: translateX(1px);
+        `
+        setTimeout(() => {
+          sigmaEl.style.cssText = ""
+        }, 70)
+      }, 250)
     }
 
-    const randomInterval = () => Math.random() * 3000 + 5000
+    const randomInterval = () => Math.random() * 1000 + 2000
 
     let timeout: ReturnType<typeof setTimeout>
     const scheduleGlitch = () => {
@@ -48,23 +57,42 @@ export default function HeroSection() {
   return (
     <>
       <style>{`
-        @keyframes column-float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-12px); }
+        @keyframes sigma-subtle-glitch {
+          0%, 100% {
+            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.55)) drop-shadow(2px 0 0 rgba(0,210,255,0.55));
+            transform: translateX(0);
+          }
+          20% {
+            filter: drop-shadow(-1px 0 0 rgba(255,50,50,0.45)) drop-shadow(1px 0 0 rgba(0,210,255,0.45));
+            transform: translateX(-0.5px);
+          }
+          40% {
+            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.58)) drop-shadow(2px 0 0 rgba(0,210,255,0.58));
+            transform: translateX(0.5px);
+          }
+          60% {
+            filter: drop-shadow(-1px 0 0 rgba(255,50,50,0.42)) drop-shadow(1px 0 0 rgba(0,210,255,0.42));
+            transform: translateX(-0.3px);
+          }
+          80% {
+            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.5)) drop-shadow(2px 0 0 rgba(0,210,255,0.5));
+            transform: translateX(0.3px);
+          }
         }
         @keyframes column-glow-pulse {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
+          0%, 100% { opacity: 0.45; }
+          50% { opacity: 0.75; }
         }
         @keyframes dot-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
-        .column-float {
-          animation: column-float 6s ease-in-out infinite;
-        }
         .column-glow {
           animation: column-glow-pulse 6s ease-in-out infinite;
+        }
+        .sigma-subtle {
+          animation: sigma-subtle-glitch 1.8s steps(2, end) infinite;
+          will-change: transform, filter;
         }
         .dot-pulse {
           animation: dot-pulse 3s ease-in-out infinite;
@@ -99,60 +127,49 @@ export default function HeroSection() {
               </p>
             </div>
 
-            {/* Right column, Broken Column Visual */}
+            {/* Right column, Signature Sigma Visual */}
             <div className="relative flex h-[480px] items-center justify-center md:h-[560px]">
               {/* Ambient glow */}
               <div
-                className="column-glow absolute bottom-[60px] left-1/2 h-6 w-32 -translate-x-1/2 rounded-full"
+                className="column-glow absolute bottom-[88px] left-1/2 h-10 w-44 -translate-x-1/2 rounded-full"
                 style={{
                   background:
-                    "radial-gradient(ellipse, rgba(0,209,178,0.25) 0%, transparent 70%)",
+                    "radial-gradient(ellipse, rgba(150,160,185,0.18) 0%, transparent 72%)",
                 }}
               />
 
-              {/* Column assembly */}
-              <div ref={columnRef} className="column-float relative">
-                {/* Capital (top fragment) */}
-                <div
-                  className="mx-auto h-6 w-36 rounded-sm bg-gradient-to-b from-[#3A3A42] to-[#2A2A32]"
-                  style={{
-                    transform: "perspective(200px) rotateX(10deg)",
-                  }}
-                />
-
-                {/* Shaft (main body) */}
-                <div
-                  className="relative mx-auto h-64 w-16"
-                  style={{
-                    background:
-                      "linear-gradient(to right, #1C1C22 0%, #3A3A42 30%, #4A4A52 50%, #3A3A42 70%, #1C1C22 100%)",
-                  }}
-                >
-                  {/* Crack lines */}
-                  <div
-                    className="absolute left-[12px] top-[40px] h-[80px] w-[1px] bg-[#0A0A0C]"
-                    style={{ transform: "rotate(3deg)" }}
-                  />
-                  <div
-                    className="absolute right-[10px] top-[120px] h-[60px] w-[1px] bg-[#0A0A0C]"
-                    style={{ transform: "rotate(-2deg)" }}
-                  />
+              {/* Sigma assembly */}
+              <div ref={sigmaRef} className="sigma-subtle relative select-none" aria-hidden="true">
+                <div className="relative flex h-[360px] w-[300px] items-center justify-center md:h-[430px] md:w-[360px]">
+                  <span
+                    className="absolute text-[248px] font-bold leading-none text-[rgba(255,50,50,0.7)] md:text-[306px]"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      transform: "translateX(-2px) scaleY(0.86)",
+                    }}
+                  >
+                    Σ
+                  </span>
+                  <span
+                    className="absolute text-[248px] font-bold leading-none text-[rgba(0,210,255,0.72)] md:text-[306px]"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      transform: "translateX(2px) scaleY(0.86)",
+                    }}
+                  >
+                    Σ
+                  </span>
+                  <span
+                    className="absolute text-[248px] font-bold leading-none text-white md:text-[306px]"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      transform: "scaleY(0.86)",
+                      textShadow: "0 0 8px rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    Σ
+                  </span>
                 </div>
-
-                {/* Base fragment (broken bottom) */}
-                <div
-                  className="mx-auto mt-2 h-5 w-24"
-                  style={{
-                    background:
-                      "linear-gradient(to right, #1C1C22 0%, #3A3A42 30%, #4A4A52 50%, #3A3A42 70%, #1C1C22 100%)",
-                    transform: "translateX(8px)",
-                  }}
-                />
-
-                {/* Debris pieces */}
-                <div className="absolute bottom-[-16px] left-[calc(50%-36px)] h-1 w-3 rotate-12 bg-[#2A2A32]" />
-                <div className="absolute bottom-[-12px] right-[calc(50%-32px)] h-2 w-2 -rotate-6 bg-[#2A2A32]" />
-                <div className="absolute bottom-[-20px] left-[calc(50%+12px)] h-1 w-2 rotate-[20deg] bg-[#2A2A32]" />
               </div>
             </div>
           </div>

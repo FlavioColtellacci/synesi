@@ -52,5 +52,3 @@ next-env.d.ts
 # Reference / private notes (never commit)
 /cto_reference_ai_pricing_and_margin.md
 /research/
-# Hero column 3D plan (local only; not for GitHub)
-/hero-column-3d-implementation.md
