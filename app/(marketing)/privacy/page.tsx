@@ -1,4 +1,5 @@
 import MarketingPageNav from "@/components/landing/MarketingPageNav"
+import LandingFooter from "@/components/landing/LandingFooter"
 
 export default function PrivacyPage() {
   return (
@@ -46,11 +47,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">5. Third-Party Services</h2>
             <ul className="mt-3 space-y-2 list-none">
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Supabase</strong>, database and authentication</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Stripe</strong>, payment processing</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Anthropic</strong>, AI analysis (your thesis content is sent to their API to generate analysis)</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Vercel</strong>, hosting and anonymous usage analytics</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Alpha Vantage</strong>, stock price data (only your ticker symbols are sent, no personal data)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>We use a small number of trusted third-party providers to support core product functionality, including infrastructure, billing, analytics, and data processing.</span></li>
             </ul>
           </section>
 
@@ -66,6 +63,7 @@ export default function PrivacyPage() {
 
         </div>
       </div>
+      <LandingFooter />
     </div>
   )
 }

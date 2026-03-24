@@ -1,4 +1,5 @@
 import MarketingPageNav from "@/components/landing/MarketingPageNav"
+import LandingFooter from "@/components/landing/LandingFooter"
 
 export default function TermsPage() {
   return (
@@ -58,11 +59,12 @@ export default function TermsPage() {
 
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">9. Governing Law</h2>
-            <p>These terms are governed by the laws of Italy. Any disputes will be resolved in the courts of Italy.</p>
+            <p>These terms are governed by the laws of Switzerland. Any disputes will be resolved in the courts of Switzerland.</p>
           </section>
 
         </div>
       </div>
+      <LandingFooter />
     </div>
   )
 }
