@@ -15,6 +15,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               style={{
                 textShadow:
                   '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
+                animation: 'synesi-icon-glitch 2.5s infinite steps(2, end)',
+                willChange: 'transform',
               }}
             >
               Σ

@@ -47,7 +47,17 @@ export default function SignupPage() {
 
   return (
     <section className="w-full max-w-md rounded-xl border border-synesi-border bg-synesi-surface p-8 shadow-[0_14px_36px_rgba(0,0,0,0.35)]">
-      <p className="mb-2 text-center font-[var(--font-mono)] text-3xl text-white">Σ</p>
+      <p
+        className="mb-2 text-center font-[var(--font-mono)] text-3xl text-white"
+        style={{
+          textShadow:
+            '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
+          animation: 'synesi-icon-glitch 2.5s infinite steps(2, end)',
+          willChange: 'transform',
+        }}
+      >
+        Σ
+      </p>
       <h1 className="text-center font-[var(--font-mono)] text-xl tracking-widest text-synesi-text">
         CREATE ACCOUNT
       </h1>
