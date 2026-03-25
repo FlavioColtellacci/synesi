@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
 ]
 
 type MarketingPageNavProps = {
-  activeItem: NavItem["key"]
+  activeItem?: NavItem["key"]
 }
 
 export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) {
