@@ -25,7 +25,7 @@ export default function LandingFooter() {
             Features
           </Link>
           <Link
-            href="/#pricing"
+            href="/pricing"
             className="whitespace-nowrap font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] lg:tracking-[0.16em]"
           >
             Pricing
