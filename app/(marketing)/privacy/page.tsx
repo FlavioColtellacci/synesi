@@ -14,7 +14,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">1. Who We Are</h2>
-            <p>SYNESI ("we", "us", "our") is an investment thesis tracking tool operated as a sole-trader business. We are not a financial advisor, broker, or investment firm. Our service is designed to help investors organise and review their own thinking, not to provide investment recommendations.</p>
+            <p>SYNESI (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) is an investment thesis tracking tool operated as a sole-trader business. We are not a financial advisor, broker, or investment firm. Our service is designed to help investors organise and review their own thinking, not to provide investment recommendations.</p>
             <p className="mt-3">Contact: support@synesi.app</p>
           </section>
 
@@ -34,7 +34,7 @@ export default function PrivacyPage() {
             <ul className="mt-3 space-y-2 list-none">
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To provide and maintain the service</span></li>
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To process your subscription via Stripe</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To run AI analysis on your thesis data using the Anthropic API (your data is sent to Anthropic's API solely to generate the analysis, it is not used to train their models under our current agreement)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To run AI analysis on your thesis data using the Anthropic API (your data is sent to Anthropic&apos;s API solely to generate the analysis, it is not used to train their models under our current agreement)</span></li>
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To send transactional emails (email confirmation, subscription receipts), no marketing emails without your explicit consent</span></li>
             </ul>
           </section>

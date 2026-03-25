@@ -33,13 +33,13 @@ export default function TermsPage() {
             <ul className="mt-3 space-y-2 list-none">
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>Subscriptions are billed monthly or annually via Stripe.</span></li>
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>You may cancel at any time via your Account page. Access continues until the end of the current billing period. No refunds for partial periods.</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>We reserve the right to change pricing with 30 days' notice to existing subscribers.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>We reserve the right to change pricing with 30 days&apos; notice to existing subscribers.</span></li>
             </ul>
           </section>
 
           <section>
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">5. Acceptable Use</h2>
-            <p>You agree not to: reverse-engineer the service, attempt to access other users' data, use the service for any unlawful purpose, or resell or redistribute access.</p>
+            <p>You agree not to: reverse-engineer the service, attempt to access other users&apos; data, use the service for any unlawful purpose, or resell or redistribute access.</p>
           </section>
 
           <section>
