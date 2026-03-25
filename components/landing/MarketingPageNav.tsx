@@ -34,7 +34,7 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
       "font-mono",
       mobile ? "text-[10px] whitespace-nowrap" : "text-xs",
       "uppercase",
-      "tracking-[0.12em]",
+      mobile ? "tracking-[0.12em]" : "tracking-widest",
       itemKey === activeItem
         ? "text-[#F0F0F0]"
         : "text-[#6B6B7B] hover:text-[#F0F0F0]",
@@ -42,9 +42,9 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
     ].join(" ")
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/80 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-10 md:py-5">
-        <div className="flex items-center gap-4">
+    <nav className="fixed left-0 right-0 top-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/90 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-6xl flex-col px-4 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:px-10 md:py-0">
+        <div className="flex items-center justify-between">
           <Link href="/" className="font-mono text-base font-medium text-[#F0F0F0]">
             <span
               aria-hidden="true"
@@ -59,14 +59,14 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
           </Link>
 
           <Link
-            href="/"
-            className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
+            href="/signup"
+            className="rounded-lg bg-[#FFFFFF] px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:hidden"
           >
-            ← Back to Home
+            GET STARTED →
           </Link>
         </div>
 
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden items-center gap-8 md:flex">
           {navItems.map((item) => (
             <Link key={item.key} href={item.href} className={getNavItemClassName(item.key)}>
               {item.label}
@@ -77,7 +77,7 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
         <div className="hidden items-center gap-4 md:flex">
           <Link
             href="/login"
-            className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             LOG IN
           </Link>
@@ -90,7 +90,7 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
         </div>
       </div>
 
-      <div className="mx-auto mt-3 flex max-w-6xl items-center gap-5 overflow-x-auto px-4 pb-1 md:hidden">
+      <div className="no-scrollbar mt-4 flex items-center gap-5 overflow-x-auto pb-2 md:hidden">
         {navItems.map((item) => (
           <Link key={item.key} href={item.href} className={getNavItemClassName(item.key, true)}>
             {item.label}
@@ -101,12 +101,6 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
           className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
         >
           LOG IN
-        </Link>
-        <Link
-          href="/signup"
-          className="whitespace-nowrap rounded-lg bg-[#FFFFFF] px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
-        >
-          GET STARTED →
         </Link>
       </div>
     </nav>
