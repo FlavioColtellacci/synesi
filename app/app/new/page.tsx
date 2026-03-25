@@ -109,16 +109,17 @@ export default function NewThesisPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-4 md:px-10">
-      <section className="w-full max-w-2xl rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-8">
-        <div className="mb-6">
-          <Link
-            href="/app/dashboard"
-            className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-          >
-            ← CONVICTIONS
-          </Link>
-        </div>
+    <main className="mx-auto min-h-screen w-full max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
+      <div className="mb-6">
+        <Link
+          href="/app/dashboard"
+          className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+        >
+          ← CONVICTIONS
+        </Link>
+      </div>
+
+      <section className="mx-auto w-full max-w-2xl rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-8">
 
         {pageState === "input" ? (
           <>
