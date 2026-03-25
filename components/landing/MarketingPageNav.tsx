@@ -9,7 +9,7 @@ type NavItem = {
 }
 
 const navItems: NavItem[] = [
-  { key: "product", label: "Product", href: "/#features" },
+  { key: "product", label: "Features", href: "/#features" },
   { key: "pricing", label: "Pricing", href: "/pricing" },
   { key: "manifesto", label: "Manifesto", href: "/manifesto" },
   {

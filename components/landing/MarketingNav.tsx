@@ -33,7 +33,7 @@ export default function MarketingNav() {
             href="/#features"
             className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
-            Product
+            Features
           </Link>
           <Link
             href="/pricing"
@@ -72,7 +72,7 @@ export default function MarketingNav() {
             href="/#features"
             className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
-            Product
+            Features
           </Link>
           <Link
             href="/pricing"
