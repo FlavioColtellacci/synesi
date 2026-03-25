@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { anthropic } from "@/lib/anthropic"
+import { getPerplexityResearchContext } from "@/lib/perplexity"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -46,8 +47,12 @@ Break condition: ${a.break_condition || "Not specified"}
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { thesisId?: string }
+    const body = (await request.json()) as {
+      thesisId?: string
+      useRealTimeData?: boolean
+    }
     const thesisId = body.thesisId?.trim()
+    const useRealTimeData = Boolean(body.useRealTimeData)
 
     if (!thesisId) {
       return NextResponse.json({ error: "Missing thesisId" }, { status: 400 })
@@ -100,12 +105,30 @@ export async function POST(request: Request) {
     const assumptions = assumptionsData ?? []
     const userPrompt = buildUserPrompt(thesis, assumptions)
 
+    let researchBlock = ""
+    if (useRealTimeData) {
+      const research = await getPerplexityResearchContext({
+        focus: "company",
+        query: `Gather fresh, relevant public context to help stress-test an investment thesis for ${thesis.ticker} (${thesis.company_name}). Include: recent notable news (last 30-90 days), major product/strategy updates, competitive landscape, key risks, and any obvious factual corrections.\n\nThesis statement:\n${thesis.thesis_statement}\n\nAssumptions:\n${assumptions
+          .map((a) => `- [${a.category}] ${a.statement} (break: ${a.break_condition || "n/a"})`)
+          .join("\n")}`,
+      })
+
+      researchBlock = research.ok
+        ? `\n\nFRESH RESEARCH CONTEXT (from web-connected research; may be incomplete):\n${research.content}\n${
+            research.citations.length
+              ? `\nSources:\n${research.citations.map((url) => `- ${url}`).join("\n")}\n`
+              : ""
+          }`
+        : "\n\nFRESH RESEARCH CONTEXT: (unavailable)\n"
+    }
+
     const completion = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4000,
       system:
         "You are a rigorous thinking partner helping a long-term investor stress-test their investment thesis. Your job is NOT to give investment advice or predict stock performance. Your job is to help the investor think more clearly about their own reasoning. Always respond with valid JSON only. No explanation, no markdown.",
-      messages: [{ role: "user", content: userPrompt }],
+      messages: [{ role: "user", content: `${userPrompt}${researchBlock}` }],
     })
 
     const responseText = completion.content

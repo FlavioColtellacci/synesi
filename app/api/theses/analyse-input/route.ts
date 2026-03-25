@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { anthropic } from "@/lib/anthropic"
+import { getPerplexityResearchContext } from "@/lib/perplexity"
 import { createClient } from "@/lib/supabase/server"
 
 type ExtractedThesis = {
@@ -20,8 +21,12 @@ type ExtractedThesis = {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { rawInput?: string }
+    const body = (await request.json()) as {
+      rawInput?: string
+      useRealTimeData?: boolean
+    }
     const rawInput = body.rawInput?.trim() ?? ""
+    const useRealTimeData = Boolean(body.useRealTimeData)
 
     if (!rawInput || rawInput.length < 50) {
       return NextResponse.json(
@@ -37,6 +42,22 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    let researchBlock = ""
+    if (useRealTimeData) {
+      const research = await getPerplexityResearchContext({
+        focus: "thesis",
+        query: `The user is writing an investment thesis. Gather fresh, relevant public context to help analyse their input (company overview, recent notable news, key risks, competitive landscape, and any obvious factual corrections if the user mentions something inaccurate). User input:\n\n${rawInput}`,
+      })
+
+      researchBlock = research.ok
+        ? `\n\nFRESH RESEARCH CONTEXT (from web-connected research; may be incomplete):\n${research.content}\n${
+            research.citations.length
+              ? `\nSources:\n${research.citations.map((url) => `- ${url}`).join("\n")}\n`
+              : ""
+          }`
+        : "\n\nFRESH RESEARCH CONTEXT: (unavailable)\n"
     }
 
     const completion = await anthropic.messages.create({
@@ -63,7 +84,7 @@ export async function POST(request: Request) {
   confidenceLevel: one of: high, medium, low (infer from tone and language)
 }
 
-User input: ${rawInput}`,
+User input: ${rawInput}${researchBlock}`,
         },
       ],
     })

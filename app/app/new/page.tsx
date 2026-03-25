@@ -45,6 +45,7 @@ export default function NewThesisPage() {
   const [saving, setSaving] = useState(false)
   const [extractedData, setExtractedData] =
     useState<ExtractedThesis>(emptyExtractedData)
+  const [useRealTimeData, setUseRealTimeData] = useState(false)
 
   const canAnalyse = rawInput.trim().length >= 50
 
@@ -59,7 +60,7 @@ export default function NewThesisPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ rawInput }),
+        body: JSON.stringify({ rawInput, useRealTimeData }),
       })
 
       if (!response.ok) {
@@ -79,6 +80,7 @@ export default function NewThesisPage() {
     setPageState("input")
     setExtractedData(emptyExtractedData)
     setRawInput("")
+    setUseRealTimeData(false)
   }
 
   const handleSave = async () => {
@@ -175,7 +177,29 @@ export default function NewThesisPage() {
               {rawInput.length} characters
             </p>
 
-            <div className="mt-6 flex">
+            <label
+              htmlFor="new-thesis-live-context"
+              className="mt-5 flex cursor-pointer gap-3"
+            >
+              <input
+                id="new-thesis-live-context"
+                type="checkbox"
+                checked={useRealTimeData}
+                onChange={(e) => setUseRealTimeData(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[#2A2A32] bg-[#141418] accent-[#F0F0F0] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F0F0F0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#141418]"
+              />
+              <span className="min-w-0">
+                <span className="font-mono text-xs tracking-widest text-[#F0F0F0]">
+                  INCLUDE LIVE CONTEXT
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-[#6B6B7B]">
+                  Uses recent public information before structuring your thesis. Slightly slower when
+                  enabled.
+                </span>
+              </span>
+            </label>
+
+            <div className="mt-5 flex">
               <button
                 type="button"
                 onClick={handleAnalyse}
@@ -193,7 +217,11 @@ export default function NewThesisPage() {
             <p className="text-4xl font-mono text-[#F0F0F0] animate-pulse mb-4">
               Σ
             </p>
-            <p className="text-sm text-[#6B6B7B]">Analysing your thesis...</p>
+            <p className="text-sm text-[#6B6B7B] text-center max-w-sm">
+              {useRealTimeData
+                ? "Gathering live context, then analysing your thesis..."
+                : "Analysing your thesis..."}
+            </p>
           </div>
         ) : null}
 

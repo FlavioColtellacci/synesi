@@ -34,7 +34,8 @@ export default function PrivacyPage() {
             <ul className="mt-3 space-y-2 list-none">
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To provide and maintain the service</span></li>
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To process your subscription via Stripe</span></li>
-              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To run AI analysis on your thesis data using the Anthropic API (your data is sent to Anthropic&apos;s API solely to generate the analysis, it is not used to train their models under our current agreement)</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To run thesis analysis features in the app, we send your thesis-related content to subprocessors that process it solely to generate the analysis output you see. Use is limited to fulfilling your request and is not for training third-party systems under our agreements with those providers.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Optional real-time research:</strong> If you turn on &quot;include real-time data&quot; when analysing a thesis, we may send relevant parts of your thesis text to a third-party web research and search service so it can retrieve current public information (for example recent news or company context). We combine that material with your thesis to produce the analysis. This path is optional, off by default, and only runs when you choose it.</span></li>
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>To send transactional emails (email confirmation, subscription receipts), no marketing emails without your explicit consent</span></li>
             </ul>
           </section>
@@ -48,6 +49,7 @@ export default function PrivacyPage() {
             <h2 className="font-mono text-xs tracking-widest uppercase text-[#F0F0F0] mb-4">5. Third-Party Services</h2>
             <ul className="mt-3 space-y-2 list-none">
               <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span>We use a small number of trusted third-party providers to support core product functionality, including infrastructure, billing, analytics, and data processing.</span></li>
+              <li className="flex gap-3"><span className="text-[#F0F0F0] font-mono">,</span><span><strong className="text-[#F0F0F0]">Analysis and research:</strong> Subprocessors run the in-app thesis analysis features. If you enable real-time research, a separate web research service may process thesis-related text to fetch live public context before the analysis is produced. Each provider&apos;s terms and privacy policy apply to data they process on our behalf.</span></li>
             </ul>
           </section>
 
