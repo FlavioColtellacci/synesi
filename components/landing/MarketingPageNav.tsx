@@ -42,20 +42,29 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
     ].join(" ")
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/80 px-4 py-4 backdrop-blur-sm md:px-8 md:py-5">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="font-mono text-base font-medium text-[#F0F0F0]">
-          <span
-            aria-hidden="true"
-            style={{
-              textShadow:
-                "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
-            }}
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#2A2A32] bg-[#0A0A0C]/80 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-10 md:py-5">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="font-mono text-base font-medium text-[#F0F0F0]">
+            <span
+              aria-hidden="true"
+              style={{
+                textShadow:
+                  "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
+              }}
+            >
+              Σ
+            </span>{" "}
+            <span>SYNESI</span>
+          </Link>
+
+          <Link
+            href="/"
+            className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
           >
-            Σ
-          </span>{" "}
-          <span>SYNESI</span>
-        </Link>
+            ← Back to Home
+          </Link>
+        </div>
 
         <div className="hidden md:flex items-center gap-6">
           {navItems.map((item) => (
@@ -65,29 +74,23 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
           ))}
         </div>
 
-        <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-lg border border-[#2A2A32] px-3 py-2 font-[var(--font-mono)] text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-white hover:text-white"
-          >
-            ← Back to Home
-          </Link>
+        <div className="hidden items-center gap-4 md:flex">
           <Link
             href="/login"
-            className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+            className="font-mono text-xs uppercase tracking-[0.12em] text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             LOG IN
           </Link>
           <Link
             href="/signup"
-            className="hidden md:inline-flex font-mono text-xs uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
+            className="rounded-lg bg-[#FFFFFF] px-5 py-2.5 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
           >
             GET STARTED →
           </Link>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-5 overflow-x-auto pb-1 md:hidden">
+      <div className="mx-auto mt-3 flex max-w-6xl items-center gap-5 overflow-x-auto px-4 pb-1 md:hidden">
         {navItems.map((item) => (
           <Link key={item.key} href={item.href} className={getNavItemClassName(item.key, true)}>
             {item.label}
@@ -101,7 +104,7 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
         </Link>
         <Link
           href="/signup"
-          className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-[#F0F0F0] transition-colors hover:text-white"
+          className="whitespace-nowrap rounded-lg bg-[#FFFFFF] px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
         >
           GET STARTED →
         </Link>
