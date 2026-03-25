@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { trackFunnelEvent } from "@/lib/analytics"
 
@@ -110,6 +111,15 @@ export default function NewThesisPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#0A0A0C] px-4 md:px-10">
       <section className="w-full max-w-2xl rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-8">
+        <div className="mb-6">
+          <Link
+            href="/app/dashboard"
+            className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+          >
+            ← CONVICTIONS
+          </Link>
+        </div>
+
         {pageState === "input" ? (
           <>
             <h1 className="font-mono uppercase text-[#F0F0F0] text-xl tracking-widest mb-2">
