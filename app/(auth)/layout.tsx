@@ -19,6 +19,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             >
               Σ
             </span>
+            {" "}
             <span>SYNESI</span>
           </Link>
           <Link
