@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:h-16 md:px-10 md:py-0">
           <Link
             href="/"
-            className="inline-flex items-center font-mono text-base font-medium text-[#F0F0F0]"
+            className="font-mono text-base font-medium text-[#F0F0F0]"
           >
             <span
               aria-hidden="true"
