@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/ingest-source-documents",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
