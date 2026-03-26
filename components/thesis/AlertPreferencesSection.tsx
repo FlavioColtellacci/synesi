@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import type { AlertRule, TrustedSource } from "@/types/database"
 
 type AlertRuleWithSources = AlertRule & {
@@ -11,6 +12,18 @@ type AlertPreferencesSectionProps = {
   thesisId: string
   trustedSources: TrustedSource[]
   initialRules: AlertRuleWithSources[]
+}
+
+type CopilotSuggestion = {
+  recommendedMode: AlertRule["mode"]
+  recommendedMinConfidence: AlertRule["min_confidence"]
+  includeKeywords: string[]
+  excludeKeywords: string[]
+  sources: Array<{
+    sourceType: string
+    nameCandidates: string[]
+    urlCandidates: Array<{ url: string; isFeedLike: boolean }>
+  }>
 }
 
 const MODE_OPTIONS: Array<{ value: AlertRule["mode"]; label: string; hint: string }> = [
@@ -45,11 +58,22 @@ export default function AlertPreferencesSection({
   trustedSources,
   initialRules,
 }: AlertPreferencesSectionProps) {
+  const router = useRouter()
   const [rules, setRules] = useState<AlertRuleWithSources[]>(initialRules)
   const [error, setError] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [includeInput, setIncludeInput] = useState("")
   const [excludeInput, setExcludeInput] = useState("")
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false)
+  const [copilotIntent, setCopilotIntent] = useState("")
+  const [copilotLoading, setCopilotLoading] = useState(false)
+  const [copilotError, setCopilotError] = useState<string | null>(null)
+  const [copilotSuggestion, setCopilotSuggestion] = useState<CopilotSuggestion | null>(null)
+  const [copilotApplyRule, setCopilotApplyRule] = useState(true)
+  const [copilotAddSources, setCopilotAddSources] = useState(true)
+  const [copilotSelections, setCopilotSelections] = useState<
+    Array<{ nameIndex: number; urlIndex: number; selected: boolean }>
+  >([])
   const primaryRule = rules[0] ?? null
 
   const selectedSourceIds = useMemo(() => new Set(primaryRule?.sourceIds ?? []), [primaryRule?.sourceIds])
@@ -280,34 +304,349 @@ export default function AlertPreferencesSection({
     }
   }
 
+  async function runCopilot() {
+    const intent = copilotIntent.trim()
+    if (!intent) {
+      setCopilotError("Describe what you want (for example: only Dan Ives on NVDA AI news).")
+      return
+    }
+
+    setCopilotLoading(true)
+    setCopilotError(null)
+    setCopilotSuggestion(null)
+
+    try {
+      const response = await fetch(`/api/theses/${thesisId}/alert-rules/copilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent }),
+      })
+      const payload = await parseJson<{ suggestion?: CopilotSuggestion; error?: string }>(response)
+      if (!response.ok || !payload?.suggestion) {
+        throw new Error(payload?.error ?? "Copilot request failed")
+      }
+
+      setCopilotSuggestion(payload.suggestion)
+      setCopilotSelections(
+        payload.suggestion.sources.map(() => ({ nameIndex: 0, urlIndex: 0, selected: true })),
+      )
+    } catch (err) {
+      setCopilotError(err instanceof Error ? err.message : "Copilot request failed")
+    } finally {
+      setCopilotLoading(false)
+    }
+  }
+
+  async function applyCopilotSuggestion() {
+    if (!copilotSuggestion) return
+
+    setIsBusy(true)
+    setError(null)
+    setCopilotError(null)
+
+    try {
+      const rule = await ensurePrimaryRule()
+      if (!rule) {
+        setCopilotError("Could not initialize alert preferences.")
+        return
+      }
+
+      if (copilotApplyRule) {
+        const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: copilotSuggestion.recommendedMode,
+            minConfidence: copilotSuggestion.recommendedMinConfidence,
+            includeKeywords: copilotSuggestion.includeKeywords,
+            excludeKeywords: copilotSuggestion.excludeKeywords,
+            isEnabled: true,
+          }),
+        })
+        const payload = await parseJson<{ error?: string }>(response)
+        if (!response.ok) {
+          throw new Error(payload?.error ?? "Failed to apply rule settings")
+        }
+        updatePrimaryRule({
+          mode: copilotSuggestion.recommendedMode,
+          min_confidence: copilotSuggestion.recommendedMinConfidence,
+          include_keywords: copilotSuggestion.includeKeywords,
+          exclude_keywords: copilotSuggestion.excludeKeywords,
+          is_enabled: true,
+        })
+      }
+
+      if (copilotAddSources) {
+        const selections = copilotSelections
+        for (let i = 0; i < copilotSuggestion.sources.length; i++) {
+          const selection = selections[i]
+          const source = copilotSuggestion.sources[i]
+          if (!selection?.selected) continue
+
+          const name = source.nameCandidates[selection.nameIndex] ?? source.nameCandidates[0] ?? ""
+          const chosenUrl = source.urlCandidates[selection.urlIndex]?.url ?? source.urlCandidates[0]?.url ?? ""
+          const isFeedLike = source.urlCandidates[selection.urlIndex]?.isFeedLike ?? false
+
+          if (!name || !chosenUrl) continue
+          if (!isFeedLike) {
+            throw new Error(`"${chosenUrl}" doesn't look like an RSS/Atom feed URL. Pick a different URL.`)
+          }
+
+          const addResponse = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              url: chosenUrl,
+              sourceType: source.sourceType,
+            }),
+          })
+          const addPayload = await parseJson<{ error?: string }>(addResponse)
+          if (!addResponse.ok) {
+            throw new Error(addPayload?.error ?? `Failed to add trusted source "${name}"`)
+          }
+        }
+      }
+
+      setIsCopilotOpen(false)
+      setCopilotSuggestion(null)
+      setCopilotIntent("")
+      router.refresh()
+    } catch (err) {
+      setCopilotError(err instanceof Error ? err.message : "Failed to apply copilot suggestion")
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
   return (
     <section className="mb-6">
       <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
         ALERT PREFERENCES
       </p>
       <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-[#F0F0F0]">Personalized challenge alerts</p>
             <p className="mt-1 text-xs text-[#6B6B7B]">
               Control which trusted sources can trigger thesis challenge notifications.
             </p>
           </div>
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => {
-              void handleEnabledToggle(!isEnabled)
-            }}
-            className={`rounded-lg border px-3 py-1.5 font-mono text-[10px] tracking-widest transition-colors disabled:opacity-60 ${
-              isEnabled
-                ? "border-[#00D1B2]/40 text-[#00D1B2] hover:bg-[#00D1B2]/10"
-                : "border-[#2A2A32] text-[#6B6B7B] hover:text-[#F0F0F0]"
-            }`}
-          >
-            {isEnabled ? "ENABLED" : "DISABLED"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => {
+                setIsCopilotOpen(true)
+                setCopilotError(null)
+              }}
+              className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+            >
+              GENERATE SETUP
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => {
+                void handleEnabledToggle(!isEnabled)
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-mono text-[10px] tracking-widest transition-colors disabled:opacity-60 ${
+                isEnabled
+                  ? "border-[#00D1B2]/40 text-[#00D1B2] hover:bg-[#00D1B2]/10"
+                  : "border-[#2A2A32] text-[#6B6B7B] hover:text-[#F0F0F0]"
+              }`}
+            >
+              {isEnabled ? "ENABLED" : "DISABLED"}
+            </button>
+          </div>
         </div>
+
+        {isCopilotOpen ? (
+          <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                  Generate personalized source setup
+                </p>
+                <p className="mt-1 text-xs text-[#6B6B7B]">
+                  You&apos;ll review the suggestions before anything is saved.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={copilotLoading || isBusy}
+                onClick={() => {
+                  setIsCopilotOpen(false)
+                  setCopilotSuggestion(null)
+                  setCopilotError(null)
+                }}
+                className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
+              >
+                CLOSE
+              </button>
+            </div>
+
+            <textarea
+              value={copilotIntent}
+              disabled={copilotLoading || isBusy}
+              onChange={(event) => setCopilotIntent(event.target.value)}
+              placeholder='Example: "Only Dan Ives on NVDA AI news. Ignore everything else."'
+              className="mt-3 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+              rows={3}
+            />
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={copilotLoading || isBusy}
+                onClick={() => {
+                  void runCopilot()
+                }}
+                className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+              >
+                {copilotLoading ? "GENERATING..." : "GENERATE"}
+              </button>
+
+              {copilotSuggestion ? (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => {
+                    void applyCopilotSuggestion()
+                  }}
+                  className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
+                >
+                  APPLY SELECTIONS
+                </button>
+              ) : null}
+
+              <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
+                <input
+                  type="checkbox"
+                  checked={copilotApplyRule}
+                  disabled={copilotLoading || isBusy}
+                  onChange={(event) => setCopilotApplyRule(event.target.checked)}
+                />
+                Apply rule settings
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
+                <input
+                  type="checkbox"
+                  checked={copilotAddSources}
+                  disabled={copilotLoading || isBusy}
+                  onChange={(event) => setCopilotAddSources(event.target.checked)}
+                />
+                Add trusted sources
+              </label>
+            </div>
+
+            {copilotError ? <p className="mt-3 font-mono text-xs text-[#FF3B30]">{copilotError}</p> : null}
+
+            {copilotSuggestion ? (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-3">
+                  <p className="text-xs text-[#6B6B7B]">
+                    Recommended: <span className="text-[#F0F0F0]">{copilotSuggestion.recommendedMode}</span>{" "}
+                    • min confidence{" "}
+                    <span className="text-[#F0F0F0]">{copilotSuggestion.recommendedMinConfidence}</span>
+                  </p>
+                  {(copilotSuggestion.includeKeywords.length > 0 || copilotSuggestion.excludeKeywords.length > 0) ? (
+                    <p className="mt-1 text-xs text-[#6B6B7B]">
+                      Keywords: include{" "}
+                      <span className="text-[#F0F0F0]">
+                        {copilotSuggestion.includeKeywords.length ? copilotSuggestion.includeKeywords.join(", ") : "—"}
+                      </span>{" "}
+                      • exclude{" "}
+                      <span className="text-[#F0F0F0]">
+                        {copilotSuggestion.excludeKeywords.length ? copilotSuggestion.excludeKeywords.join(", ") : "—"}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
+
+                {copilotSuggestion.sources.map((src, index) => {
+                  const selection = copilotSelections[index] ?? { nameIndex: 0, urlIndex: 0, selected: true }
+                  const selectedUrl = src.urlCandidates[selection.urlIndex]
+                  return (
+                    <div
+                      key={`${src.sourceType}-${index}`}
+                      className="rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-3"
+                    >
+                      <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
+                        <input
+                          type="checkbox"
+                          checked={selection.selected}
+                          disabled={copilotLoading || isBusy}
+                          onChange={(event) => {
+                            setCopilotSelections((current) =>
+                              current.map((item, i) =>
+                                i === index ? { ...item, selected: event.target.checked } : item,
+                              ),
+                            )
+                          }}
+                        />
+                        Include this source ({src.sourceType})
+                      </label>
+
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <label className="block">
+                          <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                            Name
+                          </span>
+                          <select
+                            value={selection.nameIndex}
+                            disabled={copilotLoading || isBusy}
+                            onChange={(event) => {
+                              const nameIndex = Number.parseInt(event.target.value, 10) || 0
+                              setCopilotSelections((current) =>
+                                current.map((item, i) => (i === index ? { ...item, nameIndex } : item)),
+                              )
+                            }}
+                            className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                          >
+                            {src.nameCandidates.map((name, i) => (
+                              <option key={`${name}-${i}`} value={i}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block">
+                          <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                            URL
+                          </span>
+                          <select
+                            value={selection.urlIndex}
+                            disabled={copilotLoading || isBusy}
+                            onChange={(event) => {
+                              const urlIndex = Number.parseInt(event.target.value, 10) || 0
+                              setCopilotSelections((current) =>
+                                current.map((item, i) => (i === index ? { ...item, urlIndex } : item)),
+                              )
+                            }}
+                            className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                          >
+                            {src.urlCandidates.map((u, i) => (
+                              <option key={`${u.url}-${i}`} value={i}>
+                                {u.isFeedLike ? "✅ " : "⚠ "} {u.url}
+                              </option>
+                            ))}
+                          </select>
+                          {selectedUrl && !selectedUrl.isFeedLike ? (
+                            <p className="mt-1 text-xs text-[#FFB800]">
+                              This URL may not be RSS/Atom. Pick a feed-like URL to enable saving.
+                            </p>
+                          ) : null}
+                        </label>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {hasMultipleRules ? (
           <p className="mt-3 text-xs text-[#FFB800]">
