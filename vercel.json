@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/refresh-financial",
       "schedule": "30 18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/ingest-source-documents",
+      "schedule": "0 */4 * * *"
     }
   ]
 }
