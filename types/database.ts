@@ -246,6 +246,8 @@ export type Database = {
           name: string
           mode: "only_sources" | "include_sources" | "exclude_sources"
           min_confidence: "high" | "medium"
+          include_keywords: string[]
+          exclude_keywords: string[]
           is_enabled: boolean
           created_at: string
           updated_at: string
@@ -257,6 +259,8 @@ export type Database = {
           name: string
           mode: "only_sources" | "include_sources" | "exclude_sources"
           min_confidence: "high" | "medium"
+          include_keywords?: string[]
+          exclude_keywords?: string[]
           is_enabled?: boolean
           created_at?: string
           updated_at?: string
@@ -268,6 +272,8 @@ export type Database = {
           name?: string
           mode?: "only_sources" | "include_sources" | "exclude_sources"
           min_confidence?: "high" | "medium"
+          include_keywords?: string[]
+          exclude_keywords?: string[]
           is_enabled?: boolean
           created_at?: string
           updated_at?: string
