@@ -3,7 +3,11 @@ import { notFound, redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
 import { AnalysisHistoryReadMore } from "@/components/thesis/AnalysisHistoryReadMore"
 import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
-import { createClient } from "@/lib/supabase/server"
+import FinancialRefreshButton from "@/components/thesis/FinancialRefreshButton"
+import TrustedSourcesSection from "@/components/thesis/TrustedSourcesSection"
+import { refreshFinancialSnapshot } from "@/lib/financial/refresh"
+import { createAdminClient, createClient } from "@/lib/supabase/server"
+import type { FinancialSnapshotPayload } from "@/lib/financial/types"
 import type { Database } from "@/types/database"
 
 type Assumption = Database["public"]["Tables"]["assumptions"]["Row"]
@@ -11,6 +15,14 @@ type ThesisUpdate = Pick<
   Database["public"]["Tables"]["thesis_updates"]["Row"],
   "id" | "update_type" | "note" | "old_status" | "new_status" | "created_at"
 >
+type TrustedSource = Database["public"]["Tables"]["trusted_sources"]["Row"]
+type FinancialSnapshot = Database["public"]["Tables"]["financial_snapshots"]["Row"]
+type FinancialCoverage = Partial<
+  Record<keyof FinancialSnapshotPayload, "ok" | "missing" | "computed" | "unsupported">
+>
+type UserRefreshCountRow = {
+  count: number | null
+}
 
 type ParsedAnalysisSection = {
   summary?: string
@@ -84,6 +96,13 @@ function getUpdateTypeMeta(updateType: string) {
     }
   }
 
+  if (updateType === "financial_refresh") {
+    return {
+      label: "FINANCIAL REFRESH",
+      className: "bg-[#0B3A36] text-[#00D1B2]",
+    }
+  }
+
   return {
     label: "CREATED",
     className: "bg-[#2A2A32] text-[#6B6B7B]",
@@ -96,6 +115,120 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   })
+}
+
+function formatNumber(value: number | null, digits = 2) {
+  if (value === null || !Number.isFinite(value)) return "N/A"
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  })
+}
+
+function formatPercent(value: number | null, digits = 1) {
+  if (value === null || !Number.isFinite(value)) return "N/A"
+  return `${(value * 100).toFixed(digits)}%`
+}
+
+function formatPrice(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "N/A"
+  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+}
+
+function getMetricValueClass(metric: { label: string; raw: number | null }, payload: FinancialSnapshotPayload | null) {
+  const neutral = "text-[#F0F0F0]"
+  const good = "text-[#00D1B2]"
+  const bad = "text-[#FF6B6B]"
+  const value = metric.raw
+
+  if (value === null || !Number.isFinite(value)) return neutral
+
+  switch (metric.label) {
+    case "Margin Of Safety":
+      return value > 0 ? good : bad
+    case "RSI (14)":
+      if (value <= 30) return good
+      if (value >= 70) return bad
+      return neutral
+    case "P/E":
+      if (value <= 25) return good
+      if (value >= 40) return bad
+      return neutral
+    case "Forward P/E":
+      if (value <= 22) return good
+      if (value >= 35) return bad
+      return neutral
+    case "PEG":
+      if (value <= 1.5) return good
+      if (value >= 2.5) return bad
+      return neutral
+    case "ROIC":
+      if (value >= 0.15) return good
+      if (value <= 0.08) return bad
+      return neutral
+    case "EPS":
+      return value > 0 ? good : bad
+    case "Consensus Target": {
+      const price = payload?.price ?? null
+      if (price === null || !Number.isFinite(price)) return neutral
+      return value > price ? good : bad
+    }
+    default:
+      return neutral
+  }
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) return "Unknown"
+  try {
+    return new Date(value).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  } catch {
+    return "Unknown"
+  }
+}
+
+function getFinancialSourceLabel(provider: string | null | undefined) {
+  if (provider === "ai_web") return "AI WEB SNAPSHOT"
+  if (provider === "eodhd") return "PROVIDER API (EODHD)"
+  return "UNKNOWN SOURCE"
+}
+
+function parseFinancialSnapshotPayload(raw: Record<string, unknown>): FinancialSnapshotPayload | null {
+  const payload = raw as Partial<FinancialSnapshotPayload>
+  if (!payload || typeof payload !== "object") return null
+  return {
+    price: typeof payload.price === "number" ? payload.price : null,
+    consensusTarget: typeof payload.consensusTarget === "number" ? payload.consensusTarget : null,
+    pe: typeof payload.pe === "number" ? payload.pe : null,
+    forwardPe: typeof payload.forwardPe === "number" ? payload.forwardPe : null,
+    peg: typeof payload.peg === "number" ? payload.peg : null,
+    roic: typeof payload.roic === "number" ? payload.roic : null,
+    eps: typeof payload.eps === "number" ? payload.eps : null,
+    fcfPerShare: typeof payload.fcfPerShare === "number" ? payload.fcfPerShare : null,
+    marginOfSafety: typeof payload.marginOfSafety === "number" ? payload.marginOfSafety : null,
+    rsi14: typeof payload.rsi14 === "number" ? payload.rsi14 : null,
+    insiderActivity30d:
+      payload.insiderActivity30d && typeof payload.insiderActivity30d === "object"
+        ? (payload.insiderActivity30d as FinancialSnapshotPayload["insiderActivity30d"])
+        : null,
+    nextEarningsDate:
+      typeof payload.nextEarningsDate === "string" ? payload.nextEarningsDate : null,
+    recentTargetChanges: Array.isArray(payload.recentTargetChanges)
+      ? payload.recentTargetChanges
+      : [],
+    indexChanges: Array.isArray(payload.indexChanges) ? payload.indexChanges : [],
+  }
+}
+
+function parseFinancialCoverage(raw: Record<string, unknown> | null): FinancialCoverage {
+  if (!raw || typeof raw !== "object") return {}
+  return raw as FinancialCoverage
 }
 
 function getSectionContent(analysis: ParsedAnalysisNote) {
@@ -172,6 +305,7 @@ function getAnalysisPreview(analysis: ParsedAnalysisNote | null): string {
 export default async function ThesisDetailPage({ params }: PageProps) {
   const { id } = await params
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -191,7 +325,20 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  const [{ data: assumptionsData }, { data: updatesData }] = await Promise.all([
+  const dailyRefreshLimit = Number.parseInt(
+    process.env.FINANCIAL_REFRESH_DAILY_LIMIT_PER_USER ?? "8",
+    10,
+  )
+  const startOfUtcDay = new Date()
+  startOfUtcDay.setUTCHours(0, 0, 0, 0)
+
+  const [
+    { data: assumptionsData },
+    { data: updatesData },
+    { data: trustedSourcesData },
+    { data: financialSnapshotData },
+    { count: refreshUsedTodayCount },
+  ] = await Promise.all([
     supabase
       .from("assumptions")
       .select("*")
@@ -204,15 +351,116 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .eq("thesis_id", id)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("trusted_sources")
+      .select("id, thesis_id, user_id, name, url, source_type, created_at")
+      .eq("thesis_id", id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    adminSupabase
+      .from("financial_snapshots")
+      .select("id, ticker, provider, as_of, fetched_at, stale_after, payload, coverage")
+      .eq("ticker", thesis.ticker.trim().toUpperCase())
+      .maybeSingle(),
+    supabase
+      .from("thesis_updates")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("update_type", "financial_refresh")
+      .gte("created_at", startOfUtcDay.toISOString()),
   ])
 
   const assumptions: Assumption[] = assumptionsData ?? []
   const updates: ThesisUpdate[] = updatesData ?? []
+  const trustedSources: TrustedSource[] = trustedSourcesData ?? []
   const statusMeta = getStatusMeta(thesis.status)
   const latestAiUpdate = updates.find((update) => update.update_type === "ai_analysis")
   const latestParsedAnalysis = parseAnalysisNote(latestAiUpdate?.note ?? null)
   const latestSavedAnalysis = toAnalysisResult(latestParsedAnalysis)
   const lastAiAnalysisAt = latestAiUpdate?.created_at ?? null
+  const financialSnapshot = (financialSnapshotData as FinancialSnapshot | null) ?? null
+  const financialPayload = financialSnapshot
+    ? parseFinancialSnapshotPayload(financialSnapshot.payload)
+    : null
+  const financialCoverage = financialSnapshot
+    ? parseFinancialCoverage(financialSnapshot.coverage)
+    : {}
+
+  const isSnapshotStale = financialSnapshot
+    ? new Date(financialSnapshot.stale_after).getTime() <= Date.now()
+    : true
+  const usedToday = refreshUsedTodayCount ?? 0
+  const effectiveDailyLimit = Number.isFinite(dailyRefreshLimit) ? dailyRefreshLimit : 8
+  const hasRefreshRemaining = usedToday < effectiveDailyLimit
+  const missingCoverageCount = Object.values(financialCoverage).filter(
+    (value) => value === "missing" || value === "unsupported",
+  ).length
+  const hasOnlyPriceSignal =
+    (financialPayload?.price ?? null) !== null &&
+    (financialPayload?.consensusTarget ?? null) === null &&
+    (financialPayload?.pe ?? null) === null &&
+    (financialPayload?.forwardPe ?? null) === null &&
+    (financialPayload?.peg ?? null) === null &&
+    (financialPayload?.roic ?? null) === null &&
+    (financialPayload?.eps ?? null) === null &&
+    (financialPayload?.fcfPerShare ?? null) === null &&
+    (financialPayload?.rsi14 ?? null) === null &&
+    (financialPayload?.nextEarningsDate ?? null) === null &&
+    (financialPayload?.insiderActivity30d ?? null) === null
+  const primaryMetrics = [
+    {
+      label: "Price",
+      raw: financialPayload?.price ?? null,
+      value: formatPrice(financialPayload?.price ?? null),
+    },
+    {
+      label: "Consensus Target",
+      raw: financialPayload?.consensusTarget ?? null,
+      value: formatPrice(financialPayload?.consensusTarget ?? null),
+    },
+    {
+      label: "Margin Of Safety",
+      raw: financialPayload?.marginOfSafety ?? null,
+      value: formatPercent(financialPayload?.marginOfSafety ?? null),
+    },
+    { label: "P/E", raw: financialPayload?.pe ?? null, value: formatNumber(financialPayload?.pe ?? null) },
+    {
+      label: "Forward P/E",
+      raw: financialPayload?.forwardPe ?? null,
+      value: formatNumber(financialPayload?.forwardPe ?? null),
+    },
+    { label: "PEG", raw: financialPayload?.peg ?? null, value: formatNumber(financialPayload?.peg ?? null) },
+    {
+      label: "ROIC",
+      raw: financialPayload?.roic ?? null,
+      value: formatPercent(financialPayload?.roic ?? null),
+    },
+    { label: "EPS", raw: financialPayload?.eps ?? null, value: formatNumber(financialPayload?.eps ?? null) },
+    {
+      label: "FCF / Share",
+      raw: financialPayload?.fcfPerShare ?? null,
+      value: formatNumber(financialPayload?.fcfPerShare ?? null),
+    },
+    {
+      label: "RSI (14)",
+      raw: financialPayload?.rsi14 ?? null,
+      value: formatNumber(financialPayload?.rsi14 ?? null),
+    },
+    {
+      label: "Insider Activity",
+      raw: null,
+      value: financialPayload?.insiderActivity30d?.label ?? "N/A",
+    },
+  ].filter((metric) => metric.value !== "N/A")
+  const hasSecondaryMetrics =
+    (financialPayload?.nextEarningsDate ?? null) !== null ||
+    (financialPayload?.recentTargetChanges?.length ?? 0) > 0 ||
+    (financialPayload?.indexChanges?.length ?? 0) > 0
+
+  // Preserve API quota: auto-refresh only stale snapshots when user still has daily budget.
+  if (financialSnapshot && isSnapshotStale && hasRefreshRemaining) {
+    void refreshFinancialSnapshot({ ticker: thesis.ticker })
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
@@ -358,6 +606,99 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           initialLastAnalysedAt={lastAiAnalysisAt}
           initialAnalysis={latestSavedAnalysis}
         />
+      </section>
+
+      <TrustedSourcesSection thesisId={thesis.id} initialSources={trustedSources} />
+
+      <section className="mb-6">
+        <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
+          FINANCIAL CONTEXT
+        </p>
+        <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                {financialSnapshot
+                  ? isSnapshotStale
+                    ? "STALE SNAPSHOT"
+                    : "FRESH SNAPSHOT"
+                  : "NO SNAPSHOT YET"}
+              </p>
+              <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
+                LAST FETCH: {formatTimestamp(financialSnapshot?.fetched_at ?? null)}
+              </p>
+              {financialSnapshot ? (
+                <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
+                  SOURCE: {getFinancialSourceLabel(financialSnapshot.provider)}
+                </p>
+              ) : null}
+            </div>
+            <FinancialRefreshButton
+              ticker={thesis.ticker}
+              initialLimit={effectiveDailyLimit}
+              initialUsedToday={usedToday}
+              initialHasData={primaryMetrics.length > 0}
+            />
+          </div>
+          {missingCoverageCount > 0 ? (
+            <p className="mb-4 text-xs text-[#6B6B7B]">
+              Partial coverage: {missingCoverageCount} metric
+              {missingCoverageCount === 1 ? "" : "s"} unavailable from current provider access.
+            </p>
+          ) : null}
+          {hasOnlyPriceSignal ? (
+            <p className="mb-4 text-xs text-[#6B6B7B]">
+              Price-only mode: live quote is available via fallback source; most advanced fields
+              require a higher EODHD plan.
+            </p>
+          ) : null}
+          <p className="mb-4 text-xs text-[#6B6B7B]">
+            We currently show only metrics reliably available on the active provider tier. More
+            financial data coverage is coming soon.
+          </p>
+          <p className="mb-4 text-xs text-[#6B6B7B]">
+            Green means favorable signal, red means caution. AI-extracted values can be stale or
+            imperfect; verify with your broker/data terminal before making decisions.
+          </p>
+
+          {primaryMetrics.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {primaryMetrics.map((metric) => (
+                <div key={metric.label}>
+                  <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
+                    {metric.label}
+                  </p>
+                  <p className={`mt-1 text-sm ${getMetricValueClass(metric, financialPayload)}`}>
+                    {metric.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[#6B6B7B]">
+              No provider-backed financial metrics are available for this ticker yet.
+            </p>
+          )}
+
+          {hasSecondaryMetrics ? (
+            <details className="mt-4 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3">
+              <summary className="cursor-pointer font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
+                More Metrics
+              </summary>
+              <div className="mt-3 space-y-2 text-sm text-[#6B6B7B]">
+                {financialPayload?.nextEarningsDate ? (
+                  <p>Next earnings: {financialPayload.nextEarningsDate}</p>
+                ) : null}
+                {(financialPayload?.recentTargetChanges?.length ?? 0) > 0 ? (
+                  <p>Recent target changes: {financialPayload?.recentTargetChanges?.length ?? 0}</p>
+                ) : null}
+                {(financialPayload?.indexChanges?.length ?? 0) > 0 ? (
+                  <p>Index changes: {financialPayload?.indexChanges?.length ?? 0}</p>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+        </article>
       </section>
 
       <section className="mt-12 border-t border-[#2A2A32] pt-6 [&_button]:min-h-[44px]">

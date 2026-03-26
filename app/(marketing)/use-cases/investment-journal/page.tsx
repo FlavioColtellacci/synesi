@@ -4,7 +4,7 @@ import MarketingPageNav from "@/components/landing/MarketingPageNav"
 import LandingFooter from "@/components/landing/LandingFooter"
 
 export const metadata: Metadata = {
-  title: "Investment Journal for Serious Investors",
+  title: "Investment Journal for Thesis-Driven Investors",
   description:
     "SYNESI replaces scattered notes with a structured investment journal. Document your thesis, track assumptions, and review your conviction over time with AI-powered analysis.",
 }
