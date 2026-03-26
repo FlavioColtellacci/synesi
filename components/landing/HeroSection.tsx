@@ -111,8 +111,8 @@ export default function HeroSection() {
               </h1>
 
               <p className="mt-6 max-w-sm font-sans text-base leading-relaxed text-[#6B6B7B] md:text-lg">
-                The app that answers &ldquo;why you own a stock&rdquo;, and
-                tells you when the answer has changed.
+                Where your investment story lives, grows, and gets
+                tested against reality.
               </p>
 
               <Link

@@ -5,7 +5,7 @@ import MarketingPageNav from '@/components/landing/MarketingPageNav'
 export const metadata = {
   title: 'Manifesto | SYNESI',
   description:
-    'Why SYNESI exists. A statement on conviction, process, and what it means to truly understand why you own a stock.',
+    'Why SYNESI exists. A statement on conviction, narrative, and what it means to keep your investment story honest over time.',
 }
 
 export default function ManifestoPage() {
@@ -90,9 +90,10 @@ export default function ManifestoPage() {
               What SYNESI is
             </p>
             <p>
-              SYNESI captures your conviction at the moment of purchase, the
-              thesis, the assumptions behind it, the conditions under which you&apos;d
-              sell. Then it keeps those convictions alive as the story unfolds.
+              SYNESI captures your conviction at the moment you take a position &mdash;
+              the thesis, the assumptions behind it, the conditions under which
+              you&apos;d exit. Then it keeps that narrative alive, tracking how your
+              story evolves as reality unfolds.
             </p>
             <p>
               When a significant event touches one of your assumptions, you are
@@ -110,8 +111,9 @@ export default function ManifestoPage() {
               doesn&apos;t aggregate financial news.
             </p>
             <p>
-              It asks one question: why do you own this? And it asks it again when
-              the answer might have changed.
+              It keeps your answer to one question: why do you own this? And it
+              shows you when that answer has been tested, challenged, or quietly
+              outgrown.
             </p>
           </div>
 
@@ -122,13 +124,12 @@ export default function ManifestoPage() {
               Who it is for
             </p>
             <p>
-              For investors who think in years, not minutes. Who read earnings
-              calls, not headlines. Who want to own fewer companies and understand
-              them better.
+              For investors and traders who hold positions based on a clear
+              thesis, and want to review that thesis with discipline over time.
             </p>
             <p className="text-[#6B6B7B]">
-              Not for traders. Not for momentum chasers. Not for anyone who
-              mistakes activity for investing.
+              Not for hype-driven decisions. Not for blind copying. For people
+              who can explain their reasoning and are willing to challenge it.
             </p>
           </div>
 

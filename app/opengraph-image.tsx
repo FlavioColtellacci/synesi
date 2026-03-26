@@ -60,7 +60,7 @@ export default function Image() {
         </div>
 
         <span style={{ fontSize: 26, color: '#6B6B7B', lineHeight: 1.5 }}>
-          The app that answers why you own a stock, and tells you when the answer has changed.
+          Where your investment story lives, grows, and gets tested against reality.
         </span>
       </div>
     ),

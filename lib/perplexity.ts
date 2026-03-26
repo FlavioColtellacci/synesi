@@ -19,6 +19,7 @@ function truncate(input: string, maxChars: number) {
 export async function getPerplexityResearchContext(params: {
   query: string
   focus?: "markets" | "company" | "thesis"
+  model?: string
 }): Promise<PerplexityResearchResult> {
   const apiKey = process.env.PERPLEXITY_API_KEY?.trim()
 
@@ -36,6 +37,7 @@ export async function getPerplexityResearchContext(params: {
 
   try {
     const focus = params.focus ?? "thesis"
+    const model = params.model?.trim() || "sonar-pro"
     const now = new Date().toISOString()
     const system = `You are a research assistant. Use web-connected retrieval.
 Return a concise, factual research brief for ${focus}. Prefer the last 30-90 days.
@@ -49,9 +51,7 @@ Format as plain text with short sections and bullet points. Include 5-10 sources
       },
       signal: controller.signal,
       body: JSON.stringify({
-        // Model name intentionally not hard-coded to a specific tiered plan;
-        // "sonar-pro" is Perplexity's common high-quality search model.
-        model: "sonar-pro",
+        model,
         temperature: 0.2,
         messages: [
           { role: "system", content: system },

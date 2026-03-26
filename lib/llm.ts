@@ -28,18 +28,18 @@ function getAnthropicCompatibleConfig(provider: LlmProvider): {
   }
 }
 
-export function getTextModel(): string {
-  const provider = getProvider()
-
+export function getTextModel(provider: LlmProvider = getProvider()): string {
   if (provider === "minimax") {
-    return process.env.LLM_TEXT_MODEL ?? "MiniMax-M2.7"
+    return process.env.MINIMAX_TEXT_MODEL ?? "MiniMax-M2.7"
   }
 
-  return process.env.LLM_TEXT_MODEL ?? "claude-sonnet-4-6"
+  return process.env.ANTHROPIC_TEXT_MODEL ?? "claude-sonnet-4-6"
 }
 
-const provider = getProvider()
-const { apiKey, baseURL } = getAnthropicCompatibleConfig(provider)
+export function createLlm(provider: LlmProvider = getProvider()) {
+  const { apiKey, baseURL } = getAnthropicCompatibleConfig(provider)
+  return new Anthropic({ apiKey, baseURL })
+}
 
-export const llm = new Anthropic({ apiKey, baseURL })
+export const llm = createLlm()
 

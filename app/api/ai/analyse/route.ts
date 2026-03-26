@@ -1,11 +1,32 @@
 import { NextResponse } from "next/server"
-import { llm, getTextModel } from "@/lib/llm"
+import { createLlm, getTextModel, type LlmProvider } from "@/lib/llm"
 import { getPerplexityResearchContext } from "@/lib/perplexity"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
 type Thesis = Database["public"]["Tables"]["theses"]["Row"]
 type Assumption = Database["public"]["Tables"]["assumptions"]["Row"]
+
+function getProviderForUser(profile: {
+  subscription_status: string
+  trial_ends_at: string | null
+} | null): LlmProvider {
+  if (profile?.subscription_status === "active") {
+    return "anthropic"
+  }
+
+  if (profile?.trial_ends_at && new Date(profile.trial_ends_at).getTime() > Date.now()) {
+    return "minimax"
+  }
+
+  return "anthropic"
+}
+
+function isModelNotFoundError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return message.includes("not_found_error") || message.includes("model:")
+}
 
 function buildUserPrompt(thesis: Thesis, assumptions: Assumption[]) {
   return `Analyse this investment thesis and return a JSON object with exactly 5 keys: clarityCheck, stressTest, biasScan, monitoringPlan, researchQuestions.
@@ -67,6 +88,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("subscription_status, trial_ends_at")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    const provider = getProviderForUser(profile)
+    const llm = createLlm(provider)
+
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: existingAnalyses } = await supabase
       .from("thesis_updates")
@@ -123,13 +153,30 @@ export async function POST(request: Request) {
         : "\n\nFRESH RESEARCH CONTEXT: (unavailable)\n"
     }
 
-    const completion = await llm.messages.create({
-      model: getTextModel(),
+    const requestPayload = {
       max_tokens: 4000,
       system:
         "You are a rigorous thinking partner helping a long-term investor stress-test their investment thesis. Your job is NOT to give investment advice or predict stock performance. Your job is to help the investor think more clearly about their own reasoning. Always respond with valid JSON only. No explanation, no markdown.",
       messages: [{ role: "user", content: `${userPrompt}${researchBlock}` }],
-    })
+    } as const
+
+    let completion: Awaited<ReturnType<typeof llm.messages.create>>
+    try {
+      completion = await llm.messages.create({
+        model: getTextModel(provider),
+        ...requestPayload,
+      })
+    } catch (error: unknown) {
+      if (provider === "minimax" && isModelNotFoundError(error)) {
+        const fallbackLlm = createLlm("anthropic")
+        completion = await fallbackLlm.messages.create({
+          model: getTextModel("anthropic"),
+          ...requestPayload,
+        })
+      } else {
+        throw error
+      }
+    }
 
     const responseText = completion.content
       .filter((block) => block.type === "text")

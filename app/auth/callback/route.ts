@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -35,8 +36,44 @@ export async function GET(request: Request) {
   try {
     await supabase.auth.exchangeCodeForSession(code)
   } catch {
-    // Always redirect to pricing whether exchange succeeds or fails.
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  return NextResponse.redirect(new URL('/pricing', request.url))
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('subscription_status, trial_started_at, trial_ends_at')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const hasActiveSubscription = profile?.subscription_status === 'active'
+  const hasTrialWindow = Boolean(profile?.trial_started_at && profile?.trial_ends_at)
+
+  if (!hasActiveSubscription && !hasTrialWindow && user.email) {
+    const trialStartedAt = new Date()
+    const trialEndsAt = new Date(trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+    await admin.from('profiles').upsert(
+      {
+        id: user.id,
+        email: user.email,
+        full_name:
+          typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null,
+        trial_started_at: trialStartedAt.toISOString(),
+        trial_ends_at: trialEndsAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
+  }
+
+  return NextResponse.redirect(new URL('/app/dashboard', request.url))
 }

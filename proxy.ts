@@ -5,7 +5,11 @@ import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === '/api/stripe/webhook' || request.nextUrl.pathname.startsWith('/api/cron/')) {
+  if (
+    request.nextUrl.pathname === '/api/stripe/webhook' ||
+    request.nextUrl.pathname.startsWith('/api/cron/') ||
+    request.nextUrl.pathname === '/api/financial/refresh'
+  ) {
     return NextResponse.next()
   }
 
@@ -53,11 +57,15 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === '/app' || request.nextUrl.pathname.startsWith('/app/')) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('subscription_status')
+      .select('subscription_status, trial_ends_at')
       .eq('id', user.id)
       .single()
 
-    if (profile?.subscription_status !== 'active') {
+    const hasActiveSubscription = profile?.subscription_status === 'active'
+    const hasActiveTrial =
+      typeof profile?.trial_ends_at === 'string' && new Date(profile.trial_ends_at).getTime() > Date.now()
+
+    if (!hasActiveSubscription && !hasActiveTrial) {
       supabaseResponse = NextResponse.redirect(new URL('/pricing', request.url))
       return supabaseResponse
     }
@@ -67,5 +75,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/).*)'],
+  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/|financial/refresh).*)'],
 }

@@ -22,14 +22,14 @@ export const metadata: Metadata = {
     template: '%s | SYNESI',
   },
   description:
-    'The app that answers why you own a stock, and tells you when the answer has changed. Document, track, and get AI-powered alerts on your investment theses.',
+    'The narrative keeper for thesis-driven investors and traders. Document your thesis, track how conviction evolves, and know when reality challenges your story.',
   openGraph: {
     type: 'website',
     url: 'https://synesi.app',
     siteName: 'SYNESI',
     title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The app that answers why you own a stock, and tells you when the answer has changed.',
+      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
     images: [
       {
         url: '/opengraph-image',
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The app that answers why you own a stock, and tells you when the answer has changed.',
+      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
     images: ['/opengraph-image'],
   },
 }

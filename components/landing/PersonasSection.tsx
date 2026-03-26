@@ -3,7 +3,7 @@ const personas = [
     title: "The Conviction Investor",
     description:
       "You hold 5–20 positions and know exactly why you own each one. You want a system that keeps those reasons sharp as time passes.",
-    keywords: "Long-term investor · Value investing · Position tracking",
+    keywords: "Thesis-driven investor · Conviction tracking · Position discipline",
   },
   {
     title: "The Analyst",
@@ -27,7 +27,7 @@ export default function PersonasSection() {
           Who is SYNESI for?
         </h2>
         <p className="mb-16 text-center font-sans text-sm text-[#6B6B7B]">
-          Not for day traders. Not for crypto gamblers. Built for investors who read 10-Ks.
+          Built for thesis-driven investors who document their reasoning and review it as markets evolve.
         </p>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
