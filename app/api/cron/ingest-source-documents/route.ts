@@ -216,6 +216,25 @@ function shouldEmitByRule(
   return selectedSourceIds.has(matchedTrustedSourceId)
 }
 
+function normalizeKeywordMatchText(value: string): string {
+  return value.toLowerCase()
+}
+
+function passesKeywordFilters(rule: AlertRuleRow, matchText: string): boolean {
+  const include = rule.include_keywords ?? []
+  const exclude = rule.exclude_keywords ?? []
+
+  if (include.length > 0 && !include.some((kw) => kw && matchText.includes(kw))) {
+    return false
+  }
+
+  if (exclude.length > 0 && exclude.some((kw) => kw && matchText.includes(kw))) {
+    return false
+  }
+
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -377,6 +396,7 @@ export async function GET(request: Request) {
     confidence: ConfidenceLevel
     sourceName: string
     docTitle: string
+    docExcerpt: string
     docUrl: string
     matchReason: string
   }
@@ -432,6 +452,7 @@ export async function GET(request: Request) {
           confidence: scored.confidence,
           sourceName: doc.sourceName,
           docTitle: doc.title,
+          docExcerpt: doc.contentExcerpt,
           docUrl: doc.url,
           matchReason: scored.reason,
         })
@@ -449,7 +470,9 @@ export async function GET(request: Request) {
   if (eventThesisIds.length > 0) {
     const { data: enabledRules, error: enabledRulesError } = await supabase
       .from("alert_rules")
-      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .select(
+        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+      )
       .in("thesis_id", eventThesisIds)
       .eq("is_enabled", true)
 
@@ -493,6 +516,9 @@ export async function GET(request: Request) {
   const eventErrors: Array<{ error: string }> = []
 
   for (const pending of pendingEvents) {
+    const matchText = normalizeKeywordMatchText(
+      `${pending.sourceName} ${pending.docTitle} ${pending.docExcerpt} ${pending.matchReason}`.trim(),
+    )
     const thesisRules = enabledRulesByThesis.get(pending.thesis_id) ?? []
     const shouldCreateByRules =
       thesisRules.length === 0
@@ -500,7 +526,8 @@ export async function GET(request: Request) {
         : thesisRules.some((rule) => {
             if (!meetsMinConfidence(pending.confidence, rule.min_confidence)) return false
             const selectedSourceIds = selectedSourceIdsByRule.get(rule.id) ?? new Set<string>()
-            return shouldEmitByRule(rule.mode, selectedSourceIds, pending.trusted_source_id)
+            if (!shouldEmitByRule(rule.mode, selectedSourceIds, pending.trusted_source_id)) return false
+            return passesKeywordFilters(rule, matchText)
           })
 
     if (!shouldCreateByRules) continue
