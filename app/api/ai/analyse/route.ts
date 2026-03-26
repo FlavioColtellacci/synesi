@@ -157,8 +157,8 @@ export async function POST(request: Request) {
       max_tokens: 4000,
       system:
         "You are a rigorous thinking partner helping a long-term investor stress-test their investment thesis. Your job is NOT to give investment advice or predict stock performance. Your job is to help the investor think more clearly about their own reasoning. Always respond with valid JSON only. No explanation, no markdown.",
-      messages: [{ role: "user", content: `${userPrompt}${researchBlock}` }],
-    } as const
+      messages: [{ role: "user" as const, content: `${userPrompt}${researchBlock}` }],
+    }
 
     let completion: Awaited<ReturnType<typeof llm.messages.create>>
     try {

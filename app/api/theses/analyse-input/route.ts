@@ -96,7 +96,7 @@ export async function POST(request: Request) {
         "You are a financial analyst assistant helping a long-term investor structure their investment thesis. Extract and structure the information from the user's input. Always respond with valid JSON only. No explanation, no markdown, just the JSON object.",
       messages: [
         {
-          role: "user",
+          role: "user" as const,
           content: `Extract the investment thesis from this input and return a JSON object with exactly these fields:
 {
   ticker: string (uppercase stock ticker, e.g. AAPL, infer if not explicit),
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 User input: ${rawInput}${researchBlock}`,
         },
       ],
-    } as const
+    }
 
     let completion: Awaited<ReturnType<typeof llm.messages.create>>
     try {

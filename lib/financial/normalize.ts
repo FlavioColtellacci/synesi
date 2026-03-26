@@ -1,6 +1,10 @@
 // Server-only, do not import in client components
 
-import type { FinancialSnapshotCoverage, FinancialSnapshotPayload } from "./types"
+import type {
+  FinancialSnapshotCoverage,
+  FinancialSnapshotPayload,
+  InsiderActivity30d,
+} from "./types"
 import type {
   EodhdEarningsCalendarItem,
   EodhdFundamentals,
@@ -36,7 +40,7 @@ function toYmd(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-export function buildInsiderActivity30d(transactions: EodhdInsiderTransaction[]) {
+export function buildInsiderActivity30d(transactions: EodhdInsiderTransaction[]): InsiderActivity30d {
   let buyCount = 0
   let sellCount = 0
   let netShares: number | null = 0
@@ -54,7 +58,7 @@ export function buildInsiderActivity30d(transactions: EodhdInsiderTransaction[])
     }
   }
 
-  const label =
+  const label: InsiderActivity30d["label"] =
     buyCount === 0 && sellCount === 0
       ? "Unknown"
       : netShares === null
