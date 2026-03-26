@@ -14,6 +14,8 @@ type UpdateAlertRulePayload = {
   mode?: unknown
   minConfidence?: unknown
   isEnabled?: unknown
+  includeKeywords?: unknown
+  excludeKeywords?: unknown
 }
 
 function isValidMode(value: unknown): value is AlertRuleMode {
@@ -22,6 +24,17 @@ function isValidMode(value: unknown): value is AlertRuleMode {
 
 function isValidMinConfidence(value: unknown): value is AlertRuleMinConfidence {
   return typeof value === "string" && VALID_MIN_CONFIDENCE.includes(value as AlertRuleMinConfidence)
+}
+
+function parseKeywordList(value: unknown): string[] | null {
+  if (value === undefined) return null
+  if (!Array.isArray(value)) return null
+  const keywords = value
+    .filter((item) => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((item) => item.toLowerCase())
+  return [...new Set(keywords)].slice(0, 25)
 }
 
 async function ensureThesisOwnership(
@@ -96,6 +109,28 @@ export async function PATCH(
       updatePayload.is_enabled = body.isEnabled
     }
 
+    if (body.includeKeywords !== undefined) {
+      const parsed = parseKeywordList(body.includeKeywords)
+      if (!parsed) {
+        return NextResponse.json(
+          { error: "includeKeywords must be an array of strings" },
+          { status: 400 },
+        )
+      }
+      updatePayload.include_keywords = parsed
+    }
+
+    if (body.excludeKeywords !== undefined) {
+      const parsed = parseKeywordList(body.excludeKeywords)
+      if (!parsed) {
+        return NextResponse.json(
+          { error: "excludeKeywords must be an array of strings" },
+          { status: 400 },
+        )
+      }
+      updatePayload.exclude_keywords = parsed
+    }
+
     if (Object.keys(updatePayload).length === 0) {
       return NextResponse.json(
         { error: "Provide at least one field to update" },
@@ -109,7 +144,9 @@ export async function PATCH(
       .eq("id", ruleId)
       .eq("thesis_id", thesisId)
       .eq("user_id", user.id)
-      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .select(
+        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+      )
       .maybeSingle()
 
     if (updateError) {

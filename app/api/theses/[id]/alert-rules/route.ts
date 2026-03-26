@@ -14,6 +14,8 @@ type CreateAlertRulePayload = {
   mode?: unknown
   minConfidence?: unknown
   isEnabled?: unknown
+  includeKeywords?: unknown
+  excludeKeywords?: unknown
 }
 
 function isValidMode(value: unknown): value is AlertRuleMode {
@@ -22,6 +24,17 @@ function isValidMode(value: unknown): value is AlertRuleMode {
 
 function isValidMinConfidence(value: unknown): value is AlertRuleMinConfidence {
   return typeof value === "string" && VALID_MIN_CONFIDENCE.includes(value as AlertRuleMinConfidence)
+}
+
+function parseKeywordList(value: unknown): string[] | null {
+  if (value === undefined) return null
+  if (!Array.isArray(value)) return null
+  const keywords = value
+    .filter((item) => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((item) => item.toLowerCase())
+  return [...new Set(keywords)].slice(0, 25)
 }
 
 async function ensureThesisOwnership(
@@ -61,7 +74,9 @@ export async function GET(
 
     const { data: rules, error: rulesError } = await supabase
       .from("alert_rules")
-      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .select(
+        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+      )
       .eq("thesis_id", thesisId)
       .eq("user_id", user.id)
       .order("created_at", { ascending: true })
@@ -127,6 +142,8 @@ export async function POST(
     const mode = body.mode
     const minConfidence = body.minConfidence
     const isEnabled = typeof body.isEnabled === "boolean" ? body.isEnabled : true
+    const includeKeywords = parseKeywordList(body.includeKeywords)
+    const excludeKeywords = parseKeywordList(body.excludeKeywords)
 
     if (!name) {
       return NextResponse.json({ error: "Rule name is required" }, { status: 400 })
@@ -151,12 +168,16 @@ export async function POST(
       mode,
       min_confidence: minConfidence,
       is_enabled: isEnabled,
+      include_keywords: includeKeywords ?? [],
+      exclude_keywords: excludeKeywords ?? [],
     }
 
     const { data: inserted, error: insertError } = await supabase
       .from("alert_rules")
       .insert(insertPayload)
-      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .select(
+        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+      )
       .single()
 
     if (insertError) {
