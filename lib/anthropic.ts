@@ -1,6 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk"
+// Backwards-compatible export. Prefer `lib/llm.ts`.
+import { llm } from "@/lib/llm"
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+export const anthropic = llm
 export {}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { anthropic } from "@/lib/anthropic"
+import { llm, getTextModel } from "@/lib/llm"
 import { getPerplexityResearchContext } from "@/lib/perplexity"
 import { createClient } from "@/lib/supabase/server"
 
@@ -60,8 +60,8 @@ export async function POST(request: Request) {
         : "\n\nFRESH RESEARCH CONTEXT: (unavailable)\n"
     }
 
-    const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+    const completion = await llm.messages.create({
+      model: getTextModel(),
       max_tokens: 2000,
       system:
         "You are a financial analyst assistant helping a long-term investor structure their investment thesis. Extract and structure the information from the user's input. Always respond with valid JSON only. No explanation, no markdown, just the JSON object.",

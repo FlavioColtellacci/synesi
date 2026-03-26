@@ -16,6 +16,21 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## LLM provider (Anthropic vs MiniMax)
+
+This app uses an Anthropic-compatible client for text generation. You can switch providers via env vars.
+
+- **Default (Anthropic)**:
+  - `ANTHROPIC_API_KEY=...`
+  - Optional: `LLM_TEXT_MODEL=claude-sonnet-4-6`
+
+- **MiniMax (cheaper for tests)**:
+  - `LLM_PROVIDER=minimax`
+  - `MINIMAX_API_KEY=...`
+  - Optional: `LLM_TEXT_MODEL=MiniMax-M2.7` (or `MiniMax-M2.7-highspeed`)
+
+MiniMax uses an Anthropic-compatible endpoint under the hood (default base URL: `https://api.minimax.io/anthropic`).
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
