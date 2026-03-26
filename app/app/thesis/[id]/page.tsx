@@ -1,9 +1,13 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
 import { AnalysisHistoryReadMore } from "@/components/thesis/AnalysisHistoryReadMore"
+import AlertPreferencesSection from "@/components/thesis/AlertPreferencesSection"
 import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import FinancialRefreshButton from "@/components/thesis/FinancialRefreshButton"
+import { ThesisChallengeBanner } from "@/components/thesis/ThesisChallengeBanner"
+import type { ThesisChallengeEvent } from "@/components/thesis/ThesisChallengeBanner"
 import TrustedSourcesSection from "@/components/thesis/TrustedSourcesSection"
 import { refreshFinancialSnapshot } from "@/lib/financial/refresh"
 import { createAdminClient, createClient } from "@/lib/supabase/server"
@@ -16,13 +20,12 @@ type ThesisUpdate = Pick<
   "id" | "update_type" | "note" | "old_status" | "new_status" | "created_at"
 >
 type TrustedSource = Database["public"]["Tables"]["trusted_sources"]["Row"]
+type AlertRule = Database["public"]["Tables"]["alert_rules"]["Row"]
 type FinancialSnapshot = Database["public"]["Tables"]["financial_snapshots"]["Row"]
 type FinancialCoverage = Partial<
   Record<keyof FinancialSnapshotPayload, "ok" | "missing" | "computed" | "unsupported">
 >
-type UserRefreshCountRow = {
-  count: number | null
-}
+type AlertRuleWithSources = AlertRule & { sourceIds: string[] }
 
 type ParsedAnalysisSection = {
   summary?: string
@@ -336,8 +339,10 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     { data: assumptionsData },
     { data: updatesData },
     { data: trustedSourcesData },
+    { data: alertRulesData },
     { data: financialSnapshotData },
     { count: refreshUsedTodayCount },
+    { data: challengeEventsData },
   ] = await Promise.all([
     supabase
       .from("assumptions")
@@ -357,6 +362,12 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .eq("thesis_id", id)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("alert_rules")
+      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .eq("thesis_id", id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true }),
     adminSupabase
       .from("financial_snapshots")
       .select("id, ticker, provider, as_of, fetched_at, stale_after, payload, coverage")
@@ -368,11 +379,47 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .eq("user_id", user.id)
       .eq("update_type", "financial_refresh")
       .gte("created_at", startOfUtcDay.toISOString()),
+    supabase
+      .from("events")
+      .select("id, thesis_id, event_detail")
+      .eq("thesis_id", id)
+      .eq("user_id", user.id)
+      .eq("event_type", "trusted_source_challenge")
+      .eq("is_reviewed", false)
+      .order("created_at", { ascending: false }),
   ])
 
   const assumptions: Assumption[] = assumptionsData ?? []
   const updates: ThesisUpdate[] = updatesData ?? []
   const trustedSources: TrustedSource[] = trustedSourcesData ?? []
+  const alertRulesBase: AlertRule[] = alertRulesData ?? []
+  const alertRuleIds = alertRulesBase.map((rule) => rule.id)
+  const alertRuleSourcesByRule = new Map<string, string[]>()
+
+  if (alertRuleIds.length > 0) {
+    const { data: alertRuleSourceRows } = await supabase
+      .from("alert_rule_sources")
+      .select("alert_rule_id, trusted_source_id")
+      .in("alert_rule_id", alertRuleIds)
+
+    for (const row of alertRuleSourceRows ?? []) {
+      const current = alertRuleSourcesByRule.get(row.alert_rule_id) ?? []
+      current.push(row.trusted_source_id)
+      alertRuleSourcesByRule.set(row.alert_rule_id, current)
+    }
+  }
+
+  const alertRules: AlertRuleWithSources[] = alertRulesBase.map((rule) => ({
+    ...rule,
+    sourceIds: alertRuleSourcesByRule.get(rule.id) ?? [],
+  }))
+  const challengeEvents: ThesisChallengeEvent[] = (challengeEventsData ?? [])
+    .filter((event) => event.event_detail !== null)
+    .map((event) => ({
+      id: event.id,
+      thesisId: event.thesis_id,
+      eventDetail: event.event_detail as string,
+    }))
   const statusMeta = getStatusMeta(thesis.status)
   const latestAiUpdate = updates.find((update) => update.update_type === "ai_analysis")
   const latestParsedAnalysis = parseAnalysisNote(latestAiUpdate?.note ?? null)
@@ -386,8 +433,12 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     ? parseFinancialCoverage(financialSnapshot.coverage)
     : {}
 
+  const requestDateHeader = (await headers()).get("date")
+  const requestTimestamp = requestDateHeader
+    ? Date.parse(requestDateHeader)
+    : Date.parse(thesis.updated_at)
   const isSnapshotStale = financialSnapshot
-    ? new Date(financialSnapshot.stale_after).getTime() <= Date.now()
+    ? new Date(financialSnapshot.stale_after).getTime() <= requestTimestamp
     : true
   const usedToday = refreshUsedTodayCount ?? 0
   const effectiveDailyLimit = Number.isFinite(dailyRefreshLimit) ? dailyRefreshLimit : 8
@@ -478,6 +529,12 @@ export default async function ThesisDetailPage({ params }: PageProps) {
           {statusMeta.label}
         </span>
       </div>
+
+      {challengeEvents.length > 0 ? (
+        <div className="mb-6">
+          <ThesisChallengeBanner events={challengeEvents} />
+        </div>
+      ) : null}
 
       <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -608,7 +665,18 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         />
       </section>
 
-      <TrustedSourcesSection thesisId={thesis.id} initialSources={trustedSources} />
+      <TrustedSourcesSection
+        thesisId={thesis.id}
+        thesisTicker={thesis.ticker}
+        thesisCompanyName={thesis.company_name}
+        initialSources={trustedSources}
+      />
+
+      <AlertPreferencesSection
+        thesisId={thesis.id}
+        trustedSources={trustedSources}
+        initialRules={alertRules}
+      />
 
       <section className="mb-6">
         <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
