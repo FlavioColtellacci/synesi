@@ -10,6 +10,8 @@ export type Database = {
           subscription_status: string
           subscription_plan: string | null
           subscription_period_end: string | null
+          trial_started_at: string | null
+          trial_ends_at: string | null
           created_at: string
           updated_at: string
         }
@@ -21,6 +23,8 @@ export type Database = {
           subscription_status?: string
           subscription_plan?: string | null
           subscription_period_end?: string | null
+          trial_started_at?: string | null
+          trial_ends_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -32,6 +36,8 @@ export type Database = {
           subscription_status?: string
           subscription_plan?: string | null
           subscription_period_end?: string | null
+          trial_started_at?: string | null
+          trial_ends_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -202,6 +208,144 @@ export type Database = {
         }
         Relationships: []
       }
+      trusted_sources: {
+        Row: {
+          id: string
+          thesis_id: string
+          user_id: string
+          name: string
+          url: string | null
+          source_type: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          thesis_id: string
+          user_id: string
+          name: string
+          url?: string | null
+          source_type: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          thesis_id?: string
+          user_id?: string
+          name?: string
+          url?: string | null
+          source_type?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      financial_snapshots: {
+        Row: {
+          id: string
+          ticker: string
+          provider: string
+          as_of: string
+          fetched_at: string
+          stale_after: string
+          payload: Record<string, unknown>
+          coverage: Record<string, unknown> | null
+        }
+        Insert: {
+          id?: string
+          ticker: string
+          provider?: string
+          as_of?: string
+          fetched_at?: string
+          stale_after?: string
+          payload: Record<string, unknown>
+          coverage?: Record<string, unknown> | null
+        }
+        Update: {
+          id?: string
+          ticker?: string
+          provider?: string
+          as_of?: string
+          fetched_at?: string
+          stale_after?: string
+          payload?: Record<string, unknown>
+          coverage?: Record<string, unknown> | null
+        }
+        Relationships: []
+      }
+      source_documents: {
+        Row: {
+          id: string
+          source_name: string
+          source_type: string
+          url: string
+          title: string
+          published_at: string | null
+          content_excerpt: string | null
+          content_hash: string
+          metadata: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          source_name: string
+          source_type: string
+          url: string
+          title: string
+          published_at?: string | null
+          content_excerpt?: string | null
+          content_hash: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          source_name?: string
+          source_type?: string
+          url?: string
+          title?: string
+          published_at?: string | null
+          content_excerpt?: string | null
+          content_hash?: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      thesis_source_matches: {
+        Row: {
+          id: string
+          user_id: string
+          thesis_id: string
+          trusted_source_id: string
+          source_document_id: string
+          relevance_score: number | null
+          match_reason: string | null
+          confidence: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          thesis_id: string
+          trusted_source_id: string
+          source_document_id: string
+          relevance_score?: number | null
+          match_reason?: string | null
+          confidence?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          thesis_id?: string
+          trusted_source_id?: string
+          source_document_id?: string
+          relevance_score?: number | null
+          match_reason?: string | null
+          confidence?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -223,3 +367,7 @@ export type Thesis = Database['public']['Tables']['theses']['Row']
 export type Assumption = Database['public']['Tables']['assumptions']['Row']
 export type ThesisUpdate = Database['public']['Tables']['thesis_updates']['Row']
 export type ThesisEvent = Database['public']['Tables']['events']['Row']
+export type TrustedSource = Database['public']['Tables']['trusted_sources']['Row']
+export type FinancialSnapshot = Database['public']['Tables']['financial_snapshots']['Row']
+export type SourceDocument = Database['public']['Tables']['source_documents']['Row']
+export type ThesisSourceMatch = Database['public']['Tables']['thesis_source_matches']['Row']
