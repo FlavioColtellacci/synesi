@@ -271,6 +271,81 @@ export type Database = {
         }
         Relationships: []
       }
+      source_documents: {
+        Row: {
+          id: string
+          source_name: string
+          source_type: string
+          url: string
+          title: string
+          published_at: string | null
+          content_excerpt: string | null
+          content_hash: string
+          metadata: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          source_name: string
+          source_type: string
+          url: string
+          title: string
+          published_at?: string | null
+          content_excerpt?: string | null
+          content_hash: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          source_name?: string
+          source_type?: string
+          url?: string
+          title?: string
+          published_at?: string | null
+          content_excerpt?: string | null
+          content_hash?: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      thesis_source_matches: {
+        Row: {
+          id: string
+          user_id: string
+          thesis_id: string
+          trusted_source_id: string
+          source_document_id: string
+          relevance_score: number | null
+          match_reason: string | null
+          confidence: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          thesis_id: string
+          trusted_source_id: string
+          source_document_id: string
+          relevance_score?: number | null
+          match_reason?: string | null
+          confidence?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          thesis_id?: string
+          trusted_source_id?: string
+          source_document_id?: string
+          relevance_score?: number | null
+          match_reason?: string | null
+          confidence?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -294,3 +369,5 @@ export type ThesisUpdate = Database['public']['Tables']['thesis_updates']['Row']
 export type ThesisEvent = Database['public']['Tables']['events']['Row']
 export type TrustedSource = Database['public']['Tables']['trusted_sources']['Row']
 export type FinancialSnapshot = Database['public']['Tables']['financial_snapshots']['Row']
+export type SourceDocument = Database['public']['Tables']['source_documents']['Row']
+export type ThesisSourceMatch = Database['public']['Tables']['thesis_source_matches']['Row']

@@ -545,38 +545,147 @@ Out of scope (later phases):
 
 ---
 
-### Suggested first implementation step (next chat)
+### Step A — DONE (validated 2026-03-26)
 
-Step A (small, focused):
-1. Add schema for `source_documents` + `thesis_source_matches`.
-2. Add a minimal cron endpoint scaffold:
-   - fetch placeholder/mock source items
-   - normalize + dedupe insert into `source_documents`
-3. Stop and verify table writes before any relevance or event generation.
+**Files created/modified:**
+- `supabase/migrations/20260326_trusted_source_alerting.sql` — apply in Supabase SQL editor to create both tables
+- `app/api/cron/ingest-source-documents/route.ts` — ingestion scaffold (mock items, sha256 dedupe, CRON_SECRET auth)
+- `types/database.ts` — added `source_documents` + `thesis_source_matches` types; exported `SourceDocument`, `ThesisSourceMatch`
 
-Then proceed to Step B:
-- add relevance matching to theses and write `trusted_source_challenge` events.
+**Validation result:**
+- First run returned `{"ok":true,"processed":2,"inserted":2,"skipped":0,"failed":0,"errors":[]}` — confirmed writes to `source_documents`.
+- Dedupe via `content_hash` unique index (error code `23505` → `skipped`).
+- Not yet registered in `vercel.json` — intentional until real adapters exist.
+- Env var `CRON_MAX_SOURCE_DOCS_PER_RUN` (default `50`) controls volume cap.
 
 ---
 
-### Starter prompt for a dedicated big-feature chat
+### Step B — PLANNED, not yet implemented
 
-```text
-Implement the Trusted Sources alerting pipeline using `AGENT_HANDOFF_NEXT_CHAT.md` as source of truth.
+**Goal:** Replace mock ingestion with real RSS feeds + add lexical matching + emit `trusted_source_challenge` events.
 
-First read the handoff fully, then focus on the section:
-"Big Feature Blueprint: Trusted Sources Alerting Pipeline".
+#### Files to change (exactly 2)
+
+- `app/api/cron/ingest-source-documents/route.ts` — full rewrite (all three phases below)
+- `vercel.json` — add third cron entry: `{ "path": "/api/cron/ingest-source-documents", "schedule": "0 */4 * * *" }`
+
+#### No new packages. No schema changes. No other files touched.
+
+---
+
+#### Architecture: 3 sequential phases per run
+
+**Phase 1 — Ingest**
+- Query all `trusted_sources` rows with a non-null URL; deduplicate by URL before fetching (same feed used by multiple users = 1 HTTP call)
+- Fetch each URL with `fetch()` + 8s `AbortController` timeout; return null on failure (graceful)
+- Parse RSS/Atom with an **inline XML parser** (no new packages):
+  - `extractTagContent(block, tag)` — handles plain text and CDATA `<![CDATA[...]]>`
+  - `extractAttrOrTagContent(block, tag, attr)` — handles Atom `<link href="..."/>` vs RSS `<link>url</link>`
+  - `stripHtml(raw)` — strips HTML tags, collapses whitespace
+  - Detect `<item>` (RSS 2.0) or `<entry>` (Atom)
+  - Extract: title, url (link), publishedAt (pubDate / published / updated), contentExcerpt (description / content:encoded / summary, stripped + truncated to 500 chars)
+  - Guard: `isNaN(new Date(rawDate))` → skip malformed dates
+  - Cap: 20 items per feed
+- Insert into `source_documents` using `.insert(row).select("id").single()` to get the auto-generated `id`
+- `23505` → dedupe skip; other error → push to `fetchErrors`
+- Stop across all feeds once `CRON_MAX_SOURCE_DOCS_PER_RUN` (default 50) budget is reached
+- Collect `insertedDocs[]` — each has `{ docId, sourceName, sourceType, url, title, contentExcerpt }`
+
+**Phase 2 — Match**
+- Short-circuit immediately if `insertedDocs` is empty
+- Build `distinctSourceNames` = Set of `sourceName.toLowerCase()` from `insertedDocs`
+- Query: `supabase.from("trusted_sources").select("id, thesis_id, user_id, name")` → filter in JS by name match (case-insensitive)
+- Short-circuit if no matching trusted sources
+- Query: `supabase.from("theses").select("id, user_id, ticker, company_name").in("id", thesisIds).neq("status", "broken")`
+- Build lookup maps; iterate all `(insertedDoc × matchingTrustedSource × thesis)` triples
+- Score each triple with `scoreConfidence(ticker, companyName, docTitle, docExcerpt)`:
+
+  | Condition | Confidence | Score |
+  |---|---|---|
+  | Ticker in title (word-boundary) | `high` | 1.0 |
+  | Company name in title OR ticker in excerpt | `medium` | 0.6 |
+  | Company name in excerpt only | `low` | 0.3 |
+  | No match | skip entirely | 0.0 |
+
+- `containsTickerToken(text, ticker)`: checks char before/after ticker is non-alphanumeric (prevents "F" matching "fund", "for")
+- Skip triples with `relevanceScore === 0` entirely (nothing written)
+- Insert `thesis_source_matches` row; collect **successful inserts** as pending event candidates
+- `23505` → already matched (natural dedup); push to `matchesSkipped`
+
+**Phase 3 — Events**
+- **Dedup design**: `thesis_source_matches` insert result IS the event gate
+  - Insert succeeded → new match → eligible to emit event
+  - Insert was `23505` → already matched previously → no event (prevents duplicates across runs forever)
+  - No separate query against the `events` table needed
+- Emit events for confidence ≥ `CRON_MATCHING_MIN_CONFIDENCE` env var (default `"high"`; set to `"medium"` to widen)
+- Low-confidence matches write `thesis_source_matches` but never emit events
+- `event_detail` is clean user-facing string (rendered verbatim in `ThesisChallengeBanner`):
+  `"{sourceName} — "{title truncated to 120 chars}" — {matchReason} — {url}"`
+  Example: `The Motley Fool — "Apple's AI Push Faces Regulatory Headwinds" — Ticker AAPL found in title — https://...`
+- Insert: `{ thesis_id, user_id, event_type: "trusted_source_challenge", event_detail, is_reviewed: false }`
+- Events appear immediately on dashboard — no dashboard code change needed (dashboard queries all unreviewed events regardless of type)
+
+#### Response shape
+
+```json
+{
+  "ok": true,
+  "ingestion": { "feedsFetched": 3, "docsInserted": 5, "docsSkipped": 12, "fetchErrors": [] },
+  "matching": { "pairsEvaluated": 8, "matchesInserted": 2, "matchesSkipped": 1, "matchErrors": [] },
+  "events": { "eventsCreated": 2, "eventErrors": [] }
+}
+```
+
+#### New optional env var
+- `CRON_MATCHING_MIN_CONFIDENCE` — `"high"` (default) or `"medium"`
+
+#### Key patterns to follow from existing code
+- Auth: `if (authHeader !== \`Bearer ${process.env.CRON_SECRET}\`) return 401` (same as all other cron routes)
+- Admin client: `const supabase = createAdminClient()` (same as all cron routes)
+- `parsePositiveInt(value, fallback)` — already in the scaffold, keep it
+- `computeContentHash(url, title)` — already in the scaffold, keep it
+- `getStartOfUtcDayIso()` pattern from `app/api/cron/check-prices/route.ts` (not needed for events phase, but reference if needed)
+
+#### Verification steps
+1. Add a real RSS URL to a trusted source in the app (e.g. a news outlet feed for a ticker you track)
+2. `GET /api/cron/ingest-source-documents` with `Authorization: Bearer <CRON_SECRET>`
+3. Confirm `ingestion.docsInserted > 0` in response
+4. Check Supabase `source_documents` table for new rows
+5. If source name matches a trusted source: check `thesis_source_matches` for new rows
+6. If ticker appears in a headline: check `events` for `trusted_source_challenge` rows
+7. Open dashboard — event banner should appear immediately
+8. Run again: confirm `docsSkipped > 0` and `matchesSkipped > 0` (dedupe working, no duplicate events)
+
+---
+
+### Starter prompt for Step B
+
+```
+Continue from AGENT_HANDOFF_NEXT_CHAT.md. Read the file fully before making any changes.
+
+Current state:
+- Recommendations 1–5 complete (Financial Context fully validated).
+- Trusted Sources Alerting Pipeline Step A complete and validated:
+  - Tables `source_documents` + `thesis_source_matches` exist in Supabase (migration already applied).
+  - `app/api/cron/ingest-source-documents/route.ts` exists with mock data scaffold.
+  - Types in `types/database.ts` include `SourceDocument` + `ThesisSourceMatch`.
+
+Task: implement Step B exactly as described in the handoff under "Step B — PLANNED, not yet implemented".
 
 Rules:
-- Do not touch already completed Recommendations 1-5 except where strictly needed.
-- Keep changes incremental: one step per response.
-- Read files before editing.
-- No broad refactors.
+- Read `app/api/cron/ingest-source-documents/route.ts` and `vercel.json` before editing.
+- Change exactly 2 files: the ingest cron route and vercel.json.
+- No new npm packages — use inline RSS parsing as described.
+- No schema changes — tables and indexes are already correct.
+- Follow the 3-phase architecture: Ingest → Match → Events.
+- Use thesis_source_matches insert result (23505 = skip) as the event dedup mechanism.
+- event_detail must be a clean user-facing string (rendered verbatim in ThesisChallengeBanner).
+- One step only: implement everything in Step B, then stop and report.
 
-Start with Step A only:
-1) add DB schema for `source_documents` and `thesis_source_matches`
-2) add a minimal ingestion cron scaffold that writes normalized docs with dedupe
-3) stop and report exactly what changed + validation results.
+Deliverable:
+- Files changed (exact paths)
+- TypeScript check result
+- Manual test instructions
+- What remains for Step C (if any)
 ```
-> If any issue is found, apply only small focused fixes (no broad refactor), then report: pass/fail, files changed, why, and remaining risks.
 
