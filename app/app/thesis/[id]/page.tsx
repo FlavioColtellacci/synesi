@@ -364,7 +364,9 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .order("created_at", { ascending: false }),
     supabase
       .from("alert_rules")
-      .select("id, user_id, thesis_id, name, mode, min_confidence, is_enabled, created_at, updated_at")
+      .select(
+        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+      )
       .eq("thesis_id", id)
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),

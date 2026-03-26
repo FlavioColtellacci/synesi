@@ -48,6 +48,8 @@ export default function AlertPreferencesSection({
   const [rules, setRules] = useState<AlertRuleWithSources[]>(initialRules)
   const [error, setError] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const [includeInput, setIncludeInput] = useState("")
+  const [excludeInput, setExcludeInput] = useState("")
   const primaryRule = rules[0] ?? null
 
   const selectedSourceIds = useMemo(() => new Set(primaryRule?.sourceIds ?? []), [primaryRule?.sourceIds])
@@ -195,6 +197,88 @@ export default function AlertPreferencesSection({
   const activeMode = primaryRule?.mode ?? "only_sources"
   const activeConfidence = primaryRule?.min_confidence ?? "high"
   const isEnabled = primaryRule?.is_enabled ?? false
+  const includeKeywords = primaryRule?.include_keywords ?? []
+  const excludeKeywords = primaryRule?.exclude_keywords ?? []
+
+  function normalizeKeyword(value: string) {
+    return value.trim().toLowerCase()
+  }
+
+  async function saveIncludeKeywords(next: string[]) {
+    const rule = await ensurePrimaryRule()
+    if (!rule) return
+
+    const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ includeKeywords: next }),
+    })
+    const payload = await parseJson<{ error?: string }>(response)
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Failed to update include keywords")
+    }
+    updatePrimaryRule({ include_keywords: next })
+  }
+
+  async function saveExcludeKeywords(next: string[]) {
+    const rule = await ensurePrimaryRule()
+    if (!rule) return
+
+    const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ excludeKeywords: next }),
+    })
+    const payload = await parseJson<{ error?: string }>(response)
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Failed to update exclude keywords")
+    }
+    updatePrimaryRule({ exclude_keywords: next })
+  }
+
+  async function handleAddKeyword(kind: "include" | "exclude") {
+    const input = kind === "include" ? includeInput : excludeInput
+    const keyword = normalizeKeyword(input)
+    if (!keyword) return
+
+    setIsBusy(true)
+    setError(null)
+
+    try {
+      if (kind === "include") {
+        const next = [...new Set([...includeKeywords, keyword])].slice(0, 25)
+        await saveIncludeKeywords(next)
+        setIncludeInput("")
+      } else {
+        const next = [...new Set([...excludeKeywords, keyword])].slice(0, 25)
+        await saveExcludeKeywords(next)
+        setExcludeInput("")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update keywords")
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  async function handleRemoveKeyword(kind: "include" | "exclude", keyword: string) {
+    setIsBusy(true)
+    setError(null)
+
+    try {
+      if (kind === "include") {
+        const next = includeKeywords.filter((kw) => kw !== keyword)
+        await saveIncludeKeywords(next)
+      } else {
+        const next = excludeKeywords.filter((kw) => kw !== keyword)
+        await saveExcludeKeywords(next)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update keywords")
+    } finally {
+      setIsBusy(false)
+    }
+  }
 
   return (
     <section className="mb-6">
@@ -300,6 +384,108 @@ export default function AlertPreferencesSection({
                   <span className="text-sm text-[#F0F0F0]">{source.name}</span>
                 </label>
               ))}
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                  Include keywords (optional)
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={includeInput}
+                    disabled={!isEnabled || isBusy}
+                    onChange={(event) => setIncludeInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        void handleAddKeyword("include")
+                      }
+                    }}
+                    placeholder='e.g. "downgrade", "guidance"'
+                    className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    disabled={!isEnabled || isBusy}
+                    onClick={() => void handleAddKeyword("include")}
+                    className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+                  >
+                    ADD
+                  </button>
+                </div>
+                {includeKeywords.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {includeKeywords.map((kw) => (
+                      <button
+                        key={kw}
+                        type="button"
+                        disabled={!isEnabled || isBusy}
+                        onClick={() => void handleRemoveKeyword("include", kw)}
+                        className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
+                        title="Remove keyword"
+                      >
+                        {kw}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-[#6B6B7B]">
+                    If set, alerts only trigger when the article matches at least one keyword.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                  Exclude keywords (optional)
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={excludeInput}
+                    disabled={!isEnabled || isBusy}
+                    onChange={(event) => setExcludeInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        void handleAddKeyword("exclude")
+                      }
+                    }}
+                    placeholder='e.g. "technical analysis"'
+                    className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    disabled={!isEnabled || isBusy}
+                    onClick={() => void handleAddKeyword("exclude")}
+                    className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+                  >
+                    ADD
+                  </button>
+                </div>
+                {excludeKeywords.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {excludeKeywords.map((kw) => (
+                      <button
+                        key={kw}
+                        type="button"
+                        disabled={!isEnabled || isBusy}
+                        onClick={() => void handleRemoveKeyword("exclude", kw)}
+                        className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
+                        title="Remove keyword"
+                      >
+                        {kw}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-[#6B6B7B]">
+                    If set, alerts never trigger when any excluded keyword matches.
+                  </p>
+                )}
+              </div>
             </div>
           </>
         )}
