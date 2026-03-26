@@ -115,12 +115,15 @@ export async function POST(request: Request) {
 
     const result = await refreshFinancialSnapshot({ ticker, source })
 
+    const logCtx = { ticker, source, userId: userIdForLog ?? "internal" }
     if (!result.ok) {
+      console.log("[financial/refresh] FAILED", { ...logCtx, error: result.error })
       return NextResponse.json(
         { ok: false, ticker: result.ticker, error: result.error },
         { status: 502 },
       )
     }
+    console.log("[financial/refresh] OK", { ...logCtx, staleAfter: result.staleAfter })
 
     if (supabaseForUser && userIdForLog && thesisIdForLog) {
       await supabaseForUser.from("thesis_updates").insert({

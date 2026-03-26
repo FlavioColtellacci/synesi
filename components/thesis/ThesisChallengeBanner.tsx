@@ -13,6 +13,39 @@ type Props = {
   events: ThesisChallengeEvent[]
 }
 
+type ParsedEventDetail = {
+  source: string
+  headline: string
+  reason: string
+  articleUrl: string | null
+}
+
+function truncate(text: string, maxLength: number) {
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength - 1)}...`
+}
+
+function parseEventDetail(raw: string): ParsedEventDetail {
+  const parts = raw.includes(" — ") ? raw.split(" — ") : raw.split(" - ")
+  const [sourcePart, titlePart, reasonPart, urlPart] = parts
+
+  const source = sourcePart?.trim() || "Trusted source"
+  const headline = (titlePart?.trim() || raw).replace(/^"|"$/g, "")
+  const reason = reasonPart?.trim() || "Potential thesis challenge detected."
+  const articleUrl = urlPart?.trim() || null
+
+  return { source, headline, reason, articleUrl }
+}
+
+function getHostname(url: string | null) {
+  if (!url) return null
+  try {
+    return new URL(url).hostname.replace(/^www\./, "")
+  } catch {
+    return null
+  }
+}
+
 export function ThesisChallengeBanner({ events }: Props) {
   const [visibleEvents, setVisibleEvents] = useState<ThesisChallengeEvent[]>(events)
 
@@ -47,38 +80,66 @@ export function ThesisChallengeBanner({ events }: Props) {
 
       <div>
         {visibleEvents.map((event) => (
-          <div
-            key={event.id}
-            className="thesis-challenge-enter relative w-full bg-[#141418] border border-[#2A2A32] border-l-4 border-l-[#FFB800] rounded-xl px-5 py-4 mb-3"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span aria-hidden>⚡</span>
-                  <span className="font-mono font-bold text-xs tracking-widest uppercase text-[#FFB800]">
-                    THESIS CHALLENGE:
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-[#F0F0F0]">{event.eventDetail}</p>
-              </div>
+          (() => {
+            const parsed = parseEventDetail(event.eventDetail)
+            const hostname = getHostname(parsed.articleUrl)
 
-              <div className="flex items-center gap-3 shrink-0">
-                <Link
-                  href={`/app/thesis/${event.thesisId}`}
-                  className="text-xs font-medium bg-white text-black px-3 py-1.5 rounded-lg hover:bg-[#E8E8E8] transition-colors"
-                >
-                  REVIEW NOW
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => handleDismiss(event.id)}
-                  className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
-                >
-                  DISMISS
-                </button>
+            return (
+              <div
+                key={event.id}
+                className="thesis-challenge-enter relative w-full rounded-xl border border-[#2A2A32] border-l-4 border-l-[#FFB800] bg-[#141418] px-5 py-4 mb-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden>⚡</span>
+                      <span className="font-mono font-bold text-xs tracking-widest uppercase text-[#FFB800]">
+                        THESIS CHALLENGE
+                      </span>
+                    </div>
+
+                    <p className="mt-2 font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                      Source: {truncate(parsed.source, 80)}
+                    </p>
+
+                    <p className="mt-1 text-sm leading-relaxed text-[#F0F0F0]">
+                      {truncate(parsed.headline, 180)}
+                    </p>
+
+                    <p className="mt-2 text-xs text-[#A0A0AE]">{parsed.reason}</p>
+
+                    {parsed.articleUrl ? (
+                      <a
+                        href={parsed.articleUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block text-xs text-[#8AA8FF] hover:text-[#B9CBFF]"
+                      >
+                        Open source article
+                        {hostname ? ` (${hostname})` : ""}
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Link
+                      href={`/app/thesis/${event.thesisId}`}
+                      className="text-xs font-medium bg-white text-black px-3 py-1.5 rounded-lg hover:bg-[#E8E8E8] transition-colors"
+                    >
+                      REVIEW NOW
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDismiss(event.id)}
+                      className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
+                    >
+                      DISMISS
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )
+          })()
         ))}
       </div>
     </>

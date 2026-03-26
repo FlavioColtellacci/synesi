@@ -6,6 +6,8 @@ import type { TrustedSource } from "@/types/database"
 
 type TrustedSourcesSectionProps = {
   thesisId: string
+  thesisTicker: string
+  thesisCompanyName: string
   initialSources: TrustedSource[]
 }
 
@@ -19,15 +21,65 @@ const SOURCE_TYPE_OPTIONS = [
 
 type SourceType = (typeof SOURCE_TYPE_OPTIONS)[number]["value"]
 
+type SuggestedFeed = {
+  label: string
+  name: string
+  sourceType: SourceType
+  url: string
+}
+
+function buildSuggestedFeeds(thesisTicker: string, thesisCompanyName: string): SuggestedFeed[] {
+  const normalizedTicker = thesisTicker.trim().toUpperCase()
+  const normalizedCompany = thesisCompanyName.trim()
+  const query = encodeURIComponent(`${normalizedTicker} OR ${normalizedCompany}`)
+
+  return [
+    {
+      label: `Google News (${normalizedTicker} search)`,
+      name: "Google News",
+      sourceType: "news_outlet",
+      url: `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`,
+    },
+    {
+      label: "MarketWatch Top Stories",
+      name: "MarketWatch",
+      sourceType: "news_outlet",
+      url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    },
+    {
+      label: "Reuters Recent Feed",
+      name: "Reuters",
+      sourceType: "news_outlet",
+      url: "http://live.reuters.com/api/feed/RSS_Recent.aspx",
+    },
+  ]
+}
+
 function sourceTypeLabel(value: string) {
   return SOURCE_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? "Other"
 }
 
+function looksLikeFeedUrl(value: string) {
+  const input = value.trim().toLowerCase()
+  if (!input) return true
+  return (
+    input.includes("/rss") ||
+    input.includes("rss.") ||
+    input.includes("/feed") ||
+    input.includes("atom") ||
+    input.endsWith(".xml") ||
+    input.includes("news.google.com/rss")
+  )
+}
+
 export default function TrustedSourcesSection({
   thesisId,
+  thesisTicker,
+  thesisCompanyName,
   initialSources,
 }: TrustedSourcesSectionProps) {
   const router = useRouter()
+  const suggestedFeeds = buildSuggestedFeeds(thesisTicker, thesisCompanyName)
   const [sources, setSources] = useState<TrustedSource[]>(initialSources)
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
@@ -36,10 +88,24 @@ export default function TrustedSourcesSection({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  function applySuggestedFeed(feed: SuggestedFeed) {
+    setName(feed.name)
+    setSourceType(feed.sourceType)
+    setUrl(feed.url)
+    setError(null)
+  }
+
   async function handleAddSource() {
     const trimmedName = name.trim()
+    const trimmedUrl = url.trim()
     if (!trimmedName) {
       setError("Source name is required.")
+      return
+    }
+    if (trimmedUrl && !looksLikeFeedUrl(trimmedUrl)) {
+      setError(
+        "Use a direct RSS/Atom feed URL (for example, a link containing /rss, /feed, or .xml), not a regular homepage URL.",
+      )
       return
     }
 
@@ -52,7 +118,7 @@ export default function TrustedSourcesSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: trimmedName,
-          url: url.trim(),
+          url: trimmedUrl,
           sourceType,
         }),
       })
@@ -135,7 +201,7 @@ export default function TrustedSourcesSection({
             type="url"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="Optional URL"
+            placeholder="RSS/Atom feed URL (recommended)"
             className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2.5 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/50"
           />
           <button
@@ -148,6 +214,40 @@ export default function TrustedSourcesSection({
           >
             {isAdding ? "ADDING..." : "ADD SOURCE"}
           </button>
+        </div>
+        <p className="mt-2 text-xs text-[#6B6B7B]">
+          Alerts only ingest RSS/Atom feed links. Example:
+          {" "}
+          <span className="text-[#A0A0AE]">{suggestedFeeds[0]?.url}</span>
+        </p>
+      </article>
+
+      <article className="mb-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
+        <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+          Suggested feeds (known working examples)
+        </p>
+        <p className="mt-1 text-xs text-[#6B6B7B]">
+          Click one to auto-fill the form, then press Add Source.
+        </p>
+        <div className="mt-3 space-y-2">
+          {suggestedFeeds.map((feed) => (
+            <div
+              key={feed.label}
+              className="flex flex-col gap-2 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3 md:flex-row md:items-center md:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="text-xs text-[#F0F0F0]">{feed.label}</p>
+                <p className="mt-1 break-all text-[11px] text-[#8AA8FF]">{feed.url}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => applySuggestedFeed(feed)}
+                className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5"
+              >
+                USE THIS
+              </button>
+            </div>
+          ))}
         </div>
       </article>
 

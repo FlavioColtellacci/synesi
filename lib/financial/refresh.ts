@@ -144,6 +144,14 @@ function parseMaybeNumber(value: unknown): number | null {
   return null
 }
 
+// Reject values the web model commonly hallucinates (wrong order of magnitude,
+// percent-vs-decimal confusion, etc.). Returns null if outside plausible range.
+function guardWebNumeric(value: number | null, min: number, max: number): number | null {
+  if (value === null) return null
+  if (value < min || value > max) return null
+  return value
+}
+
 function extractJsonObject(input: string): Record<string, unknown> | null {
   const trimmed = input.trim()
   try {
@@ -218,16 +226,20 @@ async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildRes
   }
 
   const payload: FinancialSnapshotPayload = {
-    price: parseMaybeNumber(parsed.price),
-    consensusTarget: parseMaybeNumber(parsed.consensusTarget),
-    pe: parseMaybeNumber(parsed.pe),
-    forwardPe: parseMaybeNumber(parsed.forwardPe),
-    peg: parseMaybeNumber(parsed.peg),
-    roic: parseMaybeNumber(parsed.roic),
-    eps: parseMaybeNumber(parsed.eps),
-    fcfPerShare: parseMaybeNumber(parsed.fcfPerShare),
+    // Price and target: must be a positive, plausible stock price (penny stocks up to $1M/share)
+    price: guardWebNumeric(parseMaybeNumber(parsed.price), 0.001, 1_000_000),
+    consensusTarget: guardWebNumeric(parseMaybeNumber(parsed.consensusTarget), 0.001, 1_000_000),
+    // Valuation multiples: wide ranges to tolerate growth/value extremes
+    pe: guardWebNumeric(parseMaybeNumber(parsed.pe), -9999, 9999),
+    forwardPe: guardWebNumeric(parseMaybeNumber(parsed.forwardPe), -9999, 9999),
+    peg: guardWebNumeric(parseMaybeNumber(parsed.peg), -999, 999),
+    // ROIC in decimal form (0.21 = 21%); reject percent-form (e.g. 21 when 0.21 expected)
+    roic: guardWebNumeric(parseMaybeNumber(parsed.roic), -5, 5),
+    eps: guardWebNumeric(parseMaybeNumber(parsed.eps), -9999, 9999),
+    fcfPerShare: guardWebNumeric(parseMaybeNumber(parsed.fcfPerShare), -9999, 9999),
     marginOfSafety: null,
-    rsi14: parseMaybeNumber(parsed.rsi14),
+    // RSI is strictly 0–100
+    rsi14: guardWebNumeric(parseMaybeNumber(parsed.rsi14), 0, 100),
     insiderActivity30d: null,
     nextEarningsDate:
       typeof parsed.nextEarningsDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.nextEarningsDate)
