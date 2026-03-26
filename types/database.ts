@@ -238,6 +238,63 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_rules: {
+        Row: {
+          id: string
+          user_id: string
+          thesis_id: string
+          name: string
+          mode: "only_sources" | "include_sources" | "exclude_sources"
+          min_confidence: "high" | "medium"
+          is_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          thesis_id: string
+          name: string
+          mode: "only_sources" | "include_sources" | "exclude_sources"
+          min_confidence: "high" | "medium"
+          is_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          thesis_id?: string
+          name?: string
+          mode?: "only_sources" | "include_sources" | "exclude_sources"
+          min_confidence?: "high" | "medium"
+          is_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      alert_rule_sources: {
+        Row: {
+          id: string
+          alert_rule_id: string
+          trusted_source_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          alert_rule_id: string
+          trusted_source_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          alert_rule_id?: string
+          trusted_source_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       financial_snapshots: {
         Row: {
           id: string
@@ -368,6 +425,8 @@ export type Assumption = Database['public']['Tables']['assumptions']['Row']
 export type ThesisUpdate = Database['public']['Tables']['thesis_updates']['Row']
 export type ThesisEvent = Database['public']['Tables']['events']['Row']
 export type TrustedSource = Database['public']['Tables']['trusted_sources']['Row']
+export type AlertRule = Database['public']['Tables']['alert_rules']['Row']
+export type AlertRuleSource = Database['public']['Tables']['alert_rule_sources']['Row']
 export type FinancialSnapshot = Database['public']['Tables']['financial_snapshots']['Row']
 export type SourceDocument = Database['public']['Tables']['source_documents']['Row']
 export type ThesisSourceMatch = Database['public']['Tables']['thesis_source_matches']['Row']
