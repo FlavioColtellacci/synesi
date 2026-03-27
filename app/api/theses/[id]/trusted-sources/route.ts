@@ -15,6 +15,19 @@ function isValidSourceType(value: unknown): value is SourceType {
   return typeof value === "string" && VALID_SOURCE_TYPES.includes(value as SourceType)
 }
 
+function looksLikeFeedUrl(value: string) {
+  const input = value.trim().toLowerCase()
+  if (!input) return false
+  return (
+    input.includes("/rss") ||
+    input.includes("rss.") ||
+    input.includes("/feed") ||
+    input.includes("atom") ||
+    input.endsWith(".xml") ||
+    input.includes("news.google.com/rss")
+  )
+}
+
 type CreateTrustedSourcePayload = {
   name?: unknown
   url?: unknown
@@ -50,6 +63,16 @@ export async function POST(
         normalizedUrl = parsed.toString()
       } catch {
         return NextResponse.json({ error: "Invalid URL" }, { status: 400 })
+      }
+
+      if (!looksLikeFeedUrl(normalizedUrl)) {
+        return NextResponse.json(
+          {
+            error:
+              "This URL doesn't look like an RSS/Atom feed. Use a direct feed URL (for example containing /rss, /feed, atom, or .xml).",
+          },
+          { status: 400 },
+        )
       }
     }
 

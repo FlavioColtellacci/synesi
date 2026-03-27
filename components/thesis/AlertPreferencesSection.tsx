@@ -26,6 +26,8 @@ type CopilotSuggestion = {
   }>
 }
 
+type CopilotSelection = { nameIndex: number; urlIndex: number; selected: boolean }
+
 const MODE_OPTIONS: Array<{ value: AlertRule["mode"]; label: string; hint: string }> = [
   {
     value: "only_sources",
@@ -71,9 +73,7 @@ export default function AlertPreferencesSection({
   const [copilotSuggestion, setCopilotSuggestion] = useState<CopilotSuggestion | null>(null)
   const [copilotApplyRule, setCopilotApplyRule] = useState(true)
   const [copilotAddSources, setCopilotAddSources] = useState(true)
-  const [copilotSelections, setCopilotSelections] = useState<
-    Array<{ nameIndex: number; urlIndex: number; selected: boolean }>
-  >([])
+  const [copilotSelections, setCopilotSelections] = useState<CopilotSelection[]>([])
   const primaryRule = rules[0] ?? null
 
   const selectedSourceIds = useMemo(() => new Set(primaryRule?.sourceIds ?? []), [primaryRule?.sourceIds])
@@ -232,6 +232,18 @@ export default function AlertPreferencesSection({
   const excludeKeywords = primaryRule?.exclude_keywords ?? []
   const selectedSourcesCount = primaryRule?.sourceIds?.length ?? 0
 
+  function getFeedLikeCandidates(source: CopilotSuggestion["sources"][number]) {
+    return source.urlCandidates.filter((candidate) => candidate.isFeedLike)
+  }
+
+  const hasBlockedSourceSelections = Boolean(
+    copilotSuggestion?.sources.some((source, index) => {
+      const selection = copilotSelections[index]
+      if (!selection?.selected) return false
+      return getFeedLikeCandidates(source).length === 0
+    }),
+  )
+
   function normalizeKeyword(value: string) {
     return value.trim().toLowerCase()
   }
@@ -339,7 +351,7 @@ export default function AlertPreferencesSection({
         payload.suggestion.sources.map((source) => ({
           nameIndex: 0,
           urlIndex: 0,
-          selected: source.urlCandidates.length > 0,
+          selected: source.urlCandidates.some((candidate) => candidate.isFeedLike),
         })),
       )
     } catch (err) {
@@ -396,8 +408,9 @@ export default function AlertPreferencesSection({
           if (!selection?.selected) continue
 
           const name = source.nameCandidates[selection.nameIndex] ?? source.nameCandidates[0] ?? ""
-          const chosenUrl = source.urlCandidates[selection.urlIndex]?.url ?? source.urlCandidates[0]?.url ?? ""
-          const isFeedLike = source.urlCandidates[selection.urlIndex]?.isFeedLike ?? false
+          const feedLikeCandidates = getFeedLikeCandidates(source)
+          const chosenUrl = feedLikeCandidates[selection.urlIndex]?.url ?? feedLikeCandidates[0]?.url ?? ""
+          const isFeedLike = feedLikeCandidates[selection.urlIndex]?.isFeedLike ?? false
 
           if (!name) continue
           if (!chosenUrl) {
@@ -496,7 +509,11 @@ export default function AlertPreferencesSection({
               placeholder='Example: "Only Dan Ives on NVDA AI news. Ignore everything else."'
               className="mt-3 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
               rows={3}
+              maxLength={500}
             />
+            <p className="mt-2 text-xs text-[#6B6B7B]">
+              Describe people/outlets and topics. Don&apos;t paste regular website URLs; only feed-like links can be saved.
+            </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
@@ -562,8 +579,8 @@ export default function AlertPreferencesSection({
 
                 {copilotSuggestion.sources.map((src, index) => {
                   const selection = copilotSelections[index] ?? { nameIndex: 0, urlIndex: 0, selected: true }
-                  const selectedUrl = src.urlCandidates[selection.urlIndex]
-                  const hasUrlCandidates = src.urlCandidates.length > 0
+                  const feedLikeCandidates = getFeedLikeCandidates(src)
+                  const hasUrlCandidates = feedLikeCandidates.length > 0
                   return (
                     <div
                       key={`${src.sourceType}-${index}`}
@@ -625,9 +642,9 @@ export default function AlertPreferencesSection({
                             className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
                           >
                             {hasUrlCandidates ? (
-                              src.urlCandidates.map((u, i) => (
+                              feedLikeCandidates.map((u, i) => (
                                 <option key={`${u.url}-${i}`} value={i}>
-                                  {u.isFeedLike ? "✅ " : "⚠ "} {u.url}
+                                  ✅ {u.url}
                                 </option>
                               ))
                             ) : (
@@ -639,21 +656,23 @@ export default function AlertPreferencesSection({
                               Copilot could not find a feed URL for this source. Uncheck it or generate again.
                             </p>
                           ) : null}
-                          {selectedUrl && !selectedUrl.isFeedLike ? (
-                            <p className="mt-1 text-xs text-[#FFB800]">
-                              This URL may not be RSS/Atom. Pick a feed-like URL to enable saving.
-                            </p>
-                          ) : null}
                         </label>
                       </div>
                     </div>
                   )
                 })}
 
+                {hasBlockedSourceSelections ? (
+                  <p className="text-xs text-[#FFB800]">
+                    At least one selected source has no feed-like URL. Uncheck it or generate a new draft before
+                    applying.
+                  </p>
+                ) : null}
+
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    disabled={isBusy}
+                    disabled={isBusy || hasBlockedSourceSelections}
                     onClick={() => {
                       void applyCopilotSuggestion()
                     }}

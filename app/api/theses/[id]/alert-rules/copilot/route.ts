@@ -99,6 +99,10 @@ function cleanStringArray(value: unknown, maxItems = 8): string[] {
   return [...new Set(cleaned)].slice(0, maxItems)
 }
 
+function normalizeIntent(value: string) {
+  return value.replace(/\s+/g, " ").trim().slice(0, 500)
+}
+
 function toMode(value: unknown): Mode | null {
   return typeof value === "string" && (VALID_MODES as readonly string[]).includes(value) ? (value as Mode) : null
 }
@@ -162,7 +166,8 @@ export async function POST(
   try {
     const { id: thesisId } = await params
     const body = (await request.json()) as { intent?: unknown }
-    const intent = typeof body.intent === "string" ? body.intent.trim() : ""
+    const rawIntent = typeof body.intent === "string" ? body.intent : ""
+    const intent = normalizeIntent(rawIntent)
 
     if (!intent) {
       return NextResponse.json({ error: "Missing intent" }, { status: 400 })
@@ -195,7 +200,7 @@ export async function POST(
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
 
-    const system = `You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates should prefer RSS/Atom feed URLs or feed-like search URLs (not generic homepages).\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
+    const system = `You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
 
     const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${(existingSources ?? [])
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())
@@ -237,9 +242,16 @@ export async function POST(
       .map((item) => {
         const sourceType = toSourceType(item.sourceType)
         const nameCandidates = cleanStringArray(item.nameCandidates, 4)
-        const explicitUrlCandidates = cleanStringArray(item.urlCandidates, 6)
+        const explicitUrlCandidates = cleanStringArray(item.urlCandidates, 6).filter((candidate) => {
+          try {
+            return Boolean(new URL(candidate))
+          } catch {
+            return false
+          }
+        })
+        const explicitFeedLikeCandidates = explicitUrlCandidates.filter((url) => looksLikeFeedUrl(url))
         const fallbackUrlCandidates =
-          explicitUrlCandidates.length > 0
+          explicitFeedLikeCandidates.length > 0
             ? []
             : buildFallbackFeedUrls({
                 sourceType,
@@ -247,7 +259,9 @@ export async function POST(
                 thesisTicker: thesis.ticker,
                 thesisCompanyName: thesis.company_name,
               })
-        const urlCandidates = [...new Set([...explicitUrlCandidates, ...fallbackUrlCandidates])].slice(0, 6)
+        const rawCandidates = [...new Set([...explicitFeedLikeCandidates, ...fallbackUrlCandidates])]
+        const feedLikeCandidates = rawCandidates.filter((url) => looksLikeFeedUrl(url))
+        const urlCandidates = feedLikeCandidates.slice(0, 6)
         return {
           sourceType,
           nameCandidates,
