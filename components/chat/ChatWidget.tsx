@@ -271,7 +271,7 @@ export default function ChatWidget() {
               "--sigma-chat-height": `${panelSize.height}px`,
             } as CSSProperties
           }
-          className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:relative sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+          className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
         >
           <div
             aria-hidden="true"
