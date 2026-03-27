@@ -44,6 +44,27 @@ function sanitizeActions(input: unknown): string[] {
     .slice(0, 3)
 }
 
+function normalizeAnswerText(input: string): string {
+  let text = input.replace(/\r\n/g, "\n").trim()
+
+  text = text
+    .replace(/```[a-zA-Z]*\n?/g, "")
+    .replace(/```/g, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+
+  // Help readability when the model returns packed inline steps.
+  text = text
+    .replace(/([^\n])(\d+\.\s)/g, "$1\n$2")
+    .replace(/\s-\s(?=\S)/g, "\n- ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+
+  return text.trim()
+}
+
 export function parseAssistantResponse(rawText: string): ChatAssistantResponse | null {
   const cleaned = rawText
     .replace(/^```json\s*/i, "")
@@ -55,7 +76,7 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
     const parsed = JSON.parse(cleaned) as unknown
     if (!isRecord(parsed)) return null
 
-    const answer = typeof parsed.answer === "string" ? parsed.answer.trim() : ""
+    const answer = typeof parsed.answer === "string" ? normalizeAnswerText(parsed.answer) : ""
     if (!answer) return null
 
     return {
@@ -79,7 +100,7 @@ export function parseAssistantTextFallback(rawText: string): ChatAssistantRespon
 
   if (!cleaned) return null
 
-  const answer = cleaned.replace(/\s+/g, " ").trim().slice(0, 1200)
+  const answer = normalizeAnswerText(cleaned).slice(0, 1200)
   if (!answer) return null
 
   return {

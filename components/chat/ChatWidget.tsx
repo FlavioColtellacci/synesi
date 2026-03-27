@@ -318,14 +318,26 @@ export default function ChatWidget() {
               Ask the Synesi assistant
             </label>
             <div className="flex gap-2">
-              <input
-                id="synesi-chat-input"
-                value={input}
-                maxLength={900}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask anything about Synesi or investing workflows..."
-                className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/45"
-              />
+              <label className="relative block w-full">
+                <input
+                  id="synesi-chat-input"
+                  value={input}
+                  maxLength={900}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder=""
+                  className="peer w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/45"
+                />
+                {input.trim().length === 0 ? (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
+                  >
+                    <span className="inline-block animate-[chat-input-placeholder-scroll_7s_ease-in-out_infinite_alternate] whitespace-nowrap">
+                      Ask anything about Synesi or investing workflows...
+                    </span>
+                  </span>
+                ) : null}
+              </label>
               <button
                 type="submit"
                 disabled={isSending || input.trim().length === 0}
@@ -338,6 +350,16 @@ export default function ChatWidget() {
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>
           </form>
+          <style jsx>{`
+            @keyframes chat-input-placeholder-scroll {
+              0% {
+                transform: translateX(0);
+              }
+              100% {
+                transform: translateX(-42%);
+              }
+            }
+          `}</style>
           </motion.section>
         ) : null}
       </AnimatePresence>
