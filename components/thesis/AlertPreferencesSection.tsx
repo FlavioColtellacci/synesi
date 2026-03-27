@@ -223,6 +223,7 @@ export default function AlertPreferencesSection({
   const isEnabled = primaryRule?.is_enabled ?? false
   const includeKeywords = primaryRule?.include_keywords ?? []
   const excludeKeywords = primaryRule?.exclude_keywords ?? []
+  const selectedSourcesCount = primaryRule?.sourceIds?.length ?? 0
 
   function normalizeKeyword(value: string) {
     return value.trim().toLowerCase()
@@ -422,7 +423,7 @@ export default function AlertPreferencesSection({
   return (
     <section className="mb-6">
       <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
-        ALERT PREFERENCES
+        ALERT PREFERENCES · STEP 2
       </p>
       <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -430,6 +431,13 @@ export default function AlertPreferencesSection({
             <p className="text-sm text-[#F0F0F0]">Personalized challenge alerts</p>
             <p className="mt-1 text-xs text-[#6B6B7B]">
               Control which trusted sources can trigger thesis challenge notifications.
+            </p>
+            <p className="mt-2 text-xs text-[#6B6B7B]">
+              Saved now:{" "}
+              <span className="text-[#F0F0F0]">{isEnabled ? "enabled" : "disabled"}</span> ·{" "}
+              <span className="text-[#F0F0F0]">{selectedSourcesCount}</span> source(s) · include{" "}
+              <span className="text-[#F0F0F0]">{includeKeywords.length}</span> · exclude{" "}
+              <span className="text-[#F0F0F0]">{excludeKeywords.length}</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -442,7 +450,7 @@ export default function AlertPreferencesSection({
               }}
               className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
             >
-              GENERATE SETUP
+              GENERATE DRAFT
             </button>
             <button
               type="button"
@@ -460,6 +468,11 @@ export default function AlertPreferencesSection({
             </button>
           </div>
         </div>
+
+        <p className="mt-3 text-xs text-[#6B6B7B]">
+          Changes in this panel save immediately. Copilot suggestions are only saved after you click{" "}
+          <span className="text-[#F0F0F0]">APPLY SELECTIONS</span>.
+        </p>
 
         {isCopilotOpen ? (
           <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
@@ -504,7 +517,7 @@ export default function AlertPreferencesSection({
                 }}
                 className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
               >
-                {copilotLoading ? "GENERATING..." : "GENERATE"}
+                {copilotLoading ? "GENERATING..." : "GENERATE DRAFT"}
               </button>
 
               {copilotSuggestion ? (
@@ -541,6 +554,12 @@ export default function AlertPreferencesSection({
             </div>
 
             {copilotError ? <p className="mt-3 font-mono text-xs text-[#FF3B30]">{copilotError}</p> : null}
+
+            {copilotSuggestion ? (
+              <p className="mt-3 rounded-lg border border-[#00D1B2]/30 bg-[#00D1B2]/10 px-3 py-2 text-xs text-[#00D1B2]">
+                Draft generated. Review it below, then click APPLY SELECTIONS to save.
+              </p>
+            ) : null}
 
             {copilotSuggestion ? (
               <div className="mt-4 space-y-3">

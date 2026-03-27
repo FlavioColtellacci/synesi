@@ -766,17 +766,17 @@ export default async function ThesisDetailPage({ params }: PageProps) {
             </article>
           </section>
 
-          <AlertPreferencesSection
-            thesisId={thesis.id}
-            trustedSources={trustedSources}
-            initialRules={alertRules}
-          />
-
           <TrustedSourcesSection
             thesisId={thesis.id}
             thesisTicker={thesis.ticker}
             thesisCompanyName={thesis.company_name}
             initialSources={trustedSources}
+          />
+
+          <AlertPreferencesSection
+            thesisId={thesis.id}
+            trustedSources={trustedSources}
+            initialRules={alertRules}
           />
         </aside>
       </div>
