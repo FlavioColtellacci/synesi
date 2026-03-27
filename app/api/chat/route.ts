@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
+import { persistChatExchange } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse } from "@/lib/chat/parse"
@@ -250,6 +251,23 @@ export async function POST(request: Request) {
     const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
 
     const responsePayload = enforceResponseGuardrails(parsed ?? fallback)
+    const responsePayloadWithWebContext: ChatAssistantResponse = {
+      ...responsePayload,
+      webContextVerified: usedSafeWebContext,
+    }
+
+    try {
+      await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+    } catch (persistError) {
+      console.warn(
+        JSON.stringify({
+          event: "chat_persist_warning",
+          requestId,
+          userId: user.id,
+          error: persistError instanceof Error ? persistError.message : "Unknown persist error",
+        }),
+      )
+    }
 
     console.info(
       JSON.stringify({
@@ -265,10 +283,7 @@ export async function POST(request: Request) {
       }),
     )
 
-    return NextResponse.json({
-      ...responsePayload,
-      webContextVerified: usedSafeWebContext,
-    })
+    return NextResponse.json(responsePayloadWithWebContext)
   } catch (error) {
     console.error(
       JSON.stringify({

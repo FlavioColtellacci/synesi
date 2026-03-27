@@ -49,6 +49,9 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
+  const [isHydratingHistory, setIsHydratingHistory] = useState(false)
+  const [isClearingHistory, setIsClearingHistory] = useState(false)
+  const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [showSuggestions, setShowSuggestions] = useState(true)
   const [panelSize, setPanelSize] = useState({
@@ -84,6 +87,46 @@ export default function ChatWidget() {
       setShowSuggestions(false)
     }
   }, [hasUserMessages])
+
+  useEffect(() => {
+    if (!isOpen || hasHydratedHistory) return
+
+    let cancelled = false
+
+    async function hydrateHistory() {
+      setIsHydratingHistory(true)
+      try {
+        const response = await fetch("/api/chat/history", { method: "GET" })
+        const payload = (await response.json()) as { messages?: ChatMessage[] }
+
+        if (cancelled) return
+
+        const hydratedMessages = Array.isArray(payload.messages) ? payload.messages : []
+        if (hydratedMessages.length > 0) {
+          setMessages(hydratedMessages)
+        } else {
+          setMessages([INITIAL_MESSAGE])
+          setShowSuggestions(true)
+        }
+      } catch {
+        if (!cancelled) {
+          setMessages([INITIAL_MESSAGE])
+          setShowSuggestions(true)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydratingHistory(false)
+          setHasHydratedHistory(true)
+        }
+      }
+    }
+
+    void hydrateHistory()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, hasHydratedHistory])
 
   useEffect(() => {
     function clamp(value: number, min: number, max: number) {
@@ -238,6 +281,23 @@ export default function ChatWidget() {
     }
   }
 
+  async function clearConversation() {
+    if (isClearingHistory) return
+
+    setIsClearingHistory(true)
+    try {
+      await fetch("/api/chat/history", { method: "DELETE" })
+    } catch {
+      // Keep UI reset even if network call fails.
+    } finally {
+      setMessages([INITIAL_MESSAGE])
+      setInput("")
+      setShowSuggestions(true)
+      setHasHydratedHistory(true)
+      setIsClearingHistory(false)
+    }
+  }
+
   return (
     <>
       <button
@@ -293,13 +353,25 @@ export default function ChatWidget() {
               <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
               <p className="text-xs text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
-            >
-              CLOSE
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void clearConversation()
+                }}
+                disabled={isClearingHistory}
+                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isClearingHistory ? "CLEARING" : "CLEAR"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
+              >
+                CLOSE
+              </button>
+            </div>
           </header>
 
           {!hasUserMessages && showSuggestions ? (
@@ -326,16 +398,17 @@ export default function ChatWidget() {
 
           <div ref={messageContainerRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
             <div className="space-y-3">
+              {isHydratingHistory ? <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p> : null}
               {messages.map((message) => (
-                <article
-                  key={message.id}
-                  className={`rounded-xl border px-3 py-2 ${
-                    message.role === "user"
-                      ? "ml-6 border-[#F0F0F0]/25 bg-[#1F1F26]"
-                      : "mr-6 border-[#2A2A32] bg-[#15151B]"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
+                <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <article
+                    className={`w-full max-w-[86%] rounded-xl border px-3 py-2 ${
+                      message.role === "user"
+                        ? "border-[#8FD6FF]/30 bg-[#202734] shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
+                        : "border-[#2A2A32] bg-[#15151B]"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
 
                   {message.role === "assistant" && message.webContextVerified ? (
                     <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
@@ -361,7 +434,8 @@ export default function ChatWidget() {
                     </div>
                   ) : null}
 
-                </article>
+                  </article>
+                </div>
               ))}
               {isSending ? <p className="font-mono text-xs text-[#6B6B7B]">Thinking…</p> : null}
             </div>
