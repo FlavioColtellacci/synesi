@@ -70,6 +70,27 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
   }
 }
 
+export function parseAssistantTextFallback(rawText: string): ChatAssistantResponse | null {
+  const cleaned = rawText
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim()
+
+  if (!cleaned) return null
+
+  const answer = cleaned.replace(/\s+/g, " ").trim().slice(0, 1200)
+  if (!answer) return null
+
+  return {
+    answer,
+    sourceTags: ["GeneralKnowledge"],
+    confidence: "medium",
+    escalation: "none",
+    followUpActions: [],
+  }
+}
+
 export function normalizeHistory(messages: ChatRequestMessage[]): ChatRequestMessage[] {
   return messages
     .filter(

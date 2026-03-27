@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
-import { normalizeHistory, parseAssistantResponse } from "@/lib/chat/parse"
+import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback } from "@/lib/chat/parse"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { createClient } from "@/lib/supabase/server"
@@ -219,9 +219,10 @@ export async function POST(request: Request) {
       .trim()
 
     const parsed = parseAssistantResponse(rawText)
+    const textFallback = parseAssistantTextFallback(rawText)
     const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessage, positions ?? [])
 
-    const responsePayload = enforceResponseGuardrails(parsed ?? fallback)
+    const responsePayload = enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
 
     console.info(
       JSON.stringify({

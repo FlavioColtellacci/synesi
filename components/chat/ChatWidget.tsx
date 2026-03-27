@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { usePathname } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
@@ -12,7 +13,6 @@ type ChatMessage = {
   sourceTags?: ChatAssistantResponse["sourceTags"]
   confidence?: ChatAssistantResponse["confidence"]
   escalation?: ChatAssistantResponse["escalation"]
-  followUpActions?: string[]
 }
 
 const QUICK_ACTIONS = [
@@ -30,7 +30,6 @@ const INITIAL_MESSAGE: ChatMessage = {
   sourceTags: ["ProductGuide", "WorkflowGuide"],
   confidence: "high",
   escalation: "none",
-  followUpActions: ["Create a thesis", "Review alerts", "Check billing options"],
 }
 
 export default function ChatWidget() {
@@ -39,7 +38,6 @@ export default function ChatWidget() {
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
-  const [showSuggestions, setShowSuggestions] = useState(true)
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
@@ -57,13 +55,7 @@ export default function ChatWidget() {
     element.scrollTop = element.scrollHeight
   }, [messages, isSending])
 
-  useEffect(() => {
-    if (hasUserMessages) {
-      setShowSuggestions(false)
-    }
-  }, [hasUserMessages])
-
-  async function submitFeedback(feedbackType: "thumbs_up" | "thumbs_down" | "handoff_requested", messageId: string) {
+  async function submitFeedback(feedbackType: "thumbs_up" | "thumbs_down", messageId: string) {
     try {
       await fetch("/api/chat/feedback", {
         method: "POST",
@@ -126,10 +118,6 @@ export default function ChatWidget() {
           "sourceTags" in payload && Array.isArray(payload.sourceTags) ? payload.sourceTags : ["GeneralKnowledge"],
         confidence: "confidence" in payload ? payload.confidence : "low",
         escalation: "escalation" in payload ? payload.escalation : "support",
-        followUpActions:
-          "followUpActions" in payload && Array.isArray(payload.followUpActions)
-            ? payload.followUpActions.slice(0, 3)
-            : [],
       }
 
       setMessages((current) => [...current, assistantMessage])
@@ -148,7 +136,6 @@ export default function ChatWidget() {
           sourceTags: ["PolicyGuide"],
           confidence: "low",
           escalation: "support",
-          followUpActions: ["Retry your question", "Ask a more specific Synesi question"],
         },
       ])
     } finally {
@@ -181,8 +168,15 @@ export default function ChatWidget() {
         </span>
       </button>
 
-      {isOpen ? (
-        <section className="fixed inset-x-0 bottom-0 top-16 z-[70] border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:w-[380px] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50">
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.section
+            initial={{ opacity: 0, y: 12, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.99 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-x-0 bottom-0 top-16 z-[70] border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:w-[380px] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+          >
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
               <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
@@ -197,8 +191,13 @@ export default function ChatWidget() {
             </button>
           </header>
 
-          {!hasUserMessages && showSuggestions ? (
-            <div className="border-b border-[#2A2A32] px-3 py-3">
+          {!hasUserMessages ? (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="border-b border-[#2A2A32] px-3 py-3"
+            >
               <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
                 Quick actions
               </p>
@@ -216,14 +215,20 @@ export default function ChatWidget() {
                   </button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           ) : null}
 
           <div ref={messageContainerRef} className="max-h-[52vh] overflow-y-auto px-3 py-3 sm:max-h-[420px]">
-            <div className="space-y-3">
+            <motion.div layout className="space-y-3">
+              <AnimatePresence initial={false}>
               {messages.map((message) => (
-                <article
+                <motion.article
                   key={message.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
                   className={`rounded-xl border px-3 py-2 ${
                     message.role === "user"
                       ? "ml-6 border-[#F0F0F0]/25 bg-[#1F1F26]"
@@ -245,23 +250,6 @@ export default function ChatWidget() {
                       {message.confidence ? (
                         <span className="font-mono text-[10px] text-[#6B6B7B]">{message.confidence} confidence</span>
                       ) : null}
-                    </div>
-                  ) : null}
-
-                  {message.role === "assistant" && showSuggestions && message.followUpActions?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {message.followUpActions.map((action) => (
-                        <button
-                          key={`${message.id}-${action}`}
-                          type="button"
-                          onClick={() => {
-                            void sendMessage(action)
-                          }}
-                          className="rounded-full border border-[#2A2A32] px-2.5 py-1 text-[11px] text-[#F0F0F0] hover:border-[#F0F0F0]/35"
-                        >
-                          {action}
-                        </button>
-                      ))}
                     </div>
                   ) : null}
 
@@ -287,22 +275,36 @@ export default function ChatWidget() {
                       >
                         👎
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_handoff_requested", { currentPath: pathname })
-                          void submitFeedback("handoff_requested", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        NEED HUMAN HELP
-                      </button>
                     </div>
                   ) : null}
-                </article>
+                </motion.article>
               ))}
-              {isSending ? <p className="font-mono text-xs text-[#6B6B7B]">Thinking…</p> : null}
-            </div>
+              </AnimatePresence>
+              {isSending ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#2A2A32] bg-[#15151B] px-3 py-2"
+                >
+                  <span className="font-mono text-xs text-[#6B6B7B]">Thinking</span>
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.15 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.3 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                </motion.div>
+              ) : null}
+            </motion.div>
           </div>
 
           <form
@@ -312,17 +314,6 @@ export default function ChatWidget() {
               void sendMessage(input)
             }}
           >
-            {hasUserMessages ? (
-              <div className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSuggestions((current) => !current)}
-                  className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                >
-                  {showSuggestions ? "HIDE SUGGESTIONS" : "SUGGESTIONS"}
-                </button>
-              </div>
-            ) : null}
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>
@@ -340,15 +331,16 @@ export default function ChatWidget() {
                 disabled={isSending || input.trim().length === 0}
                 className="rounded-lg bg-[#F0F0F0] px-3 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                SEND
+                {isSending ? "..." : "SEND"}
               </button>
             </div>
             <p className="mt-2 text-[11px] text-[#6B6B7B]">
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>
           </form>
-        </section>
-      ) : null}
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
     </>
   )
 }
