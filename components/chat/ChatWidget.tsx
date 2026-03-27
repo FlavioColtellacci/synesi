@@ -258,6 +258,11 @@ export default function ChatWidget() {
     () => messages.some((message) => message.role === "user"),
     [messages],
   )
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages],
+  )
+  const hasVerifiedWebContext = latestAssistantMessage?.webContextVerified === true
   const showStarterExamples = !hasUserMessages && !isHydratingHistory
 
   useEffect(() => {
@@ -591,6 +596,31 @@ export default function ChatWidget() {
               <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
             </div>
             <div className="flex items-center gap-2">
+              <span
+                title={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
+                aria-label={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                  hasVerifiedWebContext
+                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
+                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#6B6B7B]"
+                }`}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path
+                    d="M2.9 8H13.1M8 2.5C9.4 4 10.2 5.9 10.2 8C10.2 10.1 9.4 12 8 13.5M8 2.5C6.6 4 5.8 5.9 5.8 8C5.8 10.1 6.6 12 8 13.5"
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
               {hasUserMessages ? (
                 <button
                   type="button"
