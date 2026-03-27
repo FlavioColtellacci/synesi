@@ -24,6 +24,8 @@ type ChatMessage = {
   escalation?: ChatAssistantResponse["escalation"]
   followUpActions?: string[]
   webContextVerified?: boolean
+  webContextSource?: ChatAssistantResponse["webContextSource"]
+  webLookupTemporarilyUnavailable?: boolean
 }
 
 type ResizeDirection = "top" | "left" | "top-left"
@@ -269,7 +271,8 @@ export default function ChatWidget() {
     () => [...messages].reverse().find((message) => message.role === "assistant"),
     [messages],
   )
-  const hasVerifiedWebContext = latestAssistantMessage?.webContextVerified === true
+  const hasVerifiedWebContext =
+    latestAssistantMessage?.webContextVerified === true || latestAssistantMessage?.webContextSource === "brave_search"
   const showStarterExamples = !hasUserMessages && !isHydratingHistory
 
   useEffect(() => {
@@ -477,6 +480,13 @@ export default function ChatWidget() {
             ? payload.followUpActions.slice(0, 3)
             : [],
         webContextVerified: "webContextVerified" in payload ? payload.webContextVerified === true : false,
+        webContextSource:
+          "webContextSource" in payload &&
+          (payload.webContextSource === "safe_link" || payload.webContextSource === "brave_search")
+            ? payload.webContextSource
+            : undefined,
+        webLookupTemporarilyUnavailable:
+          "webLookupTemporarilyUnavailable" in payload ? payload.webLookupTemporarilyUnavailable === true : false,
       }
 
       setMessages((current) => [...current, assistantMessage])
@@ -731,10 +741,30 @@ export default function ChatWidget() {
                       <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
                     )}
 
-                    {message.role === "assistant" && message.webContextVerified ? (
+                    {message.role === "assistant" && message.webContextSource === "safe_link" ? (
                       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
                         Safe link verified
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" &&
+                    !message.webContextSource &&
+                    message.webContextVerified ? (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                        Safe link verified
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" && message.webContextSource === "brave_search" ? (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-sky-300/30 bg-sky-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-sky-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+                        Web context via Brave
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" && message.webLookupTemporarilyUnavailable ? (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-amber-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                        Web lookup temporarily unavailable
                       </div>
                     ) : null}
 

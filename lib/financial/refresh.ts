@@ -12,7 +12,7 @@ import type { SnapshotBuildResult } from "./types"
 import { createAdminClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 import { getGlobalQuotePrice } from "@/lib/alpha-vantage"
-import { getPerplexityResearchContext } from "@/lib/perplexity"
+import { getWebResearchContext } from "@/lib/web-research"
 import type { FinancialSnapshotCoverage, FinancialSnapshotPayload } from "./types"
 
 function toYmd(date: Date): string {
@@ -190,9 +190,8 @@ function extractJsonObject(input: string): Record<string, unknown> | null {
 async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildResult> {
   const normalizedTicker = ticker.trim().toUpperCase()
   const nowIso = new Date().toISOString()
-  const research = await getPerplexityResearchContext({
+  const research = await getWebResearchContext({
     focus: "company",
-    model: "sonar",
     query: [
       `Return financial metrics for ${normalizedTicker}.`,
       "Respond ONLY with JSON object using keys:",
