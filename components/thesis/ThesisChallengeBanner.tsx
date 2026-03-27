@@ -136,12 +136,10 @@ export function ThesisChallengeBanner({
       `}</style>
 
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
-              {title} ({visibleEvents.length})
-            </p>
-          </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-[#FFB800]">
+            {title} ({visibleEvents.length})
+          </p>
           <div className="flex items-center gap-2">
             {sectionCollapsible ? (
               <button
