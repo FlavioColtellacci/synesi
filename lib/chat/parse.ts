@@ -44,6 +44,84 @@ function sanitizeActions(input: unknown): string[] {
     .slice(0, 3)
 }
 
+function stripCodeFences(input: string): string {
+  return input
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim()
+}
+
+function extractFirstJsonObject(input: string): string | null {
+  const startIndex = input.indexOf("{")
+  if (startIndex === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = startIndex; index < input.length; index += 1) {
+    const char = input[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (char === "\\") {
+        escaped = true
+        continue
+      }
+
+      if (char === '"') {
+        inString = false
+      }
+
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === "{") {
+      depth += 1
+      continue
+    }
+
+    if (char === "}") {
+      depth -= 1
+      if (depth === 0) {
+        return input.slice(startIndex, index + 1)
+      }
+    }
+  }
+
+  return null
+}
+
+function parseStructuredPayload(rawText: string): Record<string, unknown> | null {
+  const cleaned = stripCodeFences(rawText)
+  if (!cleaned) return null
+
+  try {
+    const parsed = JSON.parse(cleaned) as unknown
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    const jsonCandidate = extractFirstJsonObject(cleaned)
+    if (!jsonCandidate) return null
+
+    try {
+      const parsed = JSON.parse(jsonCandidate) as unknown
+      return isRecord(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+}
+
 function normalizeAnswerText(input: string): string {
   let text = input.replace(/\r\n/g, "\n").trim()
 
@@ -66,17 +144,25 @@ function normalizeAnswerText(input: string): string {
 }
 
 export function parseAssistantResponse(rawText: string): ChatAssistantResponse | null {
-  const cleaned = rawText
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```\s*$/i, "")
-    .trim()
+  const parsed = parseStructuredPayload(rawText)
+  if (!parsed) return null
 
-  try {
-    const parsed = JSON.parse(cleaned) as unknown
-    if (!isRecord(parsed)) return null
+  const answer = typeof parsed.answer === "string" ? normalizeAnswerText(parsed.answer) : ""
+  if (!answer) return null
 
-    const answer = typeof parsed.answer === "string" ? normalizeAnswerText(parsed.answer) : ""
+  return {
+    answer,
+    sourceTags: sanitizeTags(parsed.sourceTags),
+    confidence: sanitizeConfidence(parsed.confidence),
+    escalation: sanitizeEscalation(parsed.escalation),
+    followUpActions: sanitizeActions(parsed.followUpActions),
+  }
+}
+
+export function parseAssistantTextFallback(rawText: string): ChatAssistantResponse | null {
+  const parsed = parseStructuredPayload(rawText)
+  if (parsed && typeof parsed.answer === "string") {
+    const answer = normalizeAnswerText(parsed.answer).slice(0, 1200)
     if (!answer) return null
 
     return {
@@ -86,17 +172,9 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
       escalation: sanitizeEscalation(parsed.escalation),
       followUpActions: sanitizeActions(parsed.followUpActions),
     }
-  } catch {
-    return null
   }
-}
 
-export function parseAssistantTextFallback(rawText: string): ChatAssistantResponse | null {
-  const cleaned = rawText
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```\s*$/i, "")
-    .trim()
+  const cleaned = stripCodeFences(rawText)
 
   if (!cleaned) return null
 
