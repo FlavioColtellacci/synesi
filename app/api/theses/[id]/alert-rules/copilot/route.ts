@@ -116,6 +116,45 @@ function toSourceType(value: unknown): SourceType {
   return "other"
 }
 
+function buildFallbackFeedUrls(input: {
+  sourceType: SourceType
+  nameCandidates: string[]
+  thesisTicker: string
+  thesisCompanyName: string
+}): string[] {
+  const urls: string[] = []
+  const normalizedNames = input.nameCandidates.map((name) => name.trim().toLowerCase()).filter(Boolean)
+
+  if (normalizedNames.some((name) => name.includes("reuters"))) {
+    urls.push("http://live.reuters.com/api/feed/RSS_Recent.aspx")
+  }
+  if (normalizedNames.some((name) => name.includes("marketwatch"))) {
+    urls.push("https://feeds.content.dowjones.io/public/rss/mw_topstories")
+  }
+
+  const ticker = input.thesisTicker.trim().toUpperCase()
+  const company = input.thesisCompanyName.trim()
+  const thesisQuery = encodeURIComponent([ticker, company].filter(Boolean).join(" OR "))
+  if (thesisQuery) {
+    urls.push(`https://news.google.com/rss/search?q=${thesisQuery}&hl=en-US&gl=US&ceid=US:en`)
+  }
+
+  const scopedNames = normalizedNames.slice(0, 2)
+  for (const name of scopedNames) {
+    const scopedQuery = encodeURIComponent([name, ticker].filter(Boolean).join(" "))
+    if (scopedQuery) {
+      urls.push(`https://news.google.com/rss/search?q=${scopedQuery}&hl=en-US&gl=US&ceid=US:en`)
+    }
+  }
+
+  if (input.sourceType === "sec_filing" && ticker) {
+    const secQuery = encodeURIComponent(`${ticker} sec filing`)
+    urls.push(`https://news.google.com/rss/search?q=${secQuery}&hl=en-US&gl=US&ceid=US:en`)
+  }
+
+  return [...new Set(urls)].slice(0, 6)
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -196,10 +235,22 @@ export async function POST(
       .slice(0, 5)
       .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : {}))
       .map((item) => {
-        const urlCandidates = cleanStringArray(item.urlCandidates, 6)
+        const sourceType = toSourceType(item.sourceType)
+        const nameCandidates = cleanStringArray(item.nameCandidates, 4)
+        const explicitUrlCandidates = cleanStringArray(item.urlCandidates, 6)
+        const fallbackUrlCandidates =
+          explicitUrlCandidates.length > 0
+            ? []
+            : buildFallbackFeedUrls({
+                sourceType,
+                nameCandidates,
+                thesisTicker: thesis.ticker,
+                thesisCompanyName: thesis.company_name,
+              })
+        const urlCandidates = [...new Set([...explicitUrlCandidates, ...fallbackUrlCandidates])].slice(0, 6)
         return {
-          sourceType: toSourceType(item.sourceType),
-          nameCandidates: cleanStringArray(item.nameCandidates, 4),
+          sourceType,
+          nameCandidates,
           urlCandidates: urlCandidates.map((url) => ({
             url,
             isFeedLike: looksLikeFeedUrl(url),

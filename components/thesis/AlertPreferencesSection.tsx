@@ -336,7 +336,11 @@ export default function AlertPreferencesSection({
 
       setCopilotSuggestion(payload.suggestion)
       setCopilotSelections(
-        payload.suggestion.sources.map(() => ({ nameIndex: 0, urlIndex: 0, selected: true })),
+        payload.suggestion.sources.map((source) => ({
+          nameIndex: 0,
+          urlIndex: 0,
+          selected: source.urlCandidates.length > 0,
+        })),
       )
     } catch (err) {
       setCopilotError(err instanceof Error ? err.message : "Copilot request failed")
@@ -395,7 +399,12 @@ export default function AlertPreferencesSection({
           const chosenUrl = source.urlCandidates[selection.urlIndex]?.url ?? source.urlCandidates[0]?.url ?? ""
           const isFeedLike = source.urlCandidates[selection.urlIndex]?.isFeedLike ?? false
 
-          if (!name || !chosenUrl) continue
+          if (!name) continue
+          if (!chosenUrl) {
+            throw new Error(
+              `No feed URL found for "${name}". Uncheck it or regenerate with a more specific source instruction.`,
+            )
+          }
           if (!isFeedLike) {
             throw new Error(`"${chosenUrl}" doesn't look like an RSS/Atom feed URL. Pick a different URL.`)
           }
@@ -567,6 +576,7 @@ export default function AlertPreferencesSection({
                 {copilotSuggestion.sources.map((src, index) => {
                   const selection = copilotSelections[index] ?? { nameIndex: 0, urlIndex: 0, selected: true }
                   const selectedUrl = src.urlCandidates[selection.urlIndex]
+                  const hasUrlCandidates = src.urlCandidates.length > 0
                   return (
                     <div
                       key={`${src.sourceType}-${index}`}
@@ -618,7 +628,7 @@ export default function AlertPreferencesSection({
                           </span>
                           <select
                             value={selection.urlIndex}
-                            disabled={copilotLoading || isBusy}
+                            disabled={copilotLoading || isBusy || !hasUrlCandidates}
                             onChange={(event) => {
                               const urlIndex = Number.parseInt(event.target.value, 10) || 0
                               setCopilotSelections((current) =>
@@ -627,12 +637,21 @@ export default function AlertPreferencesSection({
                             }}
                             className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
                           >
-                            {src.urlCandidates.map((u, i) => (
-                              <option key={`${u.url}-${i}`} value={i}>
-                                {u.isFeedLike ? "✅ " : "⚠ "} {u.url}
-                              </option>
-                            ))}
+                            {hasUrlCandidates ? (
+                              src.urlCandidates.map((u, i) => (
+                                <option key={`${u.url}-${i}`} value={i}>
+                                  {u.isFeedLike ? "✅ " : "⚠ "} {u.url}
+                                </option>
+                              ))
+                            ) : (
+                              <option value={0}>No feed URL found</option>
+                            )}
                           </select>
+                          {!hasUrlCandidates ? (
+                            <p className="mt-1 text-xs text-[#FFB800]">
+                              Copilot could not find a feed URL for this source. Uncheck it or generate again.
+                            </p>
+                          ) : null}
                           {selectedUrl && !selectedUrl.isFeedLike ? (
                             <p className="mt-1 text-xs text-[#FFB800]">
                               This URL may not be RSS/Atom. Pick a feed-like URL to enable saving.
