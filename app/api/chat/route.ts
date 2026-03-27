@@ -335,13 +335,16 @@ export async function POST(request: Request) {
       currentPath: body.context?.currentPath ?? "unknown",
     })
 
+    const resolvedSystemPrompt = (
+      liveContextSections.length > 0
+        ? `${systemPrompt}\n\n${liveContextSections.join("\n\n")}`
+        : systemPrompt
+    ).toString()
+
     const completionBaseRequest = {
       model,
       max_tokens: 900,
-      system:
-        liveContextSections.length > 0
-          ? `${systemPrompt}\n\n${liveContextSections.join("\n\n")}`
-          : systemPrompt,
+      system: resolvedSystemPrompt,
       messages: toModelMessages(history, latestMessageForModel),
     }
 
