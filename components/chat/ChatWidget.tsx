@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -228,6 +229,7 @@ function renderAssistantContent(content: string): ReactNode {
 export default function ChatWidget() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const [unreadAssistantReplies, setUnreadAssistantReplies] = useState(0)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isHydratingHistory, setIsHydratingHistory] = useState(false)
@@ -249,6 +251,11 @@ export default function ChatWidget() {
     startWidth: number
     startHeight: number
   } | null>(null)
+  const isOpenRef = useRef(false)
+
+  useLayoutEffect(() => {
+    isOpenRef.current = isOpen
+  }, [isOpen])
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
     () => messages.map((message) => ({ role: message.role, content: message.content })),
@@ -473,6 +480,9 @@ export default function ChatWidget() {
       }
 
       setMessages((current) => [...current, assistantMessage])
+      if (!isOpenRef.current) {
+        setUnreadAssistantReplies((count) => Math.min(count + 1, 99))
+      }
       trackAppEvent("chat_response_received", {
         currentPath: pathname,
         confidence: assistantMessage.confidence ?? "low",
@@ -491,6 +501,9 @@ export default function ChatWidget() {
           followUpActions: ["Retry your question", "Ask a more specific Synesi question"],
         },
       ])
+      if (!isOpenRef.current) {
+        setUnreadAssistantReplies((count) => Math.min(count + 1, 99))
+      }
     } finally {
       setIsSending(false)
     }
@@ -507,6 +520,7 @@ export default function ChatWidget() {
     } finally {
       setMessages([INITIAL_MESSAGE])
       setInput("")
+      setUnreadAssistantReplies(0)
       setHasHydratedHistory(true)
       setIsClearingHistory(false)
     }
@@ -516,11 +530,16 @@ export default function ChatWidget() {
     <>
       <button
         type="button"
-        aria-label="Open Synesi assistant"
+        aria-label={
+          unreadAssistantReplies > 0
+            ? `Open Synesi assistant, ${unreadAssistantReplies} new ${unreadAssistantReplies === 1 ? "reply" : "replies"}`
+            : "Open Synesi assistant"
+        }
         onClick={() => {
           setIsOpen((current) => {
             const next = !current
             if (next) {
+              setUnreadAssistantReplies(0)
               trackAppEvent("chat_widget_open", { currentPath: pathname })
             }
             return next
@@ -535,6 +554,14 @@ export default function ChatWidget() {
         >
           Σ
         </span>
+        {unreadAssistantReplies > 0 ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full border border-[#0A0A0C] bg-[#00D1B2] px-1 font-mono text-[10px] font-semibold leading-none text-[#0A0A0C]"
+          >
+            {unreadAssistantReplies > 9 ? "9+" : unreadAssistantReplies}
+          </span>
+        ) : null}
       </button>
 
       <AnimatePresence>
