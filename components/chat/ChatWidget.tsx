@@ -30,18 +30,20 @@ const TOP_BOTTOM_OFFSET_PX = 120
 const QUICK_ACTIONS = [
   "How do I create a thesis?",
   "How do trusted sources and alerts work?",
+  "Help me set up personalized alerts",
   "Explain this dashboard to me",
-  "How does pricing and billing work?",
+  "What open alerts do I have?",
 ]
 
 const INITIAL_MESSAGE: ChatMessage = {
   id: "assistant-welcome",
   role: "assistant",
   content:
-    "Good to see you. I can help with Synesi workflows, your theses, alerts, billing, and general guidance with care and precision.",
+    "Good to see you. I can help with Synesi workflows, your convictions dashboard, alert setup, and careful general guidance.",
   sourceTags: ["ProductGuide", "WorkflowGuide"],
   confidence: "high",
   escalation: "none",
+  followUpActions: ["Review open alerts", "Set up personalized alerts", "Check convictions status"],
 }
 
 export default function ChatWidget() {
@@ -49,6 +51,9 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
+  const [isHydratingHistory, setIsHydratingHistory] = useState(false)
+  const [isClearingHistory, setIsClearingHistory] = useState(false)
+  const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [showSuggestions, setShowSuggestions] = useState(true)
   const [panelSize, setPanelSize] = useState({
@@ -84,6 +89,46 @@ export default function ChatWidget() {
       setShowSuggestions(false)
     }
   }, [hasUserMessages])
+
+  useEffect(() => {
+    if (!isOpen || hasHydratedHistory) return
+
+    let cancelled = false
+
+    async function hydrateHistory() {
+      setIsHydratingHistory(true)
+      try {
+        const response = await fetch("/api/chat/history", { method: "GET" })
+        const payload = (await response.json()) as { messages?: ChatMessage[] }
+
+        if (cancelled) return
+
+        const hydratedMessages = Array.isArray(payload.messages) ? payload.messages : []
+        if (hydratedMessages.length > 0) {
+          setMessages(hydratedMessages)
+        } else {
+          setMessages([INITIAL_MESSAGE])
+          setShowSuggestions(true)
+        }
+      } catch {
+        if (!cancelled) {
+          setMessages([INITIAL_MESSAGE])
+          setShowSuggestions(true)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydratingHistory(false)
+          setHasHydratedHistory(true)
+        }
+      }
+    }
+
+    void hydrateHistory()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, hasHydratedHistory])
 
   useEffect(() => {
     function clamp(value: number, min: number, max: number) {
@@ -238,6 +283,23 @@ export default function ChatWidget() {
     }
   }
 
+  async function clearConversation() {
+    if (isClearingHistory) return
+
+    setIsClearingHistory(true)
+    try {
+      await fetch("/api/chat/history", { method: "DELETE" })
+    } catch {
+      // Keep UI reset even if network call fails.
+    } finally {
+      setMessages([INITIAL_MESSAGE])
+      setInput("")
+      setShowSuggestions(true)
+      setHasHydratedHistory(true)
+      setIsClearingHistory(false)
+    }
+  }
+
   return (
     <>
       <button
@@ -278,6 +340,10 @@ export default function ChatWidget() {
             }
             className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
           >
+            <div className="pointer-events-none absolute left-2 top-2 z-20 hidden items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/85 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
+              <span aria-hidden="true">↖</span>
+              Drag to resize
+            </div>
           <div
             aria-hidden="true"
             onPointerDown={(event) => handleResizeStart("top-left", event)}
@@ -295,16 +361,34 @@ export default function ChatWidget() {
           />
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#00D1B2]/35 bg-[#00D1B2]/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#7EE6D6]">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#00D1B2]" />
+                  Web lookup enabled
+                </span>
+              </div>
               <p className="text-xs text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
-            >
-              CLOSE
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void clearConversation()
+                }}
+                disabled={isClearingHistory}
+                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isClearingHistory ? "CLEARING" : "CLEAR"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
+              >
+                CLOSE
+              </button>
+            </div>
           </header>
 
           {!hasUserMessages && showSuggestions ? (
@@ -336,6 +420,7 @@ export default function ChatWidget() {
 
           <div ref={messageContainerRef} className="sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3">
             <motion.div layout className="space-y-3">
+              {isHydratingHistory ? <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p> : null}
               <AnimatePresence initial={false}>
               {messages.map((message) => (
                 <motion.article

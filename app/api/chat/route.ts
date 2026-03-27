@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
+import { persistChatExchange } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback } from "@/lib/chat/parse"
@@ -16,8 +17,20 @@ type ChatRequestBody = {
 }
 
 type PositionSnapshot = {
+  id: string
   ticker: string
+  companyName: string
   status: string
+  updatedAt: string
+}
+
+type AlertSnapshot = {
+  thesisId: string
+  ticker: string
+  companyName: string
+  eventType: string
+  eventDetail: string
+  createdAt: string
 }
 
 const MAX_MESSAGE_CHARS = 900
@@ -35,6 +48,7 @@ const userContextCache = new Map<
     openAlertsCount: number
     tickers: string[]
     positions: PositionSnapshot[]
+    alerts: AlertSnapshot[]
   }
 >()
 
@@ -71,6 +85,35 @@ function buildPositionSummary(positions: PositionSnapshot[]) {
 
 function isPositionsQuestion(message: string) {
   return /(position|positions|conviction|convictions|portfolio|how are my|how's my)/i.test(message)
+}
+
+function isInternetLookupQuestion(message: string) {
+  return /(look up|lookup|search (the )?web|web search|internet|latest news|recent news|what happened (today|this week))/i.test(
+    message,
+  )
+}
+
+function buildRecentConvictionsLine(positions: PositionSnapshot[]) {
+  if (positions.length === 0) return "none"
+  return positions
+    .slice(0, 8)
+    .map((position) => `${position.ticker} (${position.status}, updated ${new Date(position.updatedAt).toISOString().slice(0, 10)})`)
+    .join(" | ")
+}
+
+function buildRecentAlertsLine(alerts: AlertSnapshot[]) {
+  if (alerts.length === 0) return "none"
+  return alerts
+    .slice(0, 8)
+    .map((alert) => `${alert.ticker} [${alert.eventType}] ${alert.eventDetail}`)
+    .join(" | ")
+}
+
+function truncateEventDetail(input: string | null, maxChars = 140) {
+  const normalized = (input ?? "").replace(/\s+/g, " ").trim()
+  if (!normalized) return "No detail provided"
+  if (normalized.length <= maxChars) return normalized
+  return `${normalized.slice(0, maxChars - 1)}…`
 }
 
 function buildLinkSafetyResponse(reason: string): ChatAssistantResponse {
@@ -172,9 +215,10 @@ export async function POST(request: Request) {
     let openAlertsCount = cachedContext?.openAlertsCount
     let tickers = cachedContext?.tickers
     let positions = cachedContext?.positions
+    let alerts = cachedContext?.alerts
 
     if (!cachedContext || cachedContext.expiresAt <= now) {
-      const [{ count: freshThesisCount }, { count: freshOpenAlertsCount }, { data: latestTheses }] =
+      const [{ count: freshThesisCount }, { count: freshOpenAlertsCount }, { data: latestTheses }, { data: latestAlerts }] =
         await Promise.all([
           supabase.from("theses").select("id", { count: "exact", head: true }).eq("user_id", user.id),
           supabase
@@ -184,31 +228,85 @@ export async function POST(request: Request) {
             .eq("is_reviewed", false),
           supabase
             .from("theses")
-            .select("ticker,status")
+            .select("id,ticker,company_name,status,updated_at")
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
-            .limit(8),
+            .limit(12),
+          supabase
+            .from("events")
+            .select("thesis_id,event_type,event_detail,created_at")
+            .eq("user_id", user.id)
+            .eq("is_reviewed", false)
+            .order("created_at", { ascending: false })
+            .limit(12),
         ])
       thesisCount = freshThesisCount ?? 0
       openAlertsCount = freshOpenAlertsCount ?? 0
       positions = (latestTheses ?? []).map((thesis) => ({
+        id: thesis.id,
         ticker: thesis.ticker,
+        companyName: thesis.company_name,
         status: thesis.status,
+        updatedAt: thesis.updated_at,
       }))
       tickers = (positions ?? []).map((thesis) => thesis.ticker)
+      const thesisById = new Map(positions.map((thesis) => [thesis.id, thesis]))
+      const missingThesisIds = Array.from(
+        new Set(
+          (latestAlerts ?? [])
+            .map((event) => event.thesis_id)
+            .filter((thesisId) => thesisId && !thesisById.has(thesisId)),
+        ),
+      )
+
+      if (missingThesisIds.length > 0) {
+        const { data: missingTheses } = await supabase
+          .from("theses")
+          .select("id,ticker,company_name,status,updated_at")
+          .eq("user_id", user.id)
+          .in("id", missingThesisIds)
+
+        for (const thesis of missingTheses ?? []) {
+          thesisById.set(thesis.id, {
+            id: thesis.id,
+            ticker: thesis.ticker,
+            companyName: thesis.company_name,
+            status: thesis.status,
+            updatedAt: thesis.updated_at,
+          })
+        }
+      }
+
+      alerts = (latestAlerts ?? [])
+        .map((event) => {
+          const thesis = thesisById.get(event.thesis_id)
+          if (!thesis) return null
+          return {
+            thesisId: event.thesis_id,
+            ticker: thesis.ticker,
+            companyName: thesis.companyName,
+            eventType: event.event_type,
+            eventDetail: truncateEventDetail(event.event_detail),
+            createdAt: event.created_at,
+          }
+        })
+        .filter((event): event is AlertSnapshot => event !== null)
+
       userContextCache.set(user.id, {
         expiresAt: now + USER_CONTEXT_CACHE_TTL_MS,
         thesisCount,
         openAlertsCount,
         tickers,
         positions,
+        alerts,
       })
     }
 
     const sharedUrl = extractFirstUrl(latestMessage)
     let latestMessageForModel = latestMessage
-    let webContextPromptSection = ""
+    const liveContextSections: string[] = []
     let usedSafeWebContext = false
+    const shouldUseModelWebLookup = !sharedUrl && isInternetLookupQuestion(latestMessage)
 
     if (sharedUrl) {
       const webContext = await fetchSafeWebContext(sharedUrl)
@@ -216,7 +314,9 @@ export async function POST(request: Request) {
         return NextResponse.json(buildLinkSafetyResponse(webContext.reason), { status: 200 })
       }
 
-      webContextPromptSection = `LIVE WEB CONTEXT (safe-fetched by backend)\n- URL: ${webContext.sourceUrl}\n- Title: ${webContext.title}\n- Excerpt:\n${webContext.excerpt}`
+      liveContextSections.push(
+        `LIVE WEB CONTEXT (safe-fetched by backend)\n- URL: ${webContext.sourceUrl}\n- Title: ${webContext.title}\n- Excerpt:\n${webContext.excerpt}`,
+      )
 
       latestMessageForModel = `${latestMessage}\n\nThe user included a URL that has already been safely fetched. Use the provided live web context in your answer when relevant.`
       usedSafeWebContext = true
@@ -230,15 +330,54 @@ export async function POST(request: Request) {
       openAlertsCount: openAlertsCount ?? 0,
       tickers: tickers ?? [],
       positionSummary: buildPositionSummary(positions ?? []),
+      recentConvictions: buildRecentConvictionsLine(positions ?? []),
+      recentAlerts: buildRecentAlertsLine(alerts ?? []),
       currentPath: body.context?.currentPath ?? "unknown",
     })
 
-    const completion = await llm.messages.create({
+    const resolvedSystemPrompt = (
+      liveContextSections.length > 0
+        ? `${systemPrompt}\n\n${liveContextSections.join("\n\n")}`
+        : systemPrompt
+    ).toString()
+
+    const completionBaseRequest = {
       model,
       max_tokens: 900,
-      system: webContextPromptSection ? `${systemPrompt}\n\n${webContextPromptSection}` : systemPrompt,
+      system: resolvedSystemPrompt,
       messages: toModelMessages(history, latestMessageForModel),
-    })
+    }
+
+    let completion
+    try {
+      completion = await llm.messages.create(
+        shouldUseModelWebLookup
+          ? ({
+              ...completionBaseRequest,
+              system: `${completionBaseRequest.system}\n\nWhen the user asks for internet lookup, use built-in model web search capability if available, then cite uncertainty clearly.`,
+              tools: [
+                {
+                  type: "web_search_20250305",
+                  name: "web_search",
+                  max_uses: 3,
+                },
+              ],
+            } as never)
+          : completionBaseRequest,
+      )
+    } catch (lookupError) {
+      if (!shouldUseModelWebLookup) {
+        throw lookupError
+      }
+
+      completion = await llm.messages.create({
+        ...completionBaseRequest,
+        messages: toModelMessages(
+          history,
+          `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, say that clearly and ask the user to share a public HTTPS URL for a precise summary.`,
+        ),
+      })
+    }
 
     const rawText = completion.content
       .filter((block) => block.type === "text")
@@ -251,6 +390,23 @@ export async function POST(request: Request) {
     const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
 
     const responsePayload = enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
+    const responsePayloadWithWebContext: ChatAssistantResponse = {
+      ...responsePayload,
+      webContextVerified: usedSafeWebContext,
+    }
+
+    try {
+      await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+    } catch (persistError) {
+      console.warn(
+        JSON.stringify({
+          event: "chat_persist_warning",
+          requestId,
+          userId: user.id,
+          error: persistError instanceof Error ? persistError.message : "Unknown persist error",
+        }),
+      )
+    }
 
     console.info(
       JSON.stringify({
@@ -266,10 +422,7 @@ export async function POST(request: Request) {
       }),
     )
 
-    return NextResponse.json({
-      ...responsePayload,
-      webContextVerified: usedSafeWebContext,
-    })
+    return NextResponse.json(responsePayloadWithWebContext)
   } catch (error) {
     console.error(
       JSON.stringify({
