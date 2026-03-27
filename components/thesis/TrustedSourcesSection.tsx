@@ -224,7 +224,8 @@ export default function TrustedSourcesSection({
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Source name"
+              placeholder=""
+              aria-label="Source name"
               className="peer w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2.5 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/50"
             />
             {name.trim().length === 0 ? (
