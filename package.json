@@ -9,6 +9,7 @@
     "lint": "eslint",
     "secrets:scan": "gitleaks git --redact --verbose .",
     "secrets:scan:staged": "gitleaks git --staged --redact --verbose .",
+    "postinstall": "node scripts/ensure-next-env.mjs",
     "prepare": "husky"
   },
   "dependencies": {
