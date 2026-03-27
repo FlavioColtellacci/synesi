@@ -11,8 +11,6 @@ export default function FeaturesSection() {
     willChange: 'transform',
   }
 
-  const glitchStyle: CSSProperties = { textShadow: glitchTextShadow }
-
   return (
     <section id="features" className="px-6 py-32 md:px-10">
       <div className="mx-auto max-w-6xl">

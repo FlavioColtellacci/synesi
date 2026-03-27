@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { trackFunnelEvent } from '@/lib/analytics'
 import LandingFooter from '@/components/landing/LandingFooter'
