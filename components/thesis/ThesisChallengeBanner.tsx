@@ -13,6 +13,7 @@ export type ThesisChallengeEvent = {
 type Props = {
   events: ThesisChallengeEvent[]
   title?: string
+  sectionCollapsible?: boolean
 }
 
 type SortMode = "newest" | "oldest"
@@ -76,23 +77,18 @@ function formatReceivedAt(createdAt: string | null) {
   return `Received ${relative} • ${absolute}`
 }
 
-export function ThesisChallengeBanner({ events, title = "Alerts" }: Props) {
+export function ThesisChallengeBanner({
+  events,
+  title = "Alerts",
+  sectionCollapsible = false,
+}: Props) {
   const [visibleEvents, setVisibleEvents] = useState<ThesisChallengeEvent[]>(events)
-  const [collapsedEventIds, setCollapsedEventIds] = useState<Set<string>>(new Set())
   const [sortMode, setSortMode] = useState<SortMode>("newest")
+  const [isListVisible, setIsListVisible] = useState(true)
 
   useEffect(() => {
     setVisibleEvents(events)
   }, [events])
-
-  useEffect(() => {
-    setCollapsedEventIds(new Set(events.map((event) => event.id)))
-  }, [events])
-
-  const collapsedCount = useMemo(
-    () => visibleEvents.filter((event) => collapsedEventIds.has(event.id)).length,
-    [collapsedEventIds, visibleEvents],
-  )
 
   const sortedEvents = useMemo(() => {
     const getTimestamp = (createdAt: string | null) => {
@@ -115,23 +111,6 @@ export function ThesisChallengeBanner({ events, title = "Alerts" }: Props) {
     void fetch(`/api/events/${eventId}/dismiss`, {
       method: "PATCH",
     })
-  }
-
-  const toggleEvent = (eventId: string) => {
-    setCollapsedEventIds((current) => {
-      const next = new Set(current)
-      if (next.has(eventId)) next.delete(eventId)
-      else next.add(eventId)
-      return next
-    })
-  }
-
-  const collapseAll = () => {
-    setCollapsedEventIds(new Set(visibleEvents.map((event) => event.id)))
-  }
-
-  const expandAll = () => {
-    setCollapsedEventIds(new Set())
   }
 
   if (visibleEvents.length === 0) {
@@ -160,10 +139,19 @@ export function ThesisChallengeBanner({ events, title = "Alerts" }: Props) {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
-              {title} ({visibleEvents.length}){collapsedCount > 0 ? ` • ${collapsedCount} collapsed` : ""}
+              {title} ({visibleEvents.length})
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {sectionCollapsible ? (
+              <button
+                type="button"
+                onClick={() => setIsListVisible((current) => !current)}
+                className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+              >
+                {isListVisible ? "COLLAPSE" : "EXPAND"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setSortMode((current) => (current === "newest" ? "oldest" : "newest"))}
@@ -171,100 +159,74 @@ export function ThesisChallengeBanner({ events, title = "Alerts" }: Props) {
             >
               SORT: {sortMode === "newest" ? "NEWEST" : "OLDEST"}
             </button>
-            <button
-              type="button"
-              onClick={expandAll}
-              className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-            >
-              EXPAND ALL
-            </button>
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-            >
-              COLLAPSE ALL
-            </button>
           </div>
         </div>
-        {sortedEvents.map((event) => (
-          (() => {
-            const parsed = parseEventDetail(event.eventDetail)
-            const hostname = getHostname(parsed.articleUrl)
-            const isCollapsed = collapsedEventIds.has(event.id)
+        {isListVisible
+          ? sortedEvents.map((event) => {
+              const parsed = parseEventDetail(event.eventDetail)
+              const hostname = getHostname(parsed.articleUrl)
 
-            return (
-              <div
-                key={event.id}
-                className="thesis-challenge-enter relative w-full rounded-xl border border-[#2A2A32] border-l-4 border-l-[#FFB800] bg-[#141418] px-5 py-4 mb-3"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span aria-hidden>⚡</span>
-                      <span className="font-mono font-bold text-xs tracking-widest uppercase text-[#FFB800]">
-                        THESIS CHALLENGE
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleEvent(event.id)}
-                        className="ml-2 rounded border border-[#2A2A32] px-2 py-0.5 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                      >
-                        {isCollapsed ? "EXPAND" : "COLLAPSE"}
-                      </button>
+              return (
+                <div
+                  key={event.id}
+                  className="thesis-challenge-enter relative mb-3 w-full rounded-xl border border-[#2A2A32] border-l-4 border-l-[#FFB800] bg-[#141418] px-5 py-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden>⚡</span>
+                        <span className="font-mono font-bold text-xs tracking-widest uppercase text-[#FFB800]">
+                          THESIS CHALLENGE
+                        </span>
+                      </div>
+
+                      <p className="mt-2 font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                        {formatReceivedAt(event.createdAt)}
+                      </p>
+
+                      <p className="mt-1 font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                        Source: {truncate(parsed.source, 80)}
+                      </p>
+
+                      <p className="mt-1 text-sm leading-relaxed text-[#F0F0F0]">
+                        {truncate(parsed.headline, 180)}
+                      </p>
+
+                      <p className="mt-2 text-xs text-[#A0A0AE]">{parsed.reason}</p>
+
+                      {parsed.articleUrl ? (
+                        <a
+                          href={parsed.articleUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-block text-xs text-[#8AA8FF] hover:text-[#B9CBFF]"
+                        >
+                          Open source article
+                          {hostname ? ` (${hostname})` : ""}
+                        </a>
+                      ) : null}
                     </div>
 
-                    <p className="mt-2 font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                      {formatReceivedAt(event.createdAt)}
-                    </p>
-
-                    <p className="mt-1 font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                      Source: {truncate(parsed.source, 80)}
-                    </p>
-
-                    <p className="mt-1 text-sm leading-relaxed text-[#F0F0F0]">
-                      {truncate(parsed.headline, 180)}
-                    </p>
-
-                    {!isCollapsed ? (
-                      <>
-                        <p className="mt-2 text-xs text-[#A0A0AE]">{parsed.reason}</p>
-
-                        {parsed.articleUrl ? (
-                          <a
-                            href={parsed.articleUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-block text-xs text-[#8AA8FF] hover:text-[#B9CBFF]"
-                          >
-                            Open source article
-                            {hostname ? ` (${hostname})` : ""}
-                          </a>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <Link
-                      href={`/app/thesis/${event.thesisId}`}
-                      className="text-xs font-medium bg-white text-black px-3 py-1.5 rounded-lg hover:bg-[#E8E8E8] transition-colors"
-                    >
-                      REVIEW NOW
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDismiss(event.id)}
-                      className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
-                    >
-                      DISMISS
-                    </button>
+                    <div className="shrink-0 flex items-center gap-3">
+                      <Link
+                        href={`/app/thesis/${event.thesisId}`}
+                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-[#E8E8E8]"
+                      >
+                        REVIEW NOW
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDismiss(event.id)}
+                        className="text-xs text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                      >
+                        DISMISS
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })()
-        ))}
+              )
+            })
+          : null}
       </div>
     </>
   )

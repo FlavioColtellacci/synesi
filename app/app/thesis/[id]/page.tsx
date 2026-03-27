@@ -535,7 +535,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
 
       {challengeEvents.length > 0 ? (
         <div className="mb-6">
-          <ThesisChallengeBanner events={challengeEvents} />
+          <ThesisChallengeBanner events={challengeEvents} sectionCollapsible />
         </div>
       ) : null}
 
