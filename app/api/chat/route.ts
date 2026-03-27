@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
+import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse } from "@/lib/chat/parse"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
@@ -70,6 +71,16 @@ function buildPositionSummary(positions: PositionSnapshot[]) {
 
 function isPositionsQuestion(message: string) {
   return /(position|positions|conviction|convictions|portfolio|how are my|how's my)/i.test(message)
+}
+
+function buildLinkSafetyResponse(reason: string): ChatAssistantResponse {
+  return {
+    answer: `${reason} Share a public HTTPS article link and I will summarize it for you.`,
+    sourceTags: ["PolicyGuide"],
+    confidence: "high",
+    escalation: "none",
+    followUpActions: ["Share a different HTTPS link", "Paste the article text directly", "Ask a Synesi workflow question"],
+  }
 }
 
 function buildPositionsFallback(message: string, positions: PositionSnapshot[]): ChatAssistantResponse {
@@ -194,6 +205,23 @@ export async function POST(request: Request) {
       })
     }
 
+    const sharedUrl = extractFirstUrl(latestMessage)
+    let latestMessageForModel = latestMessage
+    let webContextPromptSection = ""
+    let usedSafeWebContext = false
+
+    if (sharedUrl) {
+      const webContext = await fetchSafeWebContext(sharedUrl)
+      if (!webContext.ok) {
+        return NextResponse.json(buildLinkSafetyResponse(webContext.reason), { status: 200 })
+      }
+
+      webContextPromptSection = `LIVE WEB CONTEXT (safe-fetched by backend)\n- URL: ${webContext.sourceUrl}\n- Title: ${webContext.title}\n- Excerpt:\n${webContext.excerpt}`
+
+      latestMessageForModel = `${latestMessage}\n\nThe user included a URL that has already been safely fetched. Use the provided live web context in your answer when relevant.`
+      usedSafeWebContext = true
+    }
+
     const model = getTextModel()
     const llm = createLlm()
     const systemPrompt = buildChatSystemPrompt({
@@ -208,8 +236,8 @@ export async function POST(request: Request) {
     const completion = await llm.messages.create({
       model,
       max_tokens: 900,
-      system: systemPrompt,
-      messages: toModelMessages(history, latestMessage),
+      system: webContextPromptSection ? `${systemPrompt}\n\n${webContextPromptSection}` : systemPrompt,
+      messages: toModelMessages(history, latestMessageForModel),
     })
 
     const rawText = completion.content
@@ -219,7 +247,7 @@ export async function POST(request: Request) {
       .trim()
 
     const parsed = parseAssistantResponse(rawText)
-    const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessage, positions ?? [])
+    const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
 
     const responsePayload = enforceResponseGuardrails(parsed ?? fallback)
 
@@ -233,10 +261,14 @@ export async function POST(request: Request) {
         sourceTags: responsePayload.sourceTags,
         confidence: responsePayload.confidence,
         escalation: responsePayload.escalation,
+        usedSafeWebContext,
       }),
     )
 
-    return NextResponse.json(responsePayload)
+    return NextResponse.json({
+      ...responsePayload,
+      webContextVerified: usedSafeWebContext,
+    })
   } catch (error) {
     console.error(
       JSON.stringify({

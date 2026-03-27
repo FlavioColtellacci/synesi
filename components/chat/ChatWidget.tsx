@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { usePathname } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
@@ -13,7 +13,18 @@ type ChatMessage = {
   confidence?: ChatAssistantResponse["confidence"]
   escalation?: ChatAssistantResponse["escalation"]
   followUpActions?: string[]
+  webContextVerified?: boolean
 }
+
+type ResizeDirection = "top" | "left" | "top-left"
+
+const DEFAULT_PANEL_WIDTH = 380
+const DEFAULT_PANEL_HEIGHT = 620
+const MIN_PANEL_WIDTH = 340
+const MIN_PANEL_HEIGHT = 420
+const MAX_PANEL_WIDTH = 760
+const VIEWPORT_WIDTH_RATIO = 0.92
+const TOP_BOTTOM_OFFSET_PX = 120
 
 const QUICK_ACTIONS = [
   "How do I create a thesis?",
@@ -40,7 +51,18 @@ export default function ChatWidget() {
   const [isSending, setIsSending] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
   const [showSuggestions, setShowSuggestions] = useState(true)
+  const [panelSize, setPanelSize] = useState({
+    width: DEFAULT_PANEL_WIDTH,
+    height: DEFAULT_PANEL_HEIGHT,
+  })
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
+  const resizeStateRef = useRef<{
+    direction: ResizeDirection
+    startX: number
+    startY: number
+    startWidth: number
+    startHeight: number
+  } | null>(null)
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
     () => messages.map((message) => ({ role: message.role, content: message.content })),
@@ -62,6 +84,81 @@ export default function ChatWidget() {
       setShowSuggestions(false)
     }
   }, [hasUserMessages])
+
+  useEffect(() => {
+    function clamp(value: number, min: number, max: number) {
+      return Math.min(Math.max(value, min), max)
+    }
+
+    function getMaxWidth() {
+      return Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, Math.floor(window.innerWidth * VIEWPORT_WIDTH_RATIO)))
+    }
+
+    function getMaxHeight() {
+      return Math.max(MIN_PANEL_HEIGHT, window.innerHeight - TOP_BOTTOM_OFFSET_PX)
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const resizeState = resizeStateRef.current
+      if (!resizeState) return
+
+      const deltaX = event.clientX - resizeState.startX
+      const deltaY = event.clientY - resizeState.startY
+      const shouldResizeWidth = resizeState.direction === "left" || resizeState.direction === "top-left"
+      const shouldResizeHeight = resizeState.direction === "top" || resizeState.direction === "top-left"
+
+      let nextWidth = resizeState.startWidth
+      let nextHeight = resizeState.startHeight
+
+      if (shouldResizeWidth) {
+        nextWidth = resizeState.startWidth - deltaX
+      }
+      if (shouldResizeHeight) {
+        nextHeight = resizeState.startHeight - deltaY
+      }
+
+      const maxWidth = getMaxWidth()
+      const maxHeight = getMaxHeight()
+
+      setPanelSize({
+        width: clamp(nextWidth, MIN_PANEL_WIDTH, maxWidth),
+        height: clamp(nextHeight, MIN_PANEL_HEIGHT, maxHeight),
+      })
+    }
+
+    function handlePointerUp() {
+      resizeStateRef.current = null
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
+    }
+  }, [])
+
+  function handleResizeStart(direction: ResizeDirection, event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "touch") return
+
+    event.preventDefault()
+    resizeStateRef.current = {
+      direction,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: panelSize.width,
+      startHeight: panelSize.height,
+    }
+
+    document.body.style.userSelect = "none"
+    document.body.style.cursor =
+      direction === "top" ? "ns-resize" : direction === "left" ? "ew-resize" : "nwse-resize"
+  }
 
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
@@ -114,6 +211,7 @@ export default function ChatWidget() {
           "followUpActions" in payload && Array.isArray(payload.followUpActions)
             ? payload.followUpActions.slice(0, 3)
             : [],
+        webContextVerified: "webContextVerified" in payload ? payload.webContextVerified === true : false,
       }
 
       setMessages((current) => [...current, assistantMessage])
@@ -166,7 +264,30 @@ export default function ChatWidget() {
       </button>
 
       {isOpen ? (
-        <section className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[620px] sm:w-[380px] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:[resize:both] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50">
+        <section
+          style={
+            {
+              "--sigma-chat-width": `${panelSize.width}px`,
+              "--sigma-chat-height": `${panelSize.height}px`,
+            } as CSSProperties
+          }
+          className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:relative sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+        >
+          <div
+            aria-hidden="true"
+            onPointerDown={(event) => handleResizeStart("top-left", event)}
+            className="absolute left-0 top-0 z-10 hidden h-5 w-5 cursor-nwse-resize sm:block"
+          />
+          <div
+            aria-hidden="true"
+            onPointerDown={(event) => handleResizeStart("top", event)}
+            className="absolute left-5 right-0 top-0 z-10 hidden h-2 cursor-ns-resize sm:block"
+          />
+          <div
+            aria-hidden="true"
+            onPointerDown={(event) => handleResizeStart("left", event)}
+            className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
+          />
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
               <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
@@ -216,6 +337,13 @@ export default function ChatWidget() {
                 >
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
 
+                  {message.role === "assistant" && message.webContextVerified ? (
+                    <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                      Safe link verified
+                    </div>
+                  ) : null}
+
                   {message.role === "assistant" && showSuggestions && message.followUpActions?.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {message.followUpActions.map((action) => (
@@ -246,17 +374,6 @@ export default function ChatWidget() {
               void sendMessage(input)
             }}
           >
-            {hasUserMessages ? (
-              <div className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSuggestions((current) => !current)}
-                  className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                >
-                  {showSuggestions ? "HIDE SUGGESTIONS" : "SUGGESTIONS"}
-                </button>
-              </div>
-            ) : null}
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>
