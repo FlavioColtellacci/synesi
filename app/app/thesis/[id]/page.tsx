@@ -383,7 +383,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       .gte("created_at", startOfUtcDay.toISOString()),
     supabase
       .from("events")
-      .select("id, thesis_id, event_detail")
+      .select("id, thesis_id, event_detail, created_at")
       .eq("thesis_id", id)
       .eq("user_id", user.id)
       .eq("event_type", "trusted_source_challenge")
@@ -421,6 +421,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       id: event.id,
       thesisId: event.thesis_id,
       eventDetail: event.event_detail as string,
+      createdAt: event.created_at ?? null,
     }))
   const statusMeta = getStatusMeta(thesis.status)
   const latestAiUpdate = updates.find((update) => update.update_type === "ai_analysis")

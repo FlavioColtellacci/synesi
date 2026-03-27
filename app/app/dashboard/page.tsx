@@ -9,7 +9,6 @@ import {
 } from "@/components/thesis/ThesisChallengeBanner"
 import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
 import { createClient } from "@/lib/supabase/client"
-import type { Database } from "@/types/database"
 
 type DashboardThesis = {
   id: string
@@ -99,6 +98,7 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(true)
   const [modalThesis, setModalThesis] = useState<ModalThesis | null>(null)
   const [filter, setFilter] = useState<FilterMode>("all")
+  const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -123,7 +123,7 @@ export default function Page() {
           .order("updated_at", { ascending: false }),
         supabase
           .from("events")
-          .select("id, thesis_id, event_detail")
+          .select("id, thesis_id, event_detail, created_at")
           .eq("user_id", user.id)
           .eq("is_reviewed", false)
           .order("created_at", { ascending: false }),
@@ -156,6 +156,7 @@ export default function Page() {
           id: e.id,
           thesisId: e.thesis_id,
           eventDetail: e.event_detail ?? "",
+          createdAt: e.created_at ?? null,
         })),
       )
 
@@ -165,7 +166,6 @@ export default function Page() {
     void load()
   }, [router])
 
-  const intactCount = theses.filter((t) => t.status === "intact").length
   const atRiskCount = theses.filter((t) => t.status === "at_risk").length
   const brokenCount = theses.filter((t) => t.status === "broken").length
   const needsReviewCount = atRiskCount + brokenCount
@@ -204,7 +204,7 @@ export default function Page() {
 
       {/* ── KPI Strip ── */}
       {theses.length > 0 && (
-        <div className="mb-6 grid grid-cols-3 gap-3">
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
           <div className="rounded-xl border border-[#2A2A32] bg-[#141418] px-4 py-4">
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
               Total
@@ -229,11 +229,40 @@ export default function Page() {
               {brokenCount}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsAlertsPanelOpen((current) => !current)}
+            className="relative rounded-xl border border-[#2A2A32] bg-[#141418] px-4 py-4 text-left transition-colors hover:border-[#F0F0F0]/30"
+          >
+            {challengeEvents.length > 0 ? (
+              <span className="absolute right-3 top-3 inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#FFB800] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#0A0A0C]">
+                {challengeEvents.length}
+              </span>
+            ) : null}
+            <p className="font-mono text-[10px] uppercase tracking-widest text-[#8AA8FF]">Alerts</p>
+            <p className="mt-1 font-mono text-2xl font-medium text-[#8AA8FF]">{challengeEvents.length}</p>
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
+              {isAlertsPanelOpen ? "Hide alerts" : "View alerts"}
+            </p>
+          </button>
         </div>
       )}
 
-      {/* ── Thesis Challenge Banner ── */}
-      <ThesisChallengeBanner events={challengeEvents} />
+      {/* ── Alerts Panel ── */}
+      {isAlertsPanelOpen && (
+        <section className="mb-6">
+          {challengeEvents.length > 0 ? (
+            <ThesisChallengeBanner events={challengeEvents} title="Open Alerts" />
+          ) : (
+            <div className="rounded-xl border border-[#2A2A32] bg-[#141418] px-4 py-4">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
+                Open Alerts (0)
+              </p>
+              <p className="mt-2 text-sm text-[#6B6B7B]">No active alerts right now.</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Filter Toggle ── */}
       {theses.length > 0 && (
