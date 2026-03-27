@@ -13,6 +13,7 @@ type ChatMessage = {
   sourceTags?: ChatAssistantResponse["sourceTags"]
   confidence?: ChatAssistantResponse["confidence"]
   escalation?: ChatAssistantResponse["escalation"]
+  followUpActions?: string[]
 }
 
 const QUICK_ACTIONS = [
@@ -38,6 +39,7 @@ export default function ChatWidget() {
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
+  const [showSuggestions, setShowSuggestions] = useState(true)
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
@@ -55,21 +57,11 @@ export default function ChatWidget() {
     element.scrollTop = element.scrollHeight
   }, [messages, isSending])
 
-  async function submitFeedback(feedbackType: "thumbs_up" | "thumbs_down", messageId: string) {
-    try {
-      await fetch("/api/chat/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedbackType,
-          messageId,
-          currentPath: pathname,
-        }),
-      })
-    } catch {
-      // Ignore telemetry network errors to avoid blocking the UI.
+  useEffect(() => {
+    if (hasUserMessages) {
+      setShowSuggestions(false)
     }
-  }
+  }, [hasUserMessages])
 
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
@@ -118,6 +110,10 @@ export default function ChatWidget() {
           "sourceTags" in payload && Array.isArray(payload.sourceTags) ? payload.sourceTags : ["GeneralKnowledge"],
         confidence: "confidence" in payload ? payload.confidence : "low",
         escalation: "escalation" in payload ? payload.escalation : "support",
+        followUpActions:
+          "followUpActions" in payload && Array.isArray(payload.followUpActions)
+            ? payload.followUpActions.slice(0, 3)
+            : [],
       }
 
       setMessages((current) => [...current, assistantMessage])
@@ -136,6 +132,7 @@ export default function ChatWidget() {
           sourceTags: ["PolicyGuide"],
           confidence: "low",
           escalation: "support",
+          followUpActions: ["Retry your question", "Ask a more specific Synesi question"],
         },
       ])
     } finally {
@@ -157,7 +154,7 @@ export default function ChatWidget() {
             return next
           })
         }}
-        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transition-colors hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22]"
+        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transform-gpu transition-[transform,box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-110 hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22] hover:shadow-2xl hover:shadow-black/45 active:scale-100"
       >
         <span
           aria-hidden="true"
@@ -175,7 +172,7 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.99 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[620px] sm:w-[420px] sm:min-h-[460px] sm:min-w-[340px] sm:max-h-[calc(100vh-7rem)] sm:max-w-[calc(100vw-1.5rem)] sm:resize sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+            className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[620px] sm:w-[420px] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:[resize:both] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
           >
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
@@ -191,7 +188,7 @@ export default function ChatWidget() {
             </button>
           </header>
 
-          {!hasUserMessages ? (
+          {!hasUserMessages && showSuggestions ? (
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -237,46 +234,23 @@ export default function ChatWidget() {
                 >
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
 
-                  {message.role === "assistant" ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {message.sourceTags?.map((tag) => (
-                        <span
-                          key={`${message.id}-${tag}`}
-                          className="rounded-full border border-[#2A2A32] px-2 py-0.5 font-mono text-[10px] text-[#6B6B7B]"
+                  {message.role === "assistant" && showSuggestions && message.followUpActions?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {message.followUpActions.map((action) => (
+                        <button
+                          key={`${message.id}-${action}`}
+                          type="button"
+                          onClick={() => {
+                            void sendMessage(action)
+                          }}
+                          className="rounded-full border border-[#2A2A32] px-2.5 py-1 text-[11px] text-[#F0F0F0] hover:border-[#F0F0F0]/35"
                         >
-                          {tag}
-                        </span>
+                          {action}
+                        </button>
                       ))}
-                      {message.confidence ? (
-                        <span className="font-mono text-[10px] text-[#6B6B7B]">{message.confidence} confidence</span>
-                      ) : null}
                     </div>
                   ) : null}
 
-                  {message.role === "assistant" ? (
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_feedback_positive", { currentPath: pathname })
-                          void submitFeedback("thumbs_up", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 text-[11px] text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_feedback_negative", { currentPath: pathname })
-                          void submitFeedback("thumbs_down", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 text-[11px] text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        👎
-                      </button>
-                    </div>
-                  ) : null}
                 </motion.article>
               ))}
               </AnimatePresence>
@@ -314,6 +288,17 @@ export default function ChatWidget() {
               void sendMessage(input)
             }}
           >
+            {hasUserMessages ? (
+              <div className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions((current) => !current)}
+                  className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                >
+                  {showSuggestions ? "HIDE SUGGESTIONS" : "SUGGESTIONS"}
+                </button>
+              </div>
+            ) : null}
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>
