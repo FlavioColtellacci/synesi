@@ -6,7 +6,21 @@ export type FunnelEvent =
   | "first_thesis_saved"
   | "first_ai_analysis"
 
+export type ChatEvent =
+  | "chat_widget_open"
+  | "chat_message_sent"
+  | "chat_response_received"
+  | "chat_feedback_positive"
+  | "chat_feedback_negative"
+  | "chat_handoff_requested"
+
+export type AppEvent = FunnelEvent | ChatEvent
+
 export function trackFunnelEvent(event: FunnelEvent, properties?: Record<string, string>) {
+  trackAppEvent(event, properties)
+}
+
+export function trackAppEvent(event: AppEvent, properties?: Record<string, string>) {
   if (typeof window === "undefined") return
 
   try {
