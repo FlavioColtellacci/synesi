@@ -84,7 +84,8 @@ export function ThesisChallengeBanner({
 }: Props) {
   const [visibleEvents, setVisibleEvents] = useState<ThesisChallengeEvent[]>(events)
   const [sortMode, setSortMode] = useState<SortMode>("newest")
-  const [isListVisible, setIsListVisible] = useState(true)
+  // Conviction page: start collapsed so the thesis body is visible first; dashboard: always show list.
+  const [isListVisible, setIsListVisible] = useState(() => !sectionCollapsible)
 
   useEffect(() => {
     setVisibleEvents(events)
