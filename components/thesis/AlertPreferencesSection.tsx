@@ -510,19 +510,6 @@ export default function AlertPreferencesSection({
                 {copilotLoading ? "GENERATING..." : "GENERATE DRAFT"}
               </button>
 
-              {copilotSuggestion ? (
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => {
-                    void applyCopilotSuggestion()
-                  }}
-                  className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
-                >
-                  APPLY SELECTIONS
-                </button>
-              ) : null}
-
               <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
                 <input
                   type="checkbox"
@@ -662,6 +649,19 @@ export default function AlertPreferencesSection({
                     </div>
                   )
                 })}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => {
+                      void applyCopilotSuggestion()
+                    }}
+                    className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
+                  >
+                    APPLY SELECTIONS
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
