@@ -63,22 +63,6 @@ export default function ChatWidget() {
     }
   }, [hasUserMessages])
 
-  async function submitFeedback(feedbackType: "thumbs_up" | "thumbs_down" | "handoff_requested", messageId: string) {
-    try {
-      await fetch("/api/chat/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedbackType,
-          messageId,
-          currentPath: pathname,
-        }),
-      })
-    } catch {
-      // Ignore telemetry network errors to avoid blocking the UI.
-    }
-  }
-
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
     if (!message || isSending) return
@@ -170,7 +154,7 @@ export default function ChatWidget() {
             return next
           })
         }}
-        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transition-colors hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22]"
+        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transform-gpu transition-[transform,box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-110 hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22] hover:shadow-2xl hover:shadow-black/45 active:scale-100"
       >
         <span
           aria-hidden="true"
@@ -182,7 +166,7 @@ export default function ChatWidget() {
       </button>
 
       {isOpen ? (
-        <section className="fixed inset-x-0 bottom-0 top-16 z-[70] border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:w-[380px] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50">
+        <section className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[620px] sm:w-[380px] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:[resize:both] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50">
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
               <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
@@ -219,7 +203,7 @@ export default function ChatWidget() {
             </div>
           ) : null}
 
-          <div ref={messageContainerRef} className="max-h-[52vh] overflow-y-auto px-3 py-3 sm:max-h-[420px]">
+          <div ref={messageContainerRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
             <div className="space-y-3">
               {messages.map((message) => (
                 <article
@@ -231,22 +215,6 @@ export default function ChatWidget() {
                   }`}
                 >
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
-
-                  {message.role === "assistant" ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {message.sourceTags?.map((tag) => (
-                        <span
-                          key={`${message.id}-${tag}`}
-                          className="rounded-full border border-[#2A2A32] px-2 py-0.5 font-mono text-[10px] text-[#6B6B7B]"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {message.confidence ? (
-                        <span className="font-mono text-[10px] text-[#6B6B7B]">{message.confidence} confidence</span>
-                      ) : null}
-                    </div>
-                  ) : null}
 
                   {message.role === "assistant" && showSuggestions && message.followUpActions?.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -265,40 +233,6 @@ export default function ChatWidget() {
                     </div>
                   ) : null}
 
-                  {message.role === "assistant" ? (
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_feedback_positive", { currentPath: pathname })
-                          void submitFeedback("thumbs_up", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 text-[11px] text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_feedback_negative", { currentPath: pathname })
-                          void submitFeedback("thumbs_down", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 text-[11px] text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        👎
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackAppEvent("chat_handoff_requested", { currentPath: pathname })
-                          void submitFeedback("handoff_requested", message.id)
-                        }}
-                        className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
-                      >
-                        NEED HUMAN HELP
-                      </button>
-                    </div>
-                  ) : null}
                 </article>
               ))}
               {isSending ? <p className="font-mono text-xs text-[#6B6B7B]">Thinking…</p> : null}
