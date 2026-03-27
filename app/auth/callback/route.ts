@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 import { createAdminClient } from '@/lib/supabase/server'
+import { sendTrialStartedEmail } from '@/lib/email/trial'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -73,6 +74,19 @@ export async function GET(request: Request) {
       },
       { onConflict: 'id' }
     )
+
+    try {
+      await sendTrialStartedEmail({
+        to: user.email,
+        fullName: typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null,
+        trialEndsAtIso: trialEndsAt.toISOString(),
+      })
+    } catch (error) {
+      console.error(
+        '[AuthCallback] Trial email send failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
   }
 
   return NextResponse.redirect(new URL('/app/dashboard', request.url))
