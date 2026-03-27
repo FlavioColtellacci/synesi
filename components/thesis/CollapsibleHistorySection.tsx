@@ -18,9 +18,9 @@ export function CollapsibleHistorySection({ children, defaultOpen = false }: Pro
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? "Collapse history" : "Expand history"}
-          className="flex h-6 w-6 items-center justify-center rounded border border-[#2A2A32] font-mono text-sm text-[#8B5CF6] transition-colors hover:border-[#8B5CF6]/50 hover:text-[#A78BFA]"
+          className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#8B5CF6] transition-colors hover:border-[#8B5CF6]/50 hover:text-[#A78BFA]"
         >
-          {open ? "-" : "+"}
+          {open ? "- COLLAPSE" : "+ EXPAND"}
         </button>
       </div>
 

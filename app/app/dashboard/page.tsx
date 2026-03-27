@@ -242,7 +242,7 @@ export default function Page() {
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#8AA8FF]">Alerts</p>
             <p className="mt-1 font-mono text-2xl font-medium text-[#8AA8FF]">{challengeEvents.length}</p>
             <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
-              {isAlertsPanelOpen ? "Hide alerts" : "View alerts"}
+              {isAlertsPanelOpen ? "- COLLAPSE" : "+ EXPAND"}
             </p>
           </button>
         </div>

@@ -136,27 +136,29 @@ export function ThesisChallengeBanner({
       `}</style>
 
       <div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-[#FFB800]">
-            {title} ({visibleEvents.length})
-          </p>
-          <div className="flex items-center gap-2">
-            {sectionCollapsible ? (
+        <div className="mb-3">
+          <div className="inline-flex flex-wrap items-center gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-[#FFB800]">
+              {title} ({visibleEvents.length})
+            </p>
+            <div className="flex items-center gap-2">
+              {sectionCollapsible ? (
+                <button
+                  type="button"
+                  onClick={() => setIsListVisible((current) => !current)}
+                  className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                >
+                  {isListVisible ? "- COLLAPSE" : "+ EXPAND"}
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={() => setIsListVisible((current) => !current)}
+                onClick={() => setSortMode((current) => (current === "newest" ? "oldest" : "newest"))}
                 className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
               >
-                {isListVisible ? "COLLAPSE" : "EXPAND"}
+                SORT: {sortMode === "newest" ? "NEWEST" : "OLDEST"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setSortMode((current) => (current === "newest" ? "oldest" : "newest"))}
-              className="rounded border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-            >
-              SORT: {sortMode === "newest" ? "NEWEST" : "OLDEST"}
-            </button>
+            </div>
           </div>
         </div>
         {isListVisible
