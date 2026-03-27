@@ -175,7 +175,7 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.99 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-x-0 bottom-0 top-16 z-[70] border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:w-[380px] sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+            className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[620px] sm:w-[420px] sm:min-h-[460px] sm:min-w-[340px] sm:max-h-[calc(100vh-7rem)] sm:max-w-[calc(100vw-1.5rem)] sm:resize sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
           >
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
@@ -218,7 +218,7 @@ export default function ChatWidget() {
             </motion.div>
           ) : null}
 
-          <div ref={messageContainerRef} className="max-h-[52vh] overflow-y-auto px-3 py-3 sm:max-h-[420px]">
+          <div ref={messageContainerRef} className="sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3">
             <motion.div layout className="space-y-3">
               <AnimatePresence initial={false}>
               {messages.map((message) => (
