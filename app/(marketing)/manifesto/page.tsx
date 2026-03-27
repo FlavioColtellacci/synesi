@@ -169,7 +169,7 @@ export default function ManifestoPage() {
             GET STARTED →
           </Link>
           <span className="text-sm text-[#6B6B7B]">
-            $15/month · No free tier · Cancel anytime
+            7-day free trial. Then $15/month or $99/year.
           </span>
         </div>
 

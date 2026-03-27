@@ -16,7 +16,7 @@ export default function PricingSection() {
           SIMPLE PRICING
         </p>
         <h2 className="mb-4 text-center font-mono text-2xl font-medium tracking-wide text-[#F0F0F0] md:text-3xl">
-          One plan. All features. No free tier.
+          One plan. All features. Start with a 7-day free trial.
         </h2>
         <p className="mb-16 text-center font-sans text-sm text-[#6B6B7B]">
           SYNESI is built for serious investors. Serious enough to pay for a tool that holds
