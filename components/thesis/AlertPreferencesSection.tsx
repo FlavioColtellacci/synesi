@@ -446,17 +446,19 @@ export default function AlertPreferencesSection({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={isBusy || !isEnabled}
-              onClick={() => {
-                setIsCopilotOpen(true)
-                setCopilotError(null)
-              }}
-              className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
-            >
-              GENERATE DRAFT
-            </button>
+            {isEnabled ? (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  setIsCopilotOpen(true)
+                  setCopilotError(null)
+                }}
+                className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+              >
+                GENERATE DRAFT
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={isBusy}
@@ -481,27 +483,13 @@ export default function AlertPreferencesSection({
 
         {isEnabled && isCopilotOpen ? (
           <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Generate personalized source setup
-                </p>
-                <p className="mt-1 text-xs text-[#6B6B7B]">
-                  You&apos;ll review the suggestions before anything is saved.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={copilotLoading || isBusy}
-                onClick={() => {
-                  setIsCopilotOpen(false)
-                  setCopilotSuggestion(null)
-                  setCopilotError(null)
-                }}
-                className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
-              >
-                CLOSE
-              </button>
+            <div>
+              <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                Generate personalized source setup
+              </p>
+              <p className="mt-1 text-xs text-[#6B6B7B]">
+                You&apos;ll review the suggestions before anything is saved.
+              </p>
             </div>
 
             <textarea
