@@ -29,19 +29,20 @@ const TOP_BOTTOM_OFFSET_PX = 120
 const QUICK_ACTIONS = [
   "How do I create a thesis?",
   "How do trusted sources and alerts work?",
+  "Help me set up personalized alerts",
   "Explain this dashboard to me",
-  "How does pricing and billing work?",
+  "What open alerts do I have?",
 ]
 
 const INITIAL_MESSAGE: ChatMessage = {
   id: "assistant-welcome",
   role: "assistant",
   content:
-    "Good to see you. I can help with Synesi workflows, your theses, alerts, billing, and general guidance with care and precision.",
+    "Good to see you. I can help with Synesi workflows, your convictions dashboard, alert setup, and careful general guidance.",
   sourceTags: ["ProductGuide", "WorkflowGuide"],
   confidence: "high",
   escalation: "none",
-  followUpActions: ["Create a thesis", "Review alerts", "Check billing options"],
+  followUpActions: ["Review open alerts", "Set up personalized alerts", "Check convictions status"],
 }
 
 export default function ChatWidget() {
@@ -333,6 +334,10 @@ export default function ChatWidget() {
           }
           className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
         >
+          <div className="pointer-events-none absolute left-2 top-2 z-20 hidden items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/85 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
+            <span aria-hidden="true">↖</span>
+            Drag to resize
+          </div>
           <div
             aria-hidden="true"
             onPointerDown={(event) => handleResizeStart("top-left", event)}
@@ -350,7 +355,13 @@ export default function ChatWidget() {
           />
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#00D1B2]/35 bg-[#00D1B2]/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#7EE6D6]">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#00D1B2]" />
+                  Web lookup enabled
+                </span>
+              </div>
               <p className="text-xs text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
             </div>
             <div className="flex items-center gap-2">
