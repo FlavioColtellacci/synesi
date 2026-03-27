@@ -627,46 +627,49 @@ export default function ChatWidget() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className={`rounded-xl border px-3 py-2 ${
-                    message.role === "user"
-                      ? "ml-6 border-[#F0F0F0]/25 bg-[#1F1F26]"
-                      : "mr-6 border-[#2A2A32] bg-[#15151B]"
-                  }`}
+                  className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {message.role === "assistant" ? (
-                    renderAssistantContent(message.content)
-                  ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
-                  )}
+                  <div
+                    className={`max-w-[min(92%,26rem)] rounded-2xl border px-3 py-2 text-left ${
+                      message.role === "user"
+                        ? "rounded-br-md border-[#F0F0F0]/22 bg-[#25252E] shadow-sm shadow-black/20"
+                        : "rounded-bl-md border-[#2A2A32] bg-[#15151B]"
+                    }`}
+                  >
+                    {message.role === "assistant" ? (
+                      renderAssistantContent(message.content)
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
+                    )}
 
-                  {message.role === "assistant" && message.webContextVerified ? (
-                    <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-                      Safe link verified
-                    </div>
-                  ) : null}
+                    {message.role === "assistant" && message.webContextVerified ? (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                        Safe link verified
+                      </div>
+                    ) : null}
 
-                  {message.role === "assistant" &&
-                  showSuggestions &&
-                  message.followUpActions?.length &&
-                  messageIndex === messages.length - 1 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <p className="w-full font-mono text-[10px] uppercase tracking-widest text-[#7F7F8D]">Next steps</p>
-                      {message.followUpActions.map((action) => (
-                        <button
-                          key={`${message.id}-${action}`}
-                          type="button"
-                          onClick={() => {
-                            void sendMessage(action)
-                          }}
-                          className="rounded-full border border-[#2A2A32] px-2.5 py-1 text-[11px] text-[#F0F0F0] hover:border-[#F0F0F0]/35"
-                        >
-                          {action}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
+                    {message.role === "assistant" &&
+                    showSuggestions &&
+                    message.followUpActions?.length &&
+                    messageIndex === messages.length - 1 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <p className="w-full font-mono text-[10px] uppercase tracking-widest text-[#7F7F8D]">Next steps</p>
+                        {message.followUpActions.map((action) => (
+                          <button
+                            key={`${message.id}-${action}`}
+                            type="button"
+                            onClick={() => {
+                              void sendMessage(action)
+                            }}
+                            className="rounded-full border border-[#2A2A32] px-2.5 py-1 text-[11px] text-[#F0F0F0] hover:border-[#F0F0F0]/35"
+                          >
+                            {action}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </motion.article>
               ))}
               </AnimatePresence>
@@ -674,8 +677,9 @@ export default function ChatWidget() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#2A2A32] bg-[#15151B] px-3 py-2"
+                  className="flex w-full justify-start"
                 >
+                  <div className="inline-flex max-w-[min(92%,26rem)] items-center gap-2 rounded-2xl rounded-bl-md border border-[#2A2A32] bg-[#15151B] px-3 py-2">
                   <span className="font-mono text-xs text-[#6B6B7B]">Thinking</span>
                   <motion.span
                     animate={{ opacity: [0.2, 1, 0.2] }}
@@ -692,6 +696,7 @@ export default function ChatWidget() {
                     transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.3 }}
                     className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
                   />
+                </div>
                 </motion.div>
               ) : null}
             </motion.div>
