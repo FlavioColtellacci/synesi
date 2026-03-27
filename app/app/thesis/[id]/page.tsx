@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation"
 import { AnalysisButton } from "@/components/thesis/AnalysisButton"
 import { AnalysisHistoryReadMore } from "@/components/thesis/AnalysisHistoryReadMore"
 import AlertPreferencesSection from "@/components/thesis/AlertPreferencesSection"
+import { CollapsibleHistorySection } from "@/components/thesis/CollapsibleHistorySection"
 import DeleteThesisButton from "@/components/thesis/DeleteThesisButton"
 import FinancialRefreshButton from "@/components/thesis/FinancialRefreshButton"
 import { ThesisChallengeBanner } from "@/components/thesis/ThesisChallengeBanner"
@@ -517,7 +518,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
+    <main className="mx-auto min-h-screen max-w-7xl bg-[#0A0A0C] px-4 py-10 md:px-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/app/dashboard"
@@ -539,238 +540,245 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         </div>
       ) : null}
 
-      <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="font-mono font-medium text-[#F0F0F0] text-2xl tracking-widest">
-              {thesis.ticker}
-            </h1>
-            <p className="text-sm text-[#6B6B7B] mt-1">{thesis.company_name}</p>
-          </div>
-
-          <span className="border border-[#2A2A32] rounded-full px-3 py-1 font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
-            {thesis.confidence_level}
-          </span>
-        </div>
-        <div className="mb-4">
-          <Link
-            href={`/app/thesis/${thesis.id}/edit`}
-            className="inline-flex items-center rounded-full border border-[#2A2A32] px-4 py-2 font-mono text-xs tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-          >
-            EDIT THESIS
-          </Link>
-        </div>
-
-        <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-2">
-          THESIS STATEMENT
-        </p>
-        <p className="mb-4 break-words text-sm leading-relaxed text-[#F0F0F0]">
-          {thesis.thesis_statement}
-        </p>
-
-        <div className="flex flex-col gap-3 md:flex-row md:gap-6">
-          <div>
-            <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
-              INVESTING STYLE
-            </p>
-            <p className="text-sm text-[#F0F0F0] mt-1">{thesis.investing_style ?? "N/A"}</p>
-          </div>
-
-          <div>
-            <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
-              DATE ADDED
-            </p>
-            <p className="text-sm text-[#F0F0F0] mt-1">{formatDate(thesis.created_at)}</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mb-6">
-        <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
-          ASSUMPTIONS
-        </p>
-
-        {assumptions.map((assumption) => (
-          <article
-            key={assumption.id}
-            className="mb-3 w-full rounded-xl border border-[#2A2A32] bg-[#141418] p-5"
-          >
-            <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-3">
-              {assumption.category}
-            </p>
-            <p className="text-sm text-[#F0F0F0] leading-relaxed mb-3">{assumption.statement}</p>
-
-            {assumption.break_condition ? (
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+        <div>
+          <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-1">
-                  I&apos;LL KNOW THIS IS BROKEN IF...
-                </p>
-                <p className="text-sm text-[#6B6B7B] leading-relaxed">{assumption.break_condition}</p>
+                <h1 className="font-mono font-medium text-[#F0F0F0] text-2xl tracking-widest">
+                  {thesis.ticker}
+                </h1>
+                <p className="text-sm text-[#6B6B7B] mt-1">{thesis.company_name}</p>
               </div>
-            ) : null}
-          </article>
-        ))}
-      </section>
 
-      {thesis.exit_criteria ? (
-        <section className="mb-6">
-          <article className="bg-[#141418] border border-[#2A2A32] rounded-xl p-5">
+              <span className="border border-[#2A2A32] rounded-full px-3 py-1 font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
+                {thesis.confidence_level}
+              </span>
+            </div>
+            <div className="mb-4">
+              <Link
+                href={`/app/thesis/${thesis.id}/edit`}
+                className="inline-flex items-center rounded-full border border-[#2A2A32] px-4 py-2 font-mono text-xs tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+              >
+                EDIT THESIS
+              </Link>
+            </div>
+
             <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-2">
-              I&apos;LL SELL IF...
+              THESIS STATEMENT
             </p>
-            <p className="text-sm text-[#F0F0F0] leading-relaxed">{thesis.exit_criteria}</p>
-          </article>
-        </section>
-      ) : null}
+            <p className="mb-4 break-words text-sm leading-relaxed text-[#F0F0F0]">
+              {thesis.thesis_statement}
+            </p>
 
-      <section className="mb-6">
-        <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">HISTORY</p>
-
-        {updates.map((update) => {
-          const updateMeta = getUpdateTypeMeta(update.update_type)
-          const parsedAnalysis = update.update_type === "ai_analysis" ? parseAnalysisNote(update.note) : null
-          const historyPreview = getAnalysisPreview(parsedAnalysis)
-
-          return (
-            <div key={update.id} className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-              <p className="w-auto shrink-0 pt-0.5 font-mono text-xs text-[#6B6B7B] md:w-24">
-                {formatDate(update.created_at)}
-              </p>
+            <div className="flex flex-col gap-3 md:flex-row md:gap-6">
+              <div>
+                <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
+                  INVESTING STYLE
+                </p>
+                <p className="text-sm text-[#F0F0F0] mt-1">{thesis.investing_style ?? "N/A"}</p>
+              </div>
 
               <div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-mono tracking-widest uppercase mb-1 inline-block ${updateMeta.className}`}
-                >
-                  {updateMeta.label}
-                </span>
-
-                {update.update_type === "ai_analysis" ? (
-                  parsedAnalysis ? (
-                    <AnalysisHistoryReadMore preview={historyPreview} analysis={parsedAnalysis} />
-                  ) : null
-                ) : update.note ? (
-                  <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{update.note}</p>
-                ) : null}
+                <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">
+                  DATE ADDED
+                </p>
+                <p className="text-sm text-[#F0F0F0] mt-1">{formatDate(thesis.created_at)}</p>
               </div>
             </div>
-          )
-        })}
-      </section>
+          </section>
 
-      <section className="mb-6">
-        <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
-          AI ANALYSIS
-        </p>
-        <AnalysisButton
-          thesisId={thesis.id}
-          initialLastAnalysedAt={lastAiAnalysisAt}
-          initialAnalysis={latestSavedAnalysis}
-        />
-      </section>
+          <section className="mb-6">
+            <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
+              ASSUMPTIONS
+            </p>
 
-      <TrustedSourcesSection
-        thesisId={thesis.id}
-        thesisTicker={thesis.ticker}
-        thesisCompanyName={thesis.company_name}
-        initialSources={trustedSources}
-      />
+            {assumptions.map((assumption) => (
+              <article
+                key={assumption.id}
+                className="mb-3 w-full rounded-xl border border-[#2A2A32] bg-[#141418] p-5"
+              >
+                <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-3">
+                  {assumption.category}
+                </p>
+                <p className="text-sm text-[#F0F0F0] leading-relaxed mb-3">{assumption.statement}</p>
 
-      <AlertPreferencesSection
-        thesisId={thesis.id}
-        trustedSources={trustedSources}
-        initialRules={alertRules}
-      />
+                {assumption.break_condition ? (
+                  <div>
+                    <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-1">
+                      I&apos;LL KNOW THIS IS BROKEN IF...
+                    </p>
+                    <p className="text-sm text-[#6B6B7B] leading-relaxed">{assumption.break_condition}</p>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </section>
 
-      <section className="mb-6">
-        <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
-          FINANCIAL CONTEXT
-        </p>
-        <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                {financialSnapshot
-                  ? isSnapshotStale
-                    ? "STALE SNAPSHOT"
-                    : "FRESH SNAPSHOT"
-                  : "NO SNAPSHOT YET"}
-              </p>
-              <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
-                LAST FETCH: {formatTimestamp(financialSnapshot?.fetched_at ?? null)}
-              </p>
-              {financialSnapshot ? (
-                <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
-                  SOURCE: {getFinancialSourceLabel(financialSnapshot.provider)}
+          {thesis.exit_criteria ? (
+            <section className="mb-6">
+              <article className="bg-[#141418] border border-[#2A2A32] rounded-xl p-5">
+                <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-2">
+                  I&apos;LL SELL IF...
+                </p>
+                <p className="text-sm text-[#F0F0F0] leading-relaxed">{thesis.exit_criteria}</p>
+              </article>
+            </section>
+          ) : null}
+
+          <section className="mb-6">
+            <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase mb-4">
+              AI ANALYSIS
+            </p>
+            <AnalysisButton
+              thesisId={thesis.id}
+              initialLastAnalysedAt={lastAiAnalysisAt}
+              initialAnalysis={latestSavedAnalysis}
+            />
+          </section>
+
+          <CollapsibleHistorySection>
+            {updates.map((update) => {
+              const updateMeta = getUpdateTypeMeta(update.update_type)
+              const parsedAnalysis = update.update_type === "ai_analysis" ? parseAnalysisNote(update.note) : null
+              const historyPreview = getAnalysisPreview(parsedAnalysis)
+
+              return (
+                <div
+                  key={update.id}
+                  className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:gap-4"
+                >
+                  <p className="w-auto shrink-0 pt-0.5 font-mono text-xs text-[#6B6B7B] md:w-24">
+                    {formatDate(update.created_at)}
+                  </p>
+
+                  <div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-mono tracking-widest uppercase mb-1 inline-block ${updateMeta.className}`}
+                    >
+                      {updateMeta.label}
+                    </span>
+
+                    {update.update_type === "ai_analysis" ? (
+                      parsedAnalysis ? (
+                        <AnalysisHistoryReadMore preview={historyPreview} analysis={parsedAnalysis} />
+                      ) : null
+                    ) : update.note ? (
+                      <p className="text-sm text-[#6B6B7B] leading-relaxed mt-1">{update.note}</p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </CollapsibleHistorySection>
+        </div>
+
+        <aside className="space-y-6 lg:sticky lg:top-8 lg:self-start">
+          <section>
+            <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
+              FINANCIAL CONTEXT
+            </p>
+            <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                    {financialSnapshot
+                      ? isSnapshotStale
+                        ? "STALE SNAPSHOT"
+                        : "FRESH SNAPSHOT"
+                      : "NO SNAPSHOT YET"}
+                  </p>
+                  <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
+                    LAST FETCH: {formatTimestamp(financialSnapshot?.fetched_at ?? null)}
+                  </p>
+                  {financialSnapshot ? (
+                    <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B]">
+                      SOURCE: {getFinancialSourceLabel(financialSnapshot.provider)}
+                    </p>
+                  ) : null}
+                </div>
+                <FinancialRefreshButton
+                  ticker={thesis.ticker}
+                  initialLimit={effectiveDailyLimit}
+                  initialUsedToday={usedToday}
+                  initialHasData={primaryMetrics.length > 0}
+                />
+              </div>
+              {missingCoverageCount > 0 ? (
+                <p className="mb-4 text-xs text-[#6B6B7B]">
+                  Partial coverage: {missingCoverageCount} metric
+                  {missingCoverageCount === 1 ? "" : "s"} unavailable from current provider access.
                 </p>
               ) : null}
-            </div>
-            <FinancialRefreshButton
-              ticker={thesis.ticker}
-              initialLimit={effectiveDailyLimit}
-              initialUsedToday={usedToday}
-              initialHasData={primaryMetrics.length > 0}
-            />
-          </div>
-          {missingCoverageCount > 0 ? (
-            <p className="mb-4 text-xs text-[#6B6B7B]">
-              Partial coverage: {missingCoverageCount} metric
-              {missingCoverageCount === 1 ? "" : "s"} unavailable from current provider access.
-            </p>
-          ) : null}
-          {hasOnlyPriceSignal ? (
-            <p className="mb-4 text-xs text-[#6B6B7B]">
-              Price-only mode: live quote is available via fallback source; most advanced fields
-              require a higher EODHD plan.
-            </p>
-          ) : null}
-          <p className="mb-4 text-xs text-[#6B6B7B]">
-            We currently show only metrics reliably available on the active provider tier. More
-            financial data coverage is coming soon.
-          </p>
-          <p className="mb-4 text-xs text-[#6B6B7B]">
-            Green means favorable signal, red means caution. AI-extracted values can be stale or
-            imperfect; verify with your broker/data terminal before making decisions.
-          </p>
+              {hasOnlyPriceSignal ? (
+                <p className="mb-4 text-xs text-[#6B6B7B]">
+                  Price-only mode: live quote is available via fallback source; most advanced fields
+                  require a higher EODHD plan.
+                </p>
+              ) : null}
+              <p className="mb-4 text-xs text-[#6B6B7B]">
+                We currently show only metrics reliably available on the active provider tier. More
+                financial data coverage is coming soon.
+              </p>
+              <p className="mb-4 text-xs text-[#6B6B7B]">
+                Green means favorable signal, red means caution. AI-extracted values can be stale or
+                imperfect; verify with your broker/data terminal before making decisions.
+              </p>
 
-          {primaryMetrics.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {primaryMetrics.map((metric) => (
-                <div key={metric.label}>
-                  <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
-                    {metric.label}
-                  </p>
-                  <p className={`mt-1 text-sm ${getMetricValueClass(metric, financialPayload)}`}>
-                    {metric.value}
-                  </p>
+              {primaryMetrics.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {primaryMetrics.map((metric) => (
+                    <div key={metric.label}>
+                      <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
+                        {metric.label}
+                      </p>
+                      <p className={`mt-1 text-sm ${getMetricValueClass(metric, financialPayload)}`}>
+                        {metric.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[#6B6B7B]">
-              No provider-backed financial metrics are available for this ticker yet.
-            </p>
-          )}
+              ) : (
+                <p className="text-sm text-[#6B6B7B]">
+                  No provider-backed financial metrics are available for this ticker yet.
+                </p>
+              )}
 
-          {hasSecondaryMetrics ? (
-            <details className="mt-4 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3">
-              <summary className="cursor-pointer font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
-                More Metrics
-              </summary>
-              <div className="mt-3 space-y-2 text-sm text-[#6B6B7B]">
-                {financialPayload?.nextEarningsDate ? (
-                  <p>Next earnings: {financialPayload.nextEarningsDate}</p>
-                ) : null}
-                {(financialPayload?.recentTargetChanges?.length ?? 0) > 0 ? (
-                  <p>Recent target changes: {financialPayload?.recentTargetChanges?.length ?? 0}</p>
-                ) : null}
-                {(financialPayload?.indexChanges?.length ?? 0) > 0 ? (
-                  <p>Index changes: {financialPayload?.indexChanges?.length ?? 0}</p>
-                ) : null}
-              </div>
-            </details>
-          ) : null}
-        </article>
-      </section>
+              {hasSecondaryMetrics ? (
+                <details className="mt-4 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3">
+                  <summary className="cursor-pointer font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
+                    More Metrics
+                  </summary>
+                  <div className="mt-3 space-y-2 text-sm text-[#6B6B7B]">
+                    {financialPayload?.nextEarningsDate ? (
+                      <p>Next earnings: {financialPayload.nextEarningsDate}</p>
+                    ) : null}
+                    {(financialPayload?.recentTargetChanges?.length ?? 0) > 0 ? (
+                      <p>Recent target changes: {financialPayload?.recentTargetChanges?.length ?? 0}</p>
+                    ) : null}
+                    {(financialPayload?.indexChanges?.length ?? 0) > 0 ? (
+                      <p>Index changes: {financialPayload?.indexChanges?.length ?? 0}</p>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+            </article>
+          </section>
+
+          <AlertPreferencesSection
+            thesisId={thesis.id}
+            trustedSources={trustedSources}
+            initialRules={alertRules}
+          />
+
+          <TrustedSourcesSection
+            thesisId={thesis.id}
+            thesisTicker={thesis.ticker}
+            thesisCompanyName={thesis.company_name}
+            initialSources={trustedSources}
+          />
+        </aside>
+      </div>
 
       <section className="mt-12 border-t border-[#2A2A32] pt-6 [&_button]:min-h-[44px]">
         <DeleteThesisButton thesisId={thesis.id} ticker={thesis.ticker} />
