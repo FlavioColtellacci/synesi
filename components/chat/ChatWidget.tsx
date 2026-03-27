@@ -221,7 +221,7 @@ function renderAssistantContent(content: string): ReactNode {
   flushList()
   return (
     <div
-      className={`text-sm ${isCompactMobile ? "space-y-2 leading-[1.5] sm:space-y-2.5 sm:leading-relaxed" : "space-y-2.5 leading-relaxed"}`}
+      className={`min-w-0 text-sm break-words ${isCompactMobile ? "space-y-2 leading-[1.5] sm:space-y-2.5 sm:leading-relaxed" : "space-y-2.5 leading-relaxed"}`}
     >
       {blocks}
     </div>
@@ -237,7 +237,7 @@ export default function ChatWidget() {
   const [isHydratingHistory, setIsHydratingHistory] = useState(false)
   const [isClearingHistory, setIsClearingHistory] = useState(false)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputHintOverflowPx, setInputHintOverflowPx] = useState(0)
   const [panelSize, setPanelSize] = useState({
     width: DEFAULT_PANEL_WIDTH,
@@ -273,7 +273,8 @@ export default function ChatWidget() {
   )
   const hasVerifiedWebContext =
     latestAssistantMessage?.webContextVerified === true || latestAssistantMessage?.webContextSource === "brave_search"
-  const showStarterExamples = !hasUserMessages && !isHydratingHistory
+  const showStarterExamples =
+    !hasUserMessages && (!isHydratingHistory || messages.length === 0)
 
   useEffect(() => {
     const element = messageContainerRef.current
@@ -332,11 +333,11 @@ export default function ChatWidget() {
         if (hydratedMessages.length > 0) {
           setMessages(hydratedMessages)
         } else {
-          setMessages([INITIAL_MESSAGE])
+          setMessages([])
         }
       } catch {
         if (!cancelled) {
-          setMessages([INITIAL_MESSAGE])
+          setMessages([])
         }
       } finally {
         if (!cancelled) {
@@ -442,7 +443,10 @@ export default function ChatWidget() {
       const hasStarted = current.some((message) => message.role === "user")
 
       // Keep the starter assistant content only before the first real user message.
-      if (!hasStarted && current.length === 1 && current[0].id === INITIAL_MESSAGE.id) {
+      if (
+        !hasStarted &&
+        (current.length === 0 || (current.length === 1 && current[0].id === INITIAL_MESSAGE.id))
+      ) {
         return [userMessage]
       }
 
@@ -528,7 +532,7 @@ export default function ChatWidget() {
     } catch {
       // Keep UI reset even if network call fails.
     } finally {
-      setMessages([INITIAL_MESSAGE])
+      setMessages([])
       setInput("")
       setUnreadAssistantReplies(0)
       setHasHydratedHistory(true)
@@ -685,7 +689,9 @@ export default function ChatWidget() {
             className={`sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3 ${showStarterExamples ? "flex items-center justify-center" : ""}`}
           >
             <motion.div layout className="space-y-3">
-              {isHydratingHistory ? <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p> : null}
+              {isHydratingHistory && !showStarterExamples ? (
+                <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p>
+              ) : null}
               {showStarterExamples ? (
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
@@ -726,10 +732,10 @@ export default function ChatWidget() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex w-full min-w-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[min(92%,26rem)] rounded-2xl px-3 py-2 text-left ${
+                    className={`max-w-[min(92%,26rem)] min-w-0 rounded-2xl px-3 py-2 text-left break-words ${
                       message.role === "user"
                         ? "rounded-br-md bg-[#202029] text-[#F3F3F8]"
                         : "rounded-bl-md bg-[#14141A] text-[#ECECF2]"
