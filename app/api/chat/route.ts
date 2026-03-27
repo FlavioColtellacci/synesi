@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse } from "@/lib/chat/parse"
-import type { ChatRequestMessage } from "@/lib/chat/types"
+import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { createClient } from "@/lib/supabase/server"
 
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       .trim()
 
     const parsed = parseAssistantResponse(rawText)
-    const fallback = {
+    const fallback: ChatAssistantResponse = {
       answer:
         "I could not reliably parse that response. Please ask again, or try a more specific Synesi question like 'how do I set trusted sources?'",
       sourceTags: ["PolicyGuide"],
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
         "Try again in a moment",
         "Contact support if this repeats",
       ],
-    } as const
+    }
 
     const responsePayload = enforceResponseGuardrails(parsed ?? fallback)
 
