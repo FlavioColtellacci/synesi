@@ -218,13 +218,26 @@ export default function TrustedSourcesSection({
           Add the few sources you trust most. These are later used by alert preferences.
         </p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.3fr_1fr]">
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Source name (e.g. Reuters, Stacey Rasgon)"
-            className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2.5 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/50"
-          />
+          <label className="relative block">
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder=""
+              aria-label="Source name"
+              className="peer w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2.5 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/50"
+            />
+            {name.trim().length === 0 ? (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
+              >
+                <span className="inline-block animate-[trusted-source-placeholder-scroll_7s_ease-in-out_infinite_alternate] whitespace-nowrap">
+                  Source name (e.g. Reuters, Stacey Rasgon)
+                </span>
+              </span>
+            ) : null}
+          </label>
           <select
             value={sourceType}
             onChange={(event) => setSourceType(event.target.value as SourceType)}
@@ -351,6 +364,16 @@ export default function TrustedSourcesSection({
           ))}
         </div>
       )}
+      <style jsx>{`
+        @keyframes trusted-source-placeholder-scroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-42%);
+          }
+        }
+      `}</style>
     </section>
   )
 }

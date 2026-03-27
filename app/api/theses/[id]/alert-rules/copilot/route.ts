@@ -99,6 +99,10 @@ function cleanStringArray(value: unknown, maxItems = 8): string[] {
   return [...new Set(cleaned)].slice(0, maxItems)
 }
 
+function normalizeIntent(value: string) {
+  return value.replace(/\s+/g, " ").trim().slice(0, 500)
+}
+
 function toMode(value: unknown): Mode | null {
   return typeof value === "string" && (VALID_MODES as readonly string[]).includes(value) ? (value as Mode) : null
 }
@@ -116,6 +120,45 @@ function toSourceType(value: unknown): SourceType {
   return "other"
 }
 
+function buildFallbackFeedUrls(input: {
+  sourceType: SourceType
+  nameCandidates: string[]
+  thesisTicker: string
+  thesisCompanyName: string
+}): string[] {
+  const urls: string[] = []
+  const normalizedNames = input.nameCandidates.map((name) => name.trim().toLowerCase()).filter(Boolean)
+
+  if (normalizedNames.some((name) => name.includes("reuters"))) {
+    urls.push("http://live.reuters.com/api/feed/RSS_Recent.aspx")
+  }
+  if (normalizedNames.some((name) => name.includes("marketwatch"))) {
+    urls.push("https://feeds.content.dowjones.io/public/rss/mw_topstories")
+  }
+
+  const ticker = input.thesisTicker.trim().toUpperCase()
+  const company = input.thesisCompanyName.trim()
+  const thesisQuery = encodeURIComponent([ticker, company].filter(Boolean).join(" OR "))
+  if (thesisQuery) {
+    urls.push(`https://news.google.com/rss/search?q=${thesisQuery}&hl=en-US&gl=US&ceid=US:en`)
+  }
+
+  const scopedNames = normalizedNames.slice(0, 2)
+  for (const name of scopedNames) {
+    const scopedQuery = encodeURIComponent([name, ticker].filter(Boolean).join(" "))
+    if (scopedQuery) {
+      urls.push(`https://news.google.com/rss/search?q=${scopedQuery}&hl=en-US&gl=US&ceid=US:en`)
+    }
+  }
+
+  if (input.sourceType === "sec_filing" && ticker) {
+    const secQuery = encodeURIComponent(`${ticker} sec filing`)
+    urls.push(`https://news.google.com/rss/search?q=${secQuery}&hl=en-US&gl=US&ceid=US:en`)
+  }
+
+  return [...new Set(urls)].slice(0, 6)
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -123,7 +166,8 @@ export async function POST(
   try {
     const { id: thesisId } = await params
     const body = (await request.json()) as { intent?: unknown }
-    const intent = typeof body.intent === "string" ? body.intent.trim() : ""
+    const rawIntent = typeof body.intent === "string" ? body.intent : ""
+    const intent = normalizeIntent(rawIntent)
 
     if (!intent) {
       return NextResponse.json({ error: "Missing intent" }, { status: 400 })
@@ -156,7 +200,7 @@ export async function POST(
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
 
-    const system = `You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates should prefer RSS/Atom feed URLs or feed-like search URLs (not generic homepages).\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
+    const system = `You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
 
     const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${(existingSources ?? [])
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())
@@ -196,10 +240,31 @@ export async function POST(
       .slice(0, 5)
       .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : {}))
       .map((item) => {
-        const urlCandidates = cleanStringArray(item.urlCandidates, 6)
+        const sourceType = toSourceType(item.sourceType)
+        const nameCandidates = cleanStringArray(item.nameCandidates, 4)
+        const explicitUrlCandidates = cleanStringArray(item.urlCandidates, 6).filter((candidate) => {
+          try {
+            return Boolean(new URL(candidate))
+          } catch {
+            return false
+          }
+        })
+        const explicitFeedLikeCandidates = explicitUrlCandidates.filter((url) => looksLikeFeedUrl(url))
+        const fallbackUrlCandidates =
+          explicitFeedLikeCandidates.length > 0
+            ? []
+            : buildFallbackFeedUrls({
+                sourceType,
+                nameCandidates,
+                thesisTicker: thesis.ticker,
+                thesisCompanyName: thesis.company_name,
+              })
+        const rawCandidates = [...new Set([...explicitFeedLikeCandidates, ...fallbackUrlCandidates])]
+        const feedLikeCandidates = rawCandidates.filter((url) => looksLikeFeedUrl(url))
+        const urlCandidates = feedLikeCandidates.slice(0, 6)
         return {
-          sourceType: toSourceType(item.sourceType),
-          nameCandidates: cleanStringArray(item.nameCandidates, 4),
+          sourceType,
+          nameCandidates,
           urlCandidates: urlCandidates.map((url) => ({
             url,
             isFeedLike: looksLikeFeedUrl(url),

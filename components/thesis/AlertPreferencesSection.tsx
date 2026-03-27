@@ -26,6 +26,8 @@ type CopilotSuggestion = {
   }>
 }
 
+type CopilotSelection = { nameIndex: number; urlIndex: number; selected: boolean }
+
 const MODE_OPTIONS: Array<{ value: AlertRule["mode"]; label: string; hint: string }> = [
   {
     value: "only_sources",
@@ -71,9 +73,7 @@ export default function AlertPreferencesSection({
   const [copilotSuggestion, setCopilotSuggestion] = useState<CopilotSuggestion | null>(null)
   const [copilotApplyRule, setCopilotApplyRule] = useState(true)
   const [copilotAddSources, setCopilotAddSources] = useState(true)
-  const [copilotSelections, setCopilotSelections] = useState<
-    Array<{ nameIndex: number; urlIndex: number; selected: boolean }>
-  >([])
+  const [copilotSelections, setCopilotSelections] = useState<CopilotSelection[]>([])
   const primaryRule = rules[0] ?? null
 
   const selectedSourceIds = useMemo(() => new Set(primaryRule?.sourceIds ?? []), [primaryRule?.sourceIds])
@@ -134,6 +134,13 @@ export default function AlertPreferencesSection({
         throw new Error(payload?.error ?? "Failed to update alert preferences")
       }
       updatePrimaryRule({ is_enabled: nextEnabled })
+      if (nextEnabled) {
+        setIsCopilotOpen(true)
+      } else {
+        setIsCopilotOpen(false)
+        setCopilotSuggestion(null)
+        setCopilotError(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update alert preferences")
     } finally {
@@ -224,6 +231,18 @@ export default function AlertPreferencesSection({
   const includeKeywords = primaryRule?.include_keywords ?? []
   const excludeKeywords = primaryRule?.exclude_keywords ?? []
   const selectedSourcesCount = primaryRule?.sourceIds?.length ?? 0
+
+  function getFeedLikeCandidates(source: CopilotSuggestion["sources"][number]) {
+    return source.urlCandidates.filter((candidate) => candidate.isFeedLike)
+  }
+
+  const hasBlockedSourceSelections = Boolean(
+    copilotSuggestion?.sources.some((source, index) => {
+      const selection = copilotSelections[index]
+      if (!selection?.selected) return false
+      return getFeedLikeCandidates(source).length === 0
+    }),
+  )
 
   function normalizeKeyword(value: string) {
     return value.trim().toLowerCase()
@@ -329,7 +348,11 @@ export default function AlertPreferencesSection({
 
       setCopilotSuggestion(payload.suggestion)
       setCopilotSelections(
-        payload.suggestion.sources.map(() => ({ nameIndex: 0, urlIndex: 0, selected: true })),
+        payload.suggestion.sources.map((source) => ({
+          nameIndex: 0,
+          urlIndex: 0,
+          selected: source.urlCandidates.some((candidate) => candidate.isFeedLike),
+        })),
       )
     } catch (err) {
       setCopilotError(err instanceof Error ? err.message : "Copilot request failed")
@@ -385,10 +408,16 @@ export default function AlertPreferencesSection({
           if (!selection?.selected) continue
 
           const name = source.nameCandidates[selection.nameIndex] ?? source.nameCandidates[0] ?? ""
-          const chosenUrl = source.urlCandidates[selection.urlIndex]?.url ?? source.urlCandidates[0]?.url ?? ""
-          const isFeedLike = source.urlCandidates[selection.urlIndex]?.isFeedLike ?? false
+          const feedLikeCandidates = getFeedLikeCandidates(source)
+          const chosenUrl = feedLikeCandidates[selection.urlIndex]?.url ?? feedLikeCandidates[0]?.url ?? ""
+          const isFeedLike = feedLikeCandidates[selection.urlIndex]?.isFeedLike ?? false
 
-          if (!name || !chosenUrl) continue
+          if (!name) continue
+          if (!chosenUrl) {
+            throw new Error(
+              `No feed URL found for "${name}". Uncheck it or regenerate with a more specific source instruction.`,
+            )
+          }
           if (!isFeedLike) {
             throw new Error(`"${chosenUrl}" doesn't look like an RSS/Atom feed URL. Pick a different URL.`)
           }
@@ -409,7 +438,6 @@ export default function AlertPreferencesSection({
         }
       }
 
-      setIsCopilotOpen(false)
       setCopilotSuggestion(null)
       setCopilotIntent("")
       router.refresh()
@@ -445,17 +473,6 @@ export default function AlertPreferencesSection({
               type="button"
               disabled={isBusy}
               onClick={() => {
-                setIsCopilotOpen(true)
-                setCopilotError(null)
-              }}
-              className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
-            >
-              GENERATE DRAFT
-            </button>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
                 void handleEnabledToggle(!isEnabled)
               }}
               className={`rounded-lg border px-3 py-1.5 font-mono text-[10px] tracking-widest transition-colors disabled:opacity-60 ${
@@ -474,29 +491,15 @@ export default function AlertPreferencesSection({
           <span className="text-[#F0F0F0]">APPLY SELECTIONS</span>.
         </p>
 
-        {isCopilotOpen ? (
+        {isEnabled && isCopilotOpen ? (
           <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Generate personalized source setup
-                </p>
-                <p className="mt-1 text-xs text-[#6B6B7B]">
-                  You&apos;ll review the suggestions before anything is saved.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={copilotLoading || isBusy}
-                onClick={() => {
-                  setIsCopilotOpen(false)
-                  setCopilotSuggestion(null)
-                  setCopilotError(null)
-                }}
-                className="text-xs text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
-              >
-                CLOSE
-              </button>
+            <div>
+              <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                Generate personalized source setup
+              </p>
+              <p className="mt-1 text-xs text-[#6B6B7B]">
+                You&apos;ll review the suggestions before anything is saved.
+              </p>
             </div>
 
             <textarea
@@ -506,7 +509,11 @@ export default function AlertPreferencesSection({
               placeholder='Example: "Only Dan Ives on NVDA AI news. Ignore everything else."'
               className="mt-3 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
               rows={3}
+              maxLength={500}
             />
+            <p className="mt-2 text-xs text-[#6B6B7B]">
+              Describe people/outlets and topics. Don&apos;t paste regular website URLs; only feed-like links can be saved.
+            </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
@@ -519,19 +526,6 @@ export default function AlertPreferencesSection({
               >
                 {copilotLoading ? "GENERATING..." : "GENERATE DRAFT"}
               </button>
-
-              {copilotSuggestion ? (
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => {
-                    void applyCopilotSuggestion()
-                  }}
-                  className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
-                >
-                  APPLY SELECTIONS
-                </button>
-              ) : null}
 
               <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
                 <input
@@ -585,7 +579,8 @@ export default function AlertPreferencesSection({
 
                 {copilotSuggestion.sources.map((src, index) => {
                   const selection = copilotSelections[index] ?? { nameIndex: 0, urlIndex: 0, selected: true }
-                  const selectedUrl = src.urlCandidates[selection.urlIndex]
+                  const feedLikeCandidates = getFeedLikeCandidates(src)
+                  const hasUrlCandidates = feedLikeCandidates.length > 0
                   return (
                     <div
                       key={`${src.sourceType}-${index}`}
@@ -637,7 +632,7 @@ export default function AlertPreferencesSection({
                           </span>
                           <select
                             value={selection.urlIndex}
-                            disabled={copilotLoading || isBusy}
+                            disabled={copilotLoading || isBusy || !hasUrlCandidates}
                             onChange={(event) => {
                               const urlIndex = Number.parseInt(event.target.value, 10) || 0
                               setCopilotSelections((current) =>
@@ -646,15 +641,19 @@ export default function AlertPreferencesSection({
                             }}
                             className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
                           >
-                            {src.urlCandidates.map((u, i) => (
-                              <option key={`${u.url}-${i}`} value={i}>
-                                {u.isFeedLike ? "✅ " : "⚠ "} {u.url}
-                              </option>
-                            ))}
+                            {hasUrlCandidates ? (
+                              feedLikeCandidates.map((u, i) => (
+                                <option key={`${u.url}-${i}`} value={i}>
+                                  ✅ {u.url}
+                                </option>
+                              ))
+                            ) : (
+                              <option value={0}>No feed URL found</option>
+                            )}
                           </select>
-                          {selectedUrl && !selectedUrl.isFeedLike ? (
+                          {!hasUrlCandidates ? (
                             <p className="mt-1 text-xs text-[#FFB800]">
-                              This URL may not be RSS/Atom. Pick a feed-like URL to enable saving.
+                              Copilot could not find a feed URL for this source. Uncheck it or generate again.
                             </p>
                           ) : null}
                         </label>
@@ -662,6 +661,26 @@ export default function AlertPreferencesSection({
                     </div>
                   )
                 })}
+
+                {hasBlockedSourceSelections ? (
+                  <p className="text-xs text-[#FFB800]">
+                    At least one selected source has no feed-like URL. Uncheck it or generate a new draft before
+                    applying.
+                  </p>
+                ) : null}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={isBusy || hasBlockedSourceSelections}
+                    onClick={() => {
+                      void applyCopilotSuggestion()
+                    }}
+                    className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
+                  >
+                    APPLY SELECTIONS
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -673,7 +692,11 @@ export default function AlertPreferencesSection({
           </p>
         ) : null}
 
-        {trustedSources.length === 0 ? (
+        {!isEnabled ? (
+          <p className="mt-3 text-xs text-[#6B6B7B]">
+            Enable personalized challenge alerts to configure sources and keywords.
+          </p>
+        ) : trustedSources.length === 0 ? (
           <p className="mt-3 text-xs text-[#6B6B7B]">
             Add trusted sources first, then choose exactly which ones trigger alerts.
           </p>
