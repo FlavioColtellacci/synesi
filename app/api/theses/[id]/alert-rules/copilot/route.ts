@@ -10,6 +10,73 @@ type Mode = (typeof VALID_MODES)[number]
 type MinConfidence = (typeof VALID_MIN_CONFIDENCE)[number]
 type SourceType = (typeof VALID_SOURCE_TYPES)[number]
 
+function extractFirstJsonObject(value: string): string | null {
+  const text = value.trim()
+  if (!text) return null
+  const fenced = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim()
+  if (fenced.startsWith("{") && fenced.endsWith("}")) {
+    return fenced
+  }
+
+  const start = fenced.indexOf("{")
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let isEscaped = false
+
+  for (let i = start; i < fenced.length; i++) {
+    const char = fenced[i]
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false
+      } else if (char === "\\") {
+        isEscaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === "{") {
+      depth += 1
+      continue
+    }
+    if (char === "}") {
+      depth -= 1
+      if (depth === 0) {
+        return fenced.slice(start, i + 1).trim()
+      }
+    }
+  }
+
+  return null
+}
+
+function toApiErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : ""
+  const lower = message.toLowerCase()
+  if (lower.includes("api key") || lower.includes("authentication") || lower.includes("unauthorized")) {
+    return "Copilot provider authentication failed. Check your LLM API configuration."
+  }
+  if (error instanceof SyntaxError || lower.includes("json")) {
+    return "Copilot returned an invalid format. Please try again."
+  }
+  if (message) {
+    return message
+  }
+  return "Copilot failed"
+}
+
 function looksLikeFeedUrl(value: string) {
   const input = value.trim().toLowerCase()
   if (!input) return false
@@ -113,12 +180,10 @@ export async function POST(
       .join("")
       .trim()
 
-    const raw = responseText
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim()
-
+    const raw = extractFirstJsonObject(responseText)
+    if (!raw) {
+      throw new SyntaxError("No JSON object found in copilot response")
+    }
     const parsed = JSON.parse(raw) as Record<string, unknown>
 
     const recommendedMode = toMode(parsed.recommendedMode) ?? "only_sources"
@@ -154,7 +219,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Alert rule copilot failed:", error)
-    return NextResponse.json({ error: "Copilot failed" }, { status: 500 })
+    return NextResponse.json({ error: toApiErrorMessage(error) }, { status: 500 })
   }
 }
 
