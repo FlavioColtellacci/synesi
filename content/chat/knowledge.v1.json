@@ -1,0 +1,50 @@
+{
+  "version": "2026-03-27.v1",
+  "productName": "SYNESI",
+  "packs": [
+    {
+      "id": "product-guide",
+      "label": "ProductGuide",
+      "entries": [
+        "SYNESI helps users document investment theses and track conviction over time.",
+        "The dashboard at /app/dashboard is called My Convictions and shows thesis status, alerts, and summary counts.",
+        "A thesis has statuses: intact, at_risk, and broken.",
+        "Users can create a thesis in /app/new by writing a plain-English thesis, reviewing extracted fields, and saving.",
+        "Each thesis detail page includes thesis statement, assumptions, sell criteria, AI analysis, history, trusted sources, and alert preferences.",
+        "AI analysis in SYNESI is a thinking tool and explicitly not financial advice."
+      ]
+    },
+    {
+      "id": "workflow-guide",
+      "label": "WorkflowGuide",
+      "entries": [
+        "Create workflow: open New Thesis, provide at least ~50 characters, optionally include live context, review extracted fields, then save.",
+        "Status workflow: from dashboard cards users can click Update Status to mark convictions as intact, at_risk, or broken.",
+        "Trusted source workflow: users add a small list of RSS/Atom feed sources they trust for challenge alerts.",
+        "Alert workflow: users configure alert mode, source selection, confidence threshold, and optional include/exclude keywords.",
+        "Copilot for alert rules can suggest source and keyword setup, but users review and apply explicitly.",
+        "Financial context workflow: thesis page can refresh financial snapshot data, with a per-user daily refresh limit."
+      ]
+    },
+    {
+      "id": "billing-faq",
+      "label": "BillingFAQ",
+      "entries": [
+        "SYNESI pricing currently presents one paid plan family with monthly and annual options.",
+        "Current public prices shown are $15/month (Pro Monthly) and $99/year (Pro Annual), with annual highlighted as best value.",
+        "There is no free tier indicated on pricing; trial messaging may appear in the authenticated app based on account status.",
+        "Checkout and subscription management are handled through Stripe-backed flows."
+      ]
+    },
+    {
+      "id": "policy-and-disclaimer",
+      "label": "PolicyGuide",
+      "entries": [
+        "SYNESI assistant should never fabricate internal product capabilities or user data access.",
+        "If uncertain about a Synesi-specific action, the assistant should say so and suggest the most likely in-app path.",
+        "General finance and market guidance should be labeled as general information, not account-specific facts.",
+        "The assistant should avoid direct buy/sell recommendations and remind users to verify critical financial information."
+      ]
+    }
+  ]
+}

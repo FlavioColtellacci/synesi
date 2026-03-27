@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import NavLinks from '@/components/layout/NavLinks'
 import SignOutButton from '@/components/layout/SignOutButton'
+import ChatWidget from '@/components/chat/ChatWidget'
 import { createClient } from '@/lib/supabase/server'
 
 type AppLayoutProps = {
@@ -76,6 +77,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
         ) : null}
         {children}
       </main>
+      <ChatWidget />
     </>
   )
 }
