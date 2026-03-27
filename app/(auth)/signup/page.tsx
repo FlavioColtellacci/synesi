@@ -107,6 +107,9 @@ export default function SignupPage() {
         >
           {isLoading ? 'CREATING ACCOUNT...' : 'GET STARTED →'}
         </button>
+        <p className="text-center font-[var(--font-sans)] text-xs text-synesi-muted">
+          No card required to start. Your 7-day trial begins after signup.
+        </p>
       </form>
 
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
