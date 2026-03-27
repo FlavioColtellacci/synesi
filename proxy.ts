@@ -66,7 +66,9 @@ export async function proxy(request: NextRequest) {
       typeof profile?.trial_ends_at === 'string' && new Date(profile.trial_ends_at).getTime() > Date.now()
 
     if (!hasActiveSubscription && !hasActiveTrial) {
-      supabaseResponse = NextResponse.redirect(new URL('/pricing', request.url))
+      const pricingUrl = new URL('/pricing', request.url)
+      pricingUrl.searchParams.set('reason', 'trial-expired')
+      supabaseResponse = NextResponse.redirect(pricingUrl)
       return supabaseResponse
     }
   }

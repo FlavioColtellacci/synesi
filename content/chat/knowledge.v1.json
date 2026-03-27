@@ -30,10 +30,12 @@
       "id": "billing-faq",
       "label": "BillingFAQ",
       "entries": [
-        "SYNESI pricing currently presents one paid plan family with monthly and annual options.",
-        "Current public prices shown are $15/month (Pro Monthly) and $99/year (Pro Annual), with annual highlighted as best value.",
-        "There is no free tier indicated on pricing; trial messaging may appear in the authenticated app based on account status.",
-        "Checkout and subscription management are handled through Stripe-backed flows."
+        "SYNESI pricing uses one paid plan family with monthly and annual options: $15/month (Pro Monthly) or $99/year (Pro Annual).",
+        "New users start with a 7-day free trial created at account sign-in callback when no active subscription or existing trial window is found.",
+        "During trial, users can access /app routes; after trial expiry, app access requires an active subscription.",
+        "If trial is expired and no active subscription exists, protected app routes redirect users to /pricing with reason=trial-expired.",
+        "There is no permanent free tier after trial; continued usage requires converting to a paid monthly or annual plan.",
+        "Checkout and subscription lifecycle management are handled through Stripe-backed flows."
       ]
     },
     {
