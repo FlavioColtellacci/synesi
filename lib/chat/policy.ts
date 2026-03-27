@@ -5,6 +5,7 @@ type UserContext = {
   thesisCount?: number
   openAlertsCount?: number
   tickers?: string[]
+  positionSummary?: string
   currentPath?: string
 }
 
@@ -15,6 +16,7 @@ export function buildChatSystemPrompt(userContext: UserContext) {
     `Thesis count: ${userContext.thesisCount ?? 0}`,
     `Open alerts count: ${userContext.openAlertsCount ?? 0}`,
     `Known tickers: ${(userContext.tickers ?? []).join(", ") || "none"}`,
+    `Position summary: ${userContext.positionSummary ?? "none"}`,
   ].join("\n")
 
   return `You are the in-app SYNESI assistant, named Sigma.
