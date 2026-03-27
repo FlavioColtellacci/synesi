@@ -12,7 +12,7 @@ export function CollapsibleHistorySection({ children, defaultOpen = false }: Pro
 
   return (
     <section className="mb-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 inline-flex items-center gap-2">
         <p className="font-mono text-xs text-[#6B6B7B] tracking-widest uppercase">HISTORY</p>
         <button
           type="button"
