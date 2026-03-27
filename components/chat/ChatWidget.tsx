@@ -340,7 +340,7 @@ export default function ChatWidget() {
             }
             className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
           >
-            <div className="pointer-events-none absolute left-2 top-2 z-20 hidden items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/85 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
+            <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
               Drag to resize
             </div>
@@ -361,11 +361,15 @@ export default function ChatWidget() {
           />
           <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#00D1B2]/35 bg-[#00D1B2]/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#7EE6D6]">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#00D1B2]" />
-                  Web lookup enabled
+                <span
+                  title="Sigma can look up current information on the web when you ask"
+                  aria-label="Live web lookup available"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#00D1B2]/30 bg-[#00D1B2]/8 px-1.5 py-px font-mono text-[8px] uppercase tracking-wider text-[#8BE8D8]"
+                >
+                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-[#00D1B2]" />
+                  Live web
                 </span>
               </div>
               <p className="text-xs text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
