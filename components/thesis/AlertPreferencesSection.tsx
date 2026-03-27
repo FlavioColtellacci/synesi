@@ -134,6 +134,11 @@ export default function AlertPreferencesSection({
         throw new Error(payload?.error ?? "Failed to update alert preferences")
       }
       updatePrimaryRule({ is_enabled: nextEnabled })
+      if (!nextEnabled) {
+        setIsCopilotOpen(false)
+        setCopilotSuggestion(null)
+        setCopilotError(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update alert preferences")
     } finally {
@@ -443,7 +448,7 @@ export default function AlertPreferencesSection({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={isBusy}
+              disabled={isBusy || !isEnabled}
               onClick={() => {
                 setIsCopilotOpen(true)
                 setCopilotError(null)
@@ -474,7 +479,7 @@ export default function AlertPreferencesSection({
           <span className="text-[#F0F0F0]">APPLY SELECTIONS</span>.
         </p>
 
-        {isCopilotOpen ? (
+        {isEnabled && isCopilotOpen ? (
           <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -673,7 +678,11 @@ export default function AlertPreferencesSection({
           </p>
         ) : null}
 
-        {trustedSources.length === 0 ? (
+        {!isEnabled ? (
+          <p className="mt-3 text-xs text-[#6B6B7B]">
+            Enable personalized challenge alerts to configure sources and keywords.
+          </p>
+        ) : trustedSources.length === 0 ? (
           <p className="mt-3 text-xs text-[#6B6B7B]">
             Add trusted sources first, then choose exactly which ones trigger alerts.
           </p>
