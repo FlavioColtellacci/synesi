@@ -34,11 +34,9 @@ function getFocusHint(focus: ResearchFocus) {
   return "Focus on thesis-relevant context, factual checks, and key risks from recent months."
 }
 
-function buildResearchContent(
-  query: string,
-  focus: ResearchFocus,
-  results: NonNullable<BraveWebSearchResponse["web"]>["results"],
-) {
+type BraveWebHit = NonNullable<NonNullable<BraveWebSearchResponse["web"]>["results"]>[number]
+
+function buildResearchContent(query: string, focus: ResearchFocus, results: BraveWebHit[]) {
   const lines = [
     `WEB RESEARCH SNAPSHOT (${focus.toUpperCase()})`,
     `Query: ${truncate(query, 1_000)}`,
