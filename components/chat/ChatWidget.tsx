@@ -748,10 +748,12 @@ export default function ChatWidget() {
                       transition={
                         inputHintOverflowPx > 0
                           ? {
-                              duration: Math.min(12, Math.max(6, inputHintOverflowPx / 18)),
+                              duration: Math.min(16, Math.max(8, inputHintOverflowPx / 14)),
                               ease: "easeInOut",
                               repeat: Number.POSITIVE_INFINITY,
                               repeatType: "reverse",
+                              repeatDelay: 0.7,
+                              delay: 0.35,
                             }
                           : { duration: 0.12, ease: "linear" }
                       }
