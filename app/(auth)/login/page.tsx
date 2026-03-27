@@ -108,7 +108,7 @@ export default function LoginPage() {
       <p className="mt-4 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
         Don&apos;t have an account?{' '}
         <Link href="/signup" className="text-white">
-          Sign up and start your trial →
+          Sign up →
         </Link>
       </p>
     </section>
