@@ -453,7 +453,7 @@ export default function AlertPreferencesSection({
               className={`rounded-lg border px-3 py-1.5 font-mono text-[10px] tracking-widest transition-colors disabled:opacity-60 ${
                 isEnabled
                   ? "border-[#00D1B2]/40 text-[#00D1B2] hover:bg-[#00D1B2]/10"
-                  : "border-[#2A2A32] text-[#6B6B7B] hover:text-[#F0F0F0]"
+                  : "border-[#FF3B30]/40 text-[#FF3B30] hover:bg-[#FF3B30]/10"
               }`}
             >
               {isEnabled ? "ENABLED" : "DISABLED"}
