@@ -39,10 +39,15 @@ export default function ChatWidget() {
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
+  const [showSuggestions, setShowSuggestions] = useState(true)
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
     () => messages.map((message) => ({ role: message.role, content: message.content })),
+    [messages],
+  )
+  const hasUserMessages = useMemo(
+    () => messages.some((message) => message.role === "user"),
     [messages],
   )
 
@@ -51,6 +56,12 @@ export default function ChatWidget() {
     if (!element) return
     element.scrollTop = element.scrollHeight
   }, [messages, isSending])
+
+  useEffect(() => {
+    if (hasUserMessages) {
+      setShowSuggestions(false)
+    }
+  }, [hasUserMessages])
 
   async function submitFeedback(feedbackType: "thumbs_up" | "thumbs_down" | "handoff_requested", messageId: string) {
     try {
@@ -78,7 +89,16 @@ export default function ChatWidget() {
       content: message,
     }
 
-    setMessages((current) => [...current, userMessage])
+    setMessages((current) => {
+      const hasStarted = current.some((message) => message.role === "user")
+
+      // Keep the starter assistant content only before the first real user message.
+      if (!hasStarted && current.length === 1 && current[0].id === INITIAL_MESSAGE.id) {
+        return [userMessage]
+      }
+
+      return [...current, userMessage]
+    })
     setInput("")
     setIsSending(true)
     trackAppEvent("chat_message_sent", { currentPath: pathname })
@@ -177,23 +197,27 @@ export default function ChatWidget() {
             </button>
           </header>
 
-          <div className="border-b border-[#2A2A32] px-3 py-3">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">Quick actions</p>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => {
-                    void sendMessage(action)
-                  }}
-                  className="rounded-full border border-[#2A2A32] px-3 py-1.5 text-xs text-[#F0F0F0] transition-colors hover:border-[#F0F0F0]/40 hover:bg-[#F0F0F0]/5"
-                >
-                  {action}
-                </button>
-              ))}
+          {!hasUserMessages && showSuggestions ? (
+            <div className="border-b border-[#2A2A32] px-3 py-3">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
+                Quick actions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    onClick={() => {
+                      void sendMessage(action)
+                    }}
+                    className="rounded-full border border-[#2A2A32] px-3 py-1.5 text-xs text-[#F0F0F0] transition-colors hover:border-[#F0F0F0]/40 hover:bg-[#F0F0F0]/5"
+                  >
+                    {action}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div ref={messageContainerRef} className="max-h-[52vh] overflow-y-auto px-3 py-3 sm:max-h-[420px]">
             <div className="space-y-3">
@@ -224,7 +248,7 @@ export default function ChatWidget() {
                     </div>
                   ) : null}
 
-                  {message.role === "assistant" && message.followUpActions?.length ? (
+                  {message.role === "assistant" && showSuggestions && message.followUpActions?.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {message.followUpActions.map((action) => (
                         <button
@@ -288,6 +312,17 @@ export default function ChatWidget() {
               void sendMessage(input)
             }}
           >
+            {hasUserMessages ? (
+              <div className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions((current) => !current)}
+                  className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                >
+                  {showSuggestions ? "HIDE SUGGESTIONS" : "SUGGESTIONS"}
+                </button>
+              </div>
+            ) : null}
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>

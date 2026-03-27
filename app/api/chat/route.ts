@@ -14,6 +14,11 @@ type ChatRequestBody = {
   }
 }
 
+type PositionSnapshot = {
+  ticker: string
+  status: string
+}
+
 const MAX_MESSAGE_CHARS = 900
 const MAX_HISTORY_MESSAGES = 8
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
@@ -28,6 +33,7 @@ const userContextCache = new Map<
     thesisCount: number
     openAlertsCount: number
     tickers: string[]
+    positions: PositionSnapshot[]
   }
 >()
 
@@ -47,6 +53,64 @@ function toModelMessages(history: ChatRequestMessage[], latestMessage: string) {
     })),
     { role: "user" as const, content: latestMessage },
   ]
+}
+
+function buildPositionSummary(positions: PositionSnapshot[]) {
+  if (positions.length === 0) {
+    return "No saved convictions."
+  }
+
+  const intact = positions.filter((position) => position.status === "intact").length
+  const atRisk = positions.filter((position) => position.status === "at_risk").length
+  const broken = positions.filter((position) => position.status === "broken").length
+  const top = positions.slice(0, 5).map((position) => `${position.ticker}:${position.status}`).join(", ")
+
+  return `Intact ${intact}, At risk ${atRisk}, Broken ${broken}. Recent: ${top}.`
+}
+
+function isPositionsQuestion(message: string) {
+  return /(position|positions|conviction|convictions|portfolio|how are my|how's my)/i.test(message)
+}
+
+function buildPositionsFallback(message: string, positions: PositionSnapshot[]): ChatAssistantResponse {
+  if (isPositionsQuestion(message)) {
+    if (positions.length === 0) {
+      return {
+        answer:
+          "You do not have saved convictions yet. Create your first thesis in New Thesis, and I can help you monitor position health from there.",
+        sourceTags: ["WorkflowGuide", "ProductGuide"],
+        confidence: "high",
+        escalation: "none",
+        followUpActions: ["Create your first thesis", "Ask how status tracking works", "Set up trusted sources"],
+      }
+    }
+
+    const intact = positions.filter((position) => position.status === "intact").length
+    const atRisk = positions.filter((position) => position.status === "at_risk").length
+    const broken = positions.filter((position) => position.status === "broken").length
+    const top = positions.slice(0, 5).map((position) => `${position.ticker} (${position.status})`).join(", ")
+
+    return {
+      answer: `Current snapshot: ${positions.length} convictions total — ${intact} intact, ${atRisk} at risk, ${broken} broken. Recent convictions: ${top}.`,
+      sourceTags: ["ProductGuide"],
+      confidence: "high",
+      escalation: "none",
+      followUpActions: ["Open NEEDS REVIEW filter", "Inspect at-risk convictions", "Ask me for next actions"],
+    }
+  }
+
+  return {
+    answer:
+      "I could not reliably parse that response. Please ask again, or try a more specific Synesi question like 'how do I set trusted sources?'",
+    sourceTags: ["PolicyGuide"],
+    confidence: "low",
+    escalation: "support",
+    followUpActions: [
+      "Ask a specific Synesi workflow question",
+      "Try again in a moment",
+      "Contact support if this repeats",
+    ],
+  }
 }
 
 export async function POST(request: Request) {
@@ -96,6 +160,7 @@ export async function POST(request: Request) {
     let thesisCount = cachedContext?.thesisCount
     let openAlertsCount = cachedContext?.openAlertsCount
     let tickers = cachedContext?.tickers
+    let positions = cachedContext?.positions
 
     if (!cachedContext || cachedContext.expiresAt <= now) {
       const [{ count: freshThesisCount }, { count: freshOpenAlertsCount }, { data: latestTheses }] =
@@ -108,19 +173,24 @@ export async function POST(request: Request) {
             .eq("is_reviewed", false),
           supabase
             .from("theses")
-            .select("ticker")
+            .select("ticker,status")
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
             .limit(8),
         ])
       thesisCount = freshThesisCount ?? 0
       openAlertsCount = freshOpenAlertsCount ?? 0
-      tickers = (latestTheses ?? []).map((thesis) => thesis.ticker)
+      positions = (latestTheses ?? []).map((thesis) => ({
+        ticker: thesis.ticker,
+        status: thesis.status,
+      }))
+      tickers = (positions ?? []).map((thesis) => thesis.ticker)
       userContextCache.set(user.id, {
         expiresAt: now + USER_CONTEXT_CACHE_TTL_MS,
         thesisCount,
         openAlertsCount,
         tickers,
+        positions,
       })
     }
 
@@ -131,6 +201,7 @@ export async function POST(request: Request) {
       thesisCount: thesisCount ?? 0,
       openAlertsCount: openAlertsCount ?? 0,
       tickers: tickers ?? [],
+      positionSummary: buildPositionSummary(positions ?? []),
       currentPath: body.context?.currentPath ?? "unknown",
     })
 
@@ -148,18 +219,7 @@ export async function POST(request: Request) {
       .trim()
 
     const parsed = parseAssistantResponse(rawText)
-    const fallback: ChatAssistantResponse = {
-      answer:
-        "I could not reliably parse that response. Please ask again, or try a more specific Synesi question like 'how do I set trusted sources?'",
-      sourceTags: ["PolicyGuide"],
-      confidence: "low",
-      escalation: "support",
-      followUpActions: [
-        "Ask a specific Synesi workflow question",
-        "Try again in a moment",
-        "Contact support if this repeats",
-      ],
-    }
+    const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessage, positions ?? [])
 
     const responsePayload = enforceResponseGuardrails(parsed ?? fallback)
 
