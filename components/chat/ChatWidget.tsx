@@ -506,20 +506,33 @@ export default function ChatWidget() {
       </button>
 
       <AnimatePresence>
-        {isOpen ? (
-          <motion.section
-            initial={{ opacity: 0, y: 12, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.99 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            style={
-              {
-                "--sigma-chat-width": `${panelSize.width}px`,
-                "--sigma-chat-height": `${panelSize.height}px`,
-              } as CSSProperties
-            }
-            className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
-          >
+        {isOpen
+          ? [
+              <motion.div
+                key="sigma-backdrop"
+                role="presentation"
+                aria-hidden
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="fixed inset-0 z-[65] cursor-default bg-black/35 backdrop-blur-[1px]"
+                onClick={() => setIsOpen(false)}
+              />,
+              <motion.section
+                key="sigma-panel"
+                initial={{ opacity: 0, y: 12, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.99 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                style={
+                  {
+                    "--sigma-chat-width": `${panelSize.width}px`,
+                    "--sigma-chat-height": `${panelSize.height}px`,
+                  } as CSSProperties
+                }
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+              >
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
               Drag to resize
@@ -737,8 +750,9 @@ export default function ChatWidget() {
               }
             }
           `}</style>
-          </motion.section>
-        ) : null}
+              </motion.section>,
+            ]
+          : null}
       </AnimatePresence>
     </>
   )
