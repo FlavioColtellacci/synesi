@@ -117,11 +117,12 @@ export default function TrustedSourcesSection({
       | { source?: TrustedSource; error?: string }
       | null
 
-    if (!response.ok || !payload?.source) {
+    const createdSource = payload?.source
+    if (!response.ok || !createdSource) {
       throw new Error(payload?.error ?? "Failed to add trusted source.")
     }
 
-    setSources((prev) => [payload.source, ...prev])
+    setSources((prev) => [createdSource, ...prev])
     router.refresh()
   }
 
