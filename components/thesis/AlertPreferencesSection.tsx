@@ -134,7 +134,9 @@ export default function AlertPreferencesSection({
         throw new Error(payload?.error ?? "Failed to update alert preferences")
       }
       updatePrimaryRule({ is_enabled: nextEnabled })
-      if (!nextEnabled) {
+      if (nextEnabled) {
+        setIsCopilotOpen(true)
+      } else {
         setIsCopilotOpen(false)
         setCopilotSuggestion(null)
         setCopilotError(null)
@@ -414,7 +416,6 @@ export default function AlertPreferencesSection({
         }
       }
 
-      setIsCopilotOpen(false)
       setCopilotSuggestion(null)
       setCopilotIntent("")
       router.refresh()
@@ -446,19 +447,6 @@ export default function AlertPreferencesSection({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isEnabled ? (
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={() => {
-                  setIsCopilotOpen(true)
-                  setCopilotError(null)
-                }}
-                className="rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
-              >
-                GENERATE DRAFT
-              </button>
-            ) : null}
             <button
               type="button"
               disabled={isBusy}
