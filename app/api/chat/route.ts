@@ -372,11 +372,46 @@ export async function POST(request: Request) {
       messages: toModelMessages(history, latestMessageForModel),
     }
 
+    function buildBraveContextBlock(research: { content: string; citations: string[] }) {
+      return [
+        "LIVE WEB CONTEXT (Brave Search)",
+        research.content,
+        research.citations.length
+          ? `Sources:\n${research.citations.map((url) => `- ${url}`).join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    }
+
+    async function completeWithBraveInSystem(research: { content: string; citations: string[] }) {
+      const braveContext = buildBraveContextBlock(research)
+      webContextSource = "brave_search"
+      return llm.messages.create({
+        ...completionBaseRequest,
+        system: `${completionBaseRequest.system}\n\n${braveContext}`,
+        messages: toModelMessages(
+          history,
+          `${latestMessageForModel}\n\nThe system prompt includes fresh web search snippets and source URLs. Use them to answer; cite uncertainty where snippets are incomplete.`,
+        ),
+      })
+    }
+
     let completion
-    try {
-      completion = await llm.messages.create(
-        shouldUseModelWebLookup
-          ? ({
+    // Prefer Brave for explicit web-intent messages when the key works. MiniMax may return HTTP 200
+    // without actually running Anthropic-style web_search tools, which produced empty "lookups".
+    if (shouldUseModelWebLookup) {
+      const braveFirst = await getWebResearchContext({
+        focus: "company",
+        query: latestMessage,
+      })
+
+      if (braveFirst.ok) {
+        completion = await completeWithBraveInSystem(braveFirst)
+      } else {
+        try {
+          completion = await llm.messages.create(
+            {
               ...completionBaseRequest,
               system: `${completionBaseRequest.system}\n\nWhen the user asks for internet lookup, use built-in model web search capability if available, then cite uncertainty clearly.`,
               tools: [
@@ -386,103 +421,84 @@ export async function POST(request: Request) {
                   max_uses: 3,
                 },
               ],
-            } as never)
-          : completionBaseRequest,
-      )
-    } catch (lookupError) {
-      if (!shouldUseModelWebLookup) {
-        throw lookupError
-      }
-
-      const braveResearch = await getWebResearchContext({
-        focus: "company",
-        query: latestMessage,
-      })
-
-      if (braveResearch.ok) {
-        const braveContext = [
-          "LIVE WEB CONTEXT (Brave Search fallback)",
-          braveResearch.content,
-          braveResearch.citations.length
-            ? `Sources:\n${braveResearch.citations.map((url) => `- ${url}`).join("\n")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n")
-        webContextSource = "brave_search"
-
-        completion = await llm.messages.create({
-          ...completionBaseRequest,
-          system: `${completionBaseRequest.system}\n\n${braveContext}`,
-          messages: toModelMessages(
-            history,
-            `${latestMessageForModel}\n\nUse the Brave search context included in the system prompt when relevant.`,
-          ),
-        })
-
-        const rawTextWithBrave = completion.content
-          .filter((block) => block.type === "text")
-          .map((block) => block.text)
-          .join("")
-          .trim()
-
-        const parsedWithBrave = parseAssistantResponse(rawTextWithBrave)
-        const textFallbackWithBrave = parseAssistantTextFallback(rawTextWithBrave)
-        const fallbackWithBrave: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
-
-        const responsePayloadWithBrave = enforceResponseGuardrails(
-          parsedWithBrave ?? textFallbackWithBrave ?? fallbackWithBrave,
-        )
-        const webLookupTemporarilyUnavailableWithBrave = hasWebCapabilityDenial(responsePayloadWithBrave.answer)
-        const normalizedResponsePayloadWithBrave = webLookupTemporarilyUnavailableWithBrave
-          ? buildWebLookupUnavailableNowResponse()
-          : responsePayloadWithBrave
-        const responsePayloadWithWebContext: ChatAssistantResponse = {
-          ...normalizedResponsePayloadWithBrave,
-          webContextVerified: usedSafeWebContext,
-          webContextSource,
-          webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
-        }
-
-        try {
-          await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
-        } catch (persistError) {
-          console.warn(
-            JSON.stringify({
-              event: "chat_persist_warning",
-              requestId,
-              userId: user.id,
-              error: persistError instanceof Error ? persistError.message : "Unknown persist error",
-            }),
+            } as never,
           )
+        } catch {
+          const braveResearch = await getWebResearchContext({
+            focus: "company",
+            query: latestMessage,
+          })
+
+          if (braveResearch.ok) {
+            completion = await completeWithBraveInSystem(braveResearch)
+
+            const rawTextWithBrave = completion.content
+              .filter((block) => block.type === "text")
+              .map((block) => block.text)
+              .join("")
+              .trim()
+
+            const parsedWithBrave = parseAssistantResponse(rawTextWithBrave)
+            const textFallbackWithBrave = parseAssistantTextFallback(rawTextWithBrave)
+            const fallbackWithBrave: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
+
+            const responsePayloadWithBrave = enforceResponseGuardrails(
+              parsedWithBrave ?? textFallbackWithBrave ?? fallbackWithBrave,
+            )
+            const webLookupTemporarilyUnavailableWithBrave = hasWebCapabilityDenial(responsePayloadWithBrave.answer)
+            const normalizedResponsePayloadWithBrave = webLookupTemporarilyUnavailableWithBrave
+              ? buildWebLookupUnavailableNowResponse()
+              : responsePayloadWithBrave
+            const responsePayloadWithWebContext: ChatAssistantResponse = {
+              ...normalizedResponsePayloadWithBrave,
+              webContextVerified: usedSafeWebContext,
+              webContextSource,
+              webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
+            }
+
+            try {
+              await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+            } catch (persistError) {
+              console.warn(
+                JSON.stringify({
+                  event: "chat_persist_warning",
+                  requestId,
+                  userId: user.id,
+                  error: persistError instanceof Error ? persistError.message : "Unknown persist error",
+                }),
+              )
+            }
+
+            console.info(
+              JSON.stringify({
+                event: "chat_request",
+                requestId,
+                userId: user.id,
+                model,
+                latencyMs: Date.now() - startedAt,
+                sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
+                confidence: normalizedResponsePayloadWithBrave.confidence,
+                escalation: normalizedResponsePayloadWithBrave.escalation,
+                usedSafeWebContext,
+                webContextSource,
+                webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
+              }),
+            )
+
+            return NextResponse.json(responsePayloadWithWebContext)
+          }
+
+          completion = await llm.messages.create({
+            ...completionBaseRequest,
+            messages: toModelMessages(
+              history,
+              `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, do not claim a permanent inability to browse. Say it is temporarily unavailable in this session, then ask for public HTTPS URLs for precise summarization.`,
+            ),
+          })
         }
-
-        console.info(
-          JSON.stringify({
-            event: "chat_request",
-            requestId,
-            userId: user.id,
-            model,
-            latencyMs: Date.now() - startedAt,
-            sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
-            confidence: normalizedResponsePayloadWithBrave.confidence,
-            escalation: normalizedResponsePayloadWithBrave.escalation,
-            usedSafeWebContext,
-            webContextSource,
-            webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
-          }),
-        )
-
-        return NextResponse.json(responsePayloadWithWebContext)
       }
-
-      completion = await llm.messages.create({
-        ...completionBaseRequest,
-        messages: toModelMessages(
-          history,
-          `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, do not claim a permanent inability to browse. Say it is temporarily unavailable in this session, then ask for public HTTPS URLs for precise summarization.`,
-        ),
-      })
+    } else {
+      completion = await llm.messages.create(completionBaseRequest)
     }
 
     const rawText = completion.content
