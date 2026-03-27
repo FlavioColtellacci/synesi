@@ -7,6 +7,7 @@ import {
   ThesisChallengeBanner,
   type ThesisChallengeEvent,
 } from "@/components/thesis/ThesisChallengeBanner"
+import { DashboardDeleteThesis } from "@/components/thesis/DashboardDeleteThesis"
 import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
 import { createClient } from "@/lib/supabase/client"
 
@@ -375,19 +376,31 @@ export default function Page() {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setModalThesis({
-                        id: thesis.id,
-                        status: thesis.status,
-                        ticker: thesis.ticker,
-                      })
-                    }
-                    className="min-h-[36px] cursor-pointer rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
-                  >
-                    UPDATE STATUS
-                  </button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <DashboardDeleteThesis
+                      thesisId={thesis.id}
+                      ticker={thesis.ticker}
+                      companyName={thesis.company_name}
+                      onDeleted={() => {
+                        setTheses((prev) => prev.filter((t) => t.id !== thesis.id))
+                        setChallengeEvents((prev) => prev.filter((e) => e.thesisId !== thesis.id))
+                        setModalThesis((current) => (current?.id === thesis.id ? null : current))
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModalThesis({
+                          id: thesis.id,
+                          status: thesis.status,
+                          ticker: thesis.ticker,
+                        })
+                      }
+                      className="min-h-[36px] cursor-pointer rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
+                    >
+                      UPDATE STATUS
+                    </button>
+                  </div>
                 </div>
               </article>
             )
