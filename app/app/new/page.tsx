@@ -37,6 +37,16 @@ const emptyExtractedData: ExtractedThesis = {
 
 const fieldClassName =
   "w-full rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-4 py-3 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
+const reviewInputClassName =
+  "w-full rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-4 py-4 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none"
+const reviewTextareaClassName =
+  "w-full resize-none rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-4 py-4 text-sm leading-relaxed text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none sigma-scrollbar"
+
+const glitchSigmaStyle = {
+  textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
+  animation: "synesi-icon-glitch 2.5s infinite steps(2, end)",
+  willChange: "transform",
+}
 
 export default function NewThesisPage() {
   const router = useRouter()
@@ -214,7 +224,7 @@ export default function NewThesisPage() {
 
         {pageState === "loading" ? (
           <div className="py-16 flex flex-col items-center justify-center">
-            <p className="text-4xl font-mono text-[#F0F0F0] animate-pulse mb-4">
+            <p className="mb-4 text-4xl font-mono text-[#F0F0F0]" style={glitchSigmaStyle}>
               Σ
             </p>
             <p className="text-sm text-[#6B6B7B] text-center max-w-sm">
@@ -248,7 +258,7 @@ export default function NewThesisPage() {
                       ticker: event.target.value.toUpperCase(),
                     }))
                   }
-                  className={`${fieldClassName} w-full font-mono uppercase md:w-40`}
+                  className={`${reviewInputClassName} w-full font-mono uppercase md:w-48`}
                 />
               </div>
 
@@ -265,7 +275,7 @@ export default function NewThesisPage() {
                       companyName: event.target.value,
                     }))
                   }
-                  className={fieldClassName}
+                  className={reviewInputClassName}
                 />
               </div>
 
@@ -274,7 +284,7 @@ export default function NewThesisPage() {
                   THESIS STATEMENT
                 </label>
                 <textarea
-                  rows={3}
+                  rows={5}
                   value={extractedData.thesisStatement}
                   onChange={(event) =>
                     setExtractedData((prev) => ({
@@ -282,7 +292,7 @@ export default function NewThesisPage() {
                       thesisStatement: event.target.value,
                     }))
                   }
-                  className={`${fieldClassName} resize-none`}
+                  className={reviewTextareaClassName}
                 />
               </div>
 
@@ -304,7 +314,7 @@ export default function NewThesisPage() {
                         STATEMENT
                       </label>
                       <textarea
-                        rows={2}
+                        rows={3}
                         value={assumption.statement}
                         onChange={(event) =>
                           setExtractedData((prev) => ({
@@ -316,14 +326,14 @@ export default function NewThesisPage() {
                             ),
                           }))
                         }
-                        className={`${fieldClassName} resize-none mb-3`}
+                        className={`${reviewTextareaClassName} mb-3`}
                       />
 
                       <label className="text-xs text-[#6B6B7B] font-mono uppercase tracking-widest mb-2 block">
                         I&apos;LL KNOW THIS IS BROKEN IF...
                       </label>
                       <textarea
-                        rows={2}
+                        rows={3}
                         value={assumption.breakCondition}
                         onChange={(event) =>
                           setExtractedData((prev) => ({
@@ -335,7 +345,7 @@ export default function NewThesisPage() {
                             ),
                           }))
                         }
-                        className={`${fieldClassName} resize-none`}
+                        className={reviewTextareaClassName}
                       />
                     </div>
                   ))}
@@ -374,7 +384,7 @@ export default function NewThesisPage() {
                   I&apos;LL SELL IF...
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={extractedData.exitCriteria}
                   onChange={(event) =>
                     setExtractedData((prev) => ({
@@ -382,7 +392,7 @@ export default function NewThesisPage() {
                       exitCriteria: event.target.value,
                     }))
                   }
-                  className={`${fieldClassName} resize-none`}
+                  className={reviewTextareaClassName}
                 />
               </div>
             </div>

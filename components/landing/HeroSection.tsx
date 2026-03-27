@@ -123,7 +123,7 @@ export default function HeroSection() {
               </Link>
 
               <p className="mt-6 font-mono text-xs tracking-widest text-[#6B6B7B]">
-                $15/month · No free tier · Built for serious investors
+                7-day free trial. Then $15/month or $99/year.
               </p>
             </div>
 

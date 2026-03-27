@@ -29,9 +29,9 @@ const faqs = [
       "No. SYNESI never gives buy, sell, or hold recommendations and never predicts prices. It is a thinking tool that helps you stress-test your own reasoning, the decisions are always yours.",
   },
   {
-    question: "Why is there no free tier?",
+    question: "How does the 7-day free trial work?",
     answer:
-      "SYNESI is built for investors serious about their process. The subscription ensures every user is committed to improving their decision-making, and it lets us focus on quality without ad-supported compromises.",
+      "Your 7-day free trial starts after signup. During the trial, you get full access to all features. When the trial ends, choose a plan to keep access: $15/month or $99/year.",
   },
 ]
 
