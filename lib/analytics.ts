@@ -1,7 +1,10 @@
 export type FunnelEvent =
   | "landing_view"
   | "pricing_view"
+  | "pricing_trial_expired_view"
   | "signup_start"
+  | "trial_message_view"
+  | "trial_upgrade_click"
   | "checkout_start"
   | "first_thesis_saved"
   | "first_ai_analysis"

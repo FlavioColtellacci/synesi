@@ -3,7 +3,9 @@ import Link from 'next/link'
 import NavLinks from '@/components/layout/NavLinks'
 import SignOutButton from '@/components/layout/SignOutButton'
 import ChatWidget from '@/components/chat/ChatWidget'
+import TrialStatusBanner from '@/components/billing/TrialStatusBanner'
 import { createClient } from '@/lib/supabase/server'
+import { getTrialState } from '@/lib/billing/trial-state'
 
 type AppLayoutProps = {
   children: ReactNode
@@ -24,8 +26,8 @@ export default async function AppLayout({ children }: AppLayoutProps) {
     : { data: null }
 
   const hasActiveSubscription = profile?.subscription_status === 'active'
-  const isTrialUser = Boolean(profile?.trial_ends_at)
-  const trialMessage = 'Your trial is active.'
+  const trialState = getTrialState(profile?.trial_ends_at)
+  const isTrialUser = trialState.status !== 'none'
 
   return (
     <>
@@ -60,21 +62,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       </nav>
 
       <main className="min-h-screen bg-[#0A0A0C] pt-24 md:pt-16">
-        {!hasActiveSubscription && isTrialUser ? (
-          <div className="border-b border-[#2A2A32] bg-[#1A1A20] px-4 py-3 md:px-10">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <p className="font-sans text-sm text-[#F0F0F0]">
-                <span className="font-mono text-[#FFB800]">TRIAL</span> · {trialMessage}
-              </p>
-              <Link
-                href="/pricing"
-                className="inline-flex min-h-[36px] items-center justify-center rounded-lg border border-[#F0F0F0]/30 px-4 py-1.5 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:border-[#F0F0F0] hover:bg-[#1F1F26]"
-              >
-                CHOOSE PLAN →
-              </Link>
-            </div>
-          </div>
-        ) : null}
+        {!hasActiveSubscription && isTrialUser ? <TrialStatusBanner trialState={trialState} /> : null}
         {children}
       </main>
       <ChatWidget />
