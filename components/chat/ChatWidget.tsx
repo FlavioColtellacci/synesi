@@ -539,9 +539,9 @@ export default function ChatWidget() {
             onPointerDown={(event) => handleResizeStart("left", event)}
             className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
           />
-          <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 pr-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
                 <span
                   title="Sigma can look up current information on the web when you ask"
@@ -552,7 +552,7 @@ export default function ChatWidget() {
                   Live web
                 </span>
               </div>
-              <p className="text-xs text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
+              <p className="text-xs leading-snug text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
             </div>
             <div className="flex items-center gap-2">
               <button
