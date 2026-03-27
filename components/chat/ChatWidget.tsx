@@ -37,9 +37,8 @@ const TOP_BOTTOM_OFFSET_PX = 120
 
 const QUICK_ACTIONS = [
   "How do I create a thesis?",
-  "How do trusted sources and alerts work?",
-  "Help me set up personalized alerts",
-  "Explain this dashboard to me",
+  "Set up personalized alerts",
+  "Explain my dashboard in simple terms",
   "What open alerts do I have?",
 ]
 
@@ -47,7 +46,7 @@ const INITIAL_MESSAGE: ChatMessage = {
   id: "assistant-welcome",
   role: "assistant",
   content:
-    "Good to see you. I can help with Synesi workflows, your convictions dashboard, alert setup, and careful general guidance.",
+    "Good to see you. I can help with Synesi workflows, thesis drafting, alert setup, and careful general guidance.",
   sourceTags: ["ProductGuide", "WorkflowGuide"],
   confidence: "high",
   escalation: "none",
@@ -235,12 +234,14 @@ export default function ChatWidget() {
   const [isClearingHistory, setIsClearingHistory] = useState(false)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE])
-  const [showSuggestions, setShowSuggestions] = useState(true)
+  const [inputHintOverflowPx, setInputHintOverflowPx] = useState(0)
   const [panelSize, setPanelSize] = useState({
     width: DEFAULT_PANEL_WIDTH,
     height: DEFAULT_PANEL_HEIGHT,
   })
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
+  const inputHintViewportRef = useRef<HTMLSpanElement | null>(null)
+  const inputHintTextRef = useRef<HTMLSpanElement | null>(null)
   const resizeStateRef = useRef<{
     direction: ResizeDirection
     startX: number
@@ -257,6 +258,7 @@ export default function ChatWidget() {
     () => messages.some((message) => message.role === "user"),
     [messages],
   )
+  const showStarterExamples = !hasUserMessages && !isHydratingHistory
 
   useEffect(() => {
     const element = messageContainerRef.current
@@ -265,10 +267,38 @@ export default function ChatWidget() {
   }, [messages, isSending])
 
   useEffect(() => {
-    if (hasUserMessages) {
-      setShowSuggestions(false)
+    function measureInputHintOverflow() {
+      const viewport = inputHintViewportRef.current
+      const text = inputHintTextRef.current
+
+      if (!viewport || !text || input.trim().length > 0) {
+        setInputHintOverflowPx(0)
+        return
+      }
+
+      const overflowPx = Math.max(0, Math.ceil(text.scrollWidth - viewport.clientWidth))
+      setInputHintOverflowPx(overflowPx)
     }
-  }, [hasUserMessages])
+
+    measureInputHintOverflow()
+
+    const viewport = inputHintViewportRef.current
+    if (!viewport) return
+
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        measureInputHintOverflow()
+      })
+      observer.observe(viewport)
+    }
+
+    window.addEventListener("resize", measureInputHintOverflow)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", measureInputHintOverflow)
+    }
+  }, [input, isOpen, panelSize.width])
 
   useEffect(() => {
     if (!isOpen || hasHydratedHistory) return
@@ -288,12 +318,10 @@ export default function ChatWidget() {
           setMessages(hydratedMessages)
         } else {
           setMessages([INITIAL_MESSAGE])
-          setShowSuggestions(true)
         }
       } catch {
         if (!cancelled) {
           setMessages([INITIAL_MESSAGE])
-          setShowSuggestions(true)
         }
       } finally {
         if (!cancelled) {
@@ -474,7 +502,6 @@ export default function ChatWidget() {
     } finally {
       setMessages([INITIAL_MESSAGE])
       setInput("")
-      setShowSuggestions(true)
       setHasHydratedHistory(true)
       setIsClearingHistory(false)
     }
@@ -531,7 +558,7 @@ export default function ChatWidget() {
                     "--sigma-chat-height": `${panelSize.height}px`,
                   } as CSSProperties
                 }
-                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
               >
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
@@ -552,74 +579,79 @@ export default function ChatWidget() {
             onPointerDown={(event) => handleResizeStart("left", event)}
             className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
           />
-          <header className="flex items-center justify-between border-b border-[#2A2A32] px-4 py-3.5">
-            <div className="flex min-w-0 flex-1 flex-col gap-2 pr-3">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <p className="font-mono text-xs uppercase tracking-widest text-[#F0F0F0]">SIGMA</p>
-                <span
-                  title="Sigma can look up current information on the web when you ask"
-                  aria-label="Live web lookup available"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#00D1B2]/30 bg-[#00D1B2]/8 px-1.5 py-px font-mono text-[8px] uppercase tracking-wider text-[#8BE8D8]"
-                >
-                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-[#00D1B2]" />
-                  Live web
-                </span>
-              </div>
-              <p className="text-xs leading-snug text-[#6B6B7B]">Elegant, careful, and Synesi-first guidance.</p>
+          <header className="relative flex items-center justify-end border-b border-[#2A2A32]/70 px-4 py-2.5">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className="font-mono text-base text-[#F0F0F0]"
+                style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+              >
+                Σ
+              </span>
+              <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  void clearConversation()
-                }}
-                disabled={isClearingHistory}
-                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isClearingHistory ? "CLEARING" : "CLEAR"}
-              </button>
+              {hasUserMessages ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void clearConversation()
+                  }}
+                  disabled={isClearingHistory}
+                  className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isClearingHistory ? "CLEARING" : "CLEAR"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] hover:text-[#F0F0F0]"
+                className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
               >
                 CLOSE
               </button>
             </div>
           </header>
 
-          {!hasUserMessages && showSuggestions ? (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18 }}
-              className="border-b border-[#2A2A32] px-3 py-3"
-            >
-              <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
-                Quick actions
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_ACTIONS.map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => {
-                      void sendMessage(action)
-                    }}
-                    className="rounded-full border border-[#2A2A32] px-3 py-1.5 text-xs text-[#F0F0F0] transition-colors hover:border-[#F0F0F0]/40 hover:bg-[#F0F0F0]/5"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          ) : null}
-
-          <div ref={messageContainerRef} className="sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <div
+            ref={messageContainerRef}
+            className={`sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3 ${showStarterExamples ? "flex items-center justify-center" : ""}`}
+          >
             <motion.div layout className="space-y-3">
               {isHydratingHistory ? <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p> : null}
+              {showStarterExamples ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="mx-auto w-full max-w-[32rem] space-y-5 px-3 pb-1 pt-2 text-center"
+                >
+                  <div className="space-y-2">
+                    <p
+                      className="font-mono text-[30px] leading-none text-[#F0F0F0]"
+                      style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+                    >
+                      Σ
+                    </p>
+                    <p className="text-lg text-[#F0F0F0]">How can I help today?</p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {QUICK_ACTIONS.map((action) => (
+                      <button
+                        key={action}
+                        type="button"
+                        onClick={() => setInput(action)}
+                        className="rounded-full border border-[#2A2A32] bg-[#101018] px-4 py-1.5 text-sm text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 hover:bg-[#15151F]"
+                      >
+                        {action}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : null}
               <AnimatePresence initial={false}>
-              {messages.map((message, messageIndex) => (
+              {!showStarterExamples
+                ? messages.map((message) => (
                 <motion.article
                   key={message.id}
                   layout
@@ -630,10 +662,10 @@ export default function ChatWidget() {
                   className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[min(92%,26rem)] rounded-2xl border px-3 py-2 text-left ${
+                    className={`max-w-[min(92%,26rem)] rounded-2xl px-3 py-2 text-left ${
                       message.role === "user"
-                        ? "rounded-br-md border-[#F0F0F0]/22 bg-[#25252E] shadow-sm shadow-black/20"
-                        : "rounded-bl-md border-[#2A2A32] bg-[#15151B]"
+                        ? "rounded-br-md bg-[#202029] text-[#F3F3F8]"
+                        : "rounded-bl-md bg-[#14141A] text-[#ECECF2]"
                     }`}
                   >
                     {message.role === "assistant" ? (
@@ -649,29 +681,10 @@ export default function ChatWidget() {
                       </div>
                     ) : null}
 
-                    {message.role === "assistant" &&
-                    showSuggestions &&
-                    message.followUpActions?.length &&
-                    messageIndex === messages.length - 1 ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <p className="w-full font-mono text-[10px] uppercase tracking-widest text-[#7F7F8D]">Next steps</p>
-                        {message.followUpActions.map((action) => (
-                          <button
-                            key={`${message.id}-${action}`}
-                            type="button"
-                            onClick={() => {
-                              void sendMessage(action)
-                            }}
-                            className="rounded-full border border-[#2A2A32] px-2.5 py-1 text-[11px] text-[#F0F0F0] hover:border-[#F0F0F0]/35"
-                          >
-                            {action}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 </motion.article>
-              ))}
+                ))
+                : null}
               </AnimatePresence>
               {isSending ? (
                 <motion.div
@@ -679,7 +692,7 @@ export default function ChatWidget() {
                   animate={{ opacity: 1 }}
                   className="flex w-full justify-start"
                 >
-                  <div className="inline-flex max-w-[min(92%,26rem)] items-center gap-2 rounded-2xl rounded-bl-md border border-[#2A2A32] bg-[#15151B] px-3 py-2">
+                  <div className="inline-flex max-w-[min(92%,26rem)] items-center gap-2 rounded-2xl rounded-bl-md bg-[#14141A] px-3 py-2">
                   <span className="font-mono text-xs text-[#6B6B7B]">Thinking</span>
                   <motion.span
                     animate={{ opacity: [0.2, 1, 0.2] }}
@@ -712,7 +725,7 @@ export default function ChatWidget() {
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-[#2A2A32]/85 bg-[#0B0B0F] px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
               <label className="relative block w-full">
                 <input
                   id="synesi-chat-input"
@@ -720,23 +733,38 @@ export default function ChatWidget() {
                   maxLength={900}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder=""
-                  className="peer w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/45"
+                  className="peer w-full bg-transparent px-1 py-1.5 text-sm text-[#F0F0F0] outline-none"
                 />
                 {input.trim().length === 0 ? (
                   <span
+                    ref={inputHintViewportRef}
                     aria-hidden
-                    className="pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
+                    className="pointer-events-none absolute inset-y-0 left-1 right-1 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
                   >
-                    <span className="inline-block animate-[chat-input-placeholder-scroll_7s_ease-in-out_infinite_alternate] whitespace-nowrap">
-                      Ask anything about Synesi or investing workflows...
-                    </span>
+                    <motion.span
+                      ref={inputHintTextRef}
+                      className="inline-block whitespace-nowrap"
+                      animate={inputHintOverflowPx > 0 ? { x: [0, -inputHintOverflowPx] } : { x: 0 }}
+                      transition={
+                        inputHintOverflowPx > 0
+                          ? {
+                              duration: Math.min(12, Math.max(6, inputHintOverflowPx / 18)),
+                              ease: "easeInOut",
+                              repeat: Number.POSITIVE_INFINITY,
+                              repeatType: "reverse",
+                            }
+                          : { duration: 0.12, ease: "linear" }
+                      }
+                    >
+                      Ask Sigma about Synesi or your investing workflow...
+                    </motion.span>
                   </span>
                 ) : null}
               </label>
               <button
                 type="submit"
                 disabled={isSending || input.trim().length === 0}
-                className="rounded-lg bg-[#F0F0F0] px-3 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full bg-[#F0F0F0] px-4 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isSending ? "..." : "SEND"}
               </button>
@@ -745,16 +773,6 @@ export default function ChatWidget() {
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>
           </form>
-          <style jsx>{`
-            @keyframes chat-input-placeholder-scroll {
-              0% {
-                transform: translateX(0);
-              }
-              100% {
-                transform: translateX(-42%);
-              }
-            }
-          `}</style>
               </motion.section>,
             ]
           : null}
