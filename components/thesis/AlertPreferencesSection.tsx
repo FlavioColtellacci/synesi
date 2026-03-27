@@ -55,6 +55,10 @@ async function parseJson<T>(response: Response): Promise<T | null> {
   return (await response.json().catch(() => null)) as T | null
 }
 
+function normalizeSourceField(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase()
+}
+
 export default function AlertPreferencesSection({
   thesisId,
   trustedSources,
@@ -401,6 +405,8 @@ export default function AlertPreferencesSection({
       }
 
       if (copilotAddSources) {
+        const nextSelectedSourceIds = new Set(primaryRule?.sourceIds ?? [])
+        const createdOrMatchedSources: TrustedSource[] = []
         const selections = copilotSelections
         for (let i = 0; i < copilotSuggestion.sources.length; i++) {
           const selection = selections[i]
@@ -422,20 +428,53 @@ export default function AlertPreferencesSection({
             throw new Error(`"${chosenUrl}" doesn't look like an RSS/Atom feed URL. Pick a different URL.`)
           }
 
-          const addResponse = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
+          const matchedSource = [...trustedSources, ...createdOrMatchedSources].find((candidate) => {
+            const nameMatches = normalizeSourceField(candidate.name) === normalizeSourceField(name)
+            const urlMatches = normalizeSourceField(candidate.url) === normalizeSourceField(chosenUrl)
+            return nameMatches || urlMatches
+          })
+
+          let sourceIdToAttach = matchedSource?.id ?? ""
+
+          if (!sourceIdToAttach) {
+            const addResponse = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name,
+                url: chosenUrl,
+                sourceType: source.sourceType,
+              }),
+            })
+            const addPayload = await parseJson<{ source?: TrustedSource; error?: string }>(addResponse)
+            if (!addResponse.ok || !addPayload?.source) {
+              throw new Error(addPayload?.error ?? `Failed to add trusted source "${name}"`)
+            }
+            sourceIdToAttach = addPayload.source.id
+            createdOrMatchedSources.push(addPayload.source)
+          }
+
+          if (!sourceIdToAttach || nextSelectedSourceIds.has(sourceIdToAttach)) {
+            continue
+          }
+
+          const attachResponse = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}/sources`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name,
-              url: chosenUrl,
-              sourceType: source.sourceType,
-            }),
+            body: JSON.stringify({ trustedSourceId: sourceIdToAttach }),
           })
-          const addPayload = await parseJson<{ error?: string }>(addResponse)
-          if (!addResponse.ok) {
-            throw new Error(addPayload?.error ?? `Failed to add trusted source "${name}"`)
+          const attachPayload = await parseJson<{ error?: string }>(attachResponse)
+          if (!attachResponse.ok && attachResponse.status !== 409) {
+            throw new Error(
+              attachPayload?.error ??
+                `Failed to attach source "${name}" to your personalized challenge alerts.`,
+            )
           }
+
+          nextSelectedSourceIds.add(sourceIdToAttach)
         }
+
+        updatePrimaryRule({ sourceIds: [...nextSelectedSourceIds] })
       }
 
       setCopilotSuggestion(null)
