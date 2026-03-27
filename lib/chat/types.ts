@@ -10,6 +10,7 @@ export type ChatAssistantResponse = {
   confidence: ChatConfidence
   escalation: ChatEscalation
   followUpActions: string[]
+  webContextVerified?: boolean
 }
 
 export type ChatMessageRole = "user" | "assistant"
