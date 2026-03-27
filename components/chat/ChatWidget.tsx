@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import { usePathname } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
@@ -324,20 +325,25 @@ export default function ChatWidget() {
         </span>
       </button>
 
-      {isOpen ? (
-        <section
-          style={
-            {
-              "--sigma-chat-width": `${panelSize.width}px`,
-              "--sigma-chat-height": `${panelSize.height}px`,
-            } as CSSProperties
-          }
-          className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(92vw,760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
-        >
-          <div className="pointer-events-none absolute left-2 top-2 z-20 hidden items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/85 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
-            <span aria-hidden="true">↖</span>
-            Drag to resize
-          </div>
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.section
+            initial={{ opacity: 0, y: 12, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.99 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={
+              {
+                "--sigma-chat-width": `${panelSize.width}px`,
+                "--sigma-chat-height": `${panelSize.height}px`,
+              } as CSSProperties
+            }
+            className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:bg-[#111116] sm:shadow-2xl sm:shadow-black/50"
+          >
+            <div className="pointer-events-none absolute left-2 top-2 z-20 hidden items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/85 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
+              <span aria-hidden="true">↖</span>
+              Drag to resize
+            </div>
           <div
             aria-hidden="true"
             onPointerDown={(event) => handleResizeStart("top-left", event)}
@@ -386,7 +392,12 @@ export default function ChatWidget() {
           </header>
 
           {!hasUserMessages && showSuggestions ? (
-            <div className="border-b border-[#2A2A32] px-3 py-3">
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="border-b border-[#2A2A32] px-3 py-3"
+            >
               <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
                 Quick actions
               </p>
@@ -404,22 +415,28 @@ export default function ChatWidget() {
                   </button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           ) : null}
 
-          <div ref={messageContainerRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
-            <div className="space-y-3">
+          <div ref={messageContainerRef} className="sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <motion.div layout className="space-y-3">
               {isHydratingHistory ? <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p> : null}
+              <AnimatePresence initial={false}>
               {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <article
-                    className={`w-full max-w-[86%] rounded-xl border px-3 py-2 ${
-                      message.role === "user"
-                        ? "border-[#8FD6FF]/30 bg-[#202734] shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
-                        : "border-[#2A2A32] bg-[#15151B]"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
+                <motion.article
+                  key={message.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                  className={`rounded-xl border px-3 py-2 ${
+                    message.role === "user"
+                      ? "ml-6 border-[#F0F0F0]/25 bg-[#1F1F26]"
+                      : "mr-6 border-[#2A2A32] bg-[#15151B]"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
 
                   {message.role === "assistant" && message.webContextVerified ? (
                     <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
@@ -445,11 +462,34 @@ export default function ChatWidget() {
                     </div>
                   ) : null}
 
-                  </article>
-                </div>
+                </motion.article>
               ))}
-              {isSending ? <p className="font-mono text-xs text-[#6B6B7B]">Thinking…</p> : null}
-            </div>
+              </AnimatePresence>
+              {isSending ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#2A2A32] bg-[#15151B] px-3 py-2"
+                >
+                  <span className="font-mono text-xs text-[#6B6B7B]">Thinking</span>
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.15 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                  <motion.span
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.3 }}
+                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
+                  />
+                </motion.div>
+              ) : null}
+            </motion.div>
           </div>
 
           <form
@@ -463,28 +503,51 @@ export default function ChatWidget() {
               Ask the Synesi assistant
             </label>
             <div className="flex gap-2">
-              <input
-                id="synesi-chat-input"
-                value={input}
-                maxLength={900}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask anything about Synesi or investing workflows..."
-                className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/45"
-              />
+              <label className="relative block w-full">
+                <input
+                  id="synesi-chat-input"
+                  value={input}
+                  maxLength={900}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder=""
+                  className="peer w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/45"
+                />
+                {input.trim().length === 0 ? (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
+                  >
+                    <span className="inline-block animate-[chat-input-placeholder-scroll_7s_ease-in-out_infinite_alternate] whitespace-nowrap">
+                      Ask anything about Synesi or investing workflows...
+                    </span>
+                  </span>
+                ) : null}
+              </label>
               <button
                 type="submit"
                 disabled={isSending || input.trim().length === 0}
                 className="rounded-lg bg-[#F0F0F0] px-3 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                SEND
+                {isSending ? "..." : "SEND"}
               </button>
             </div>
             <p className="mt-2 text-[11px] text-[#6B6B7B]">
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>
           </form>
-        </section>
-      ) : null}
+          <style jsx>{`
+            @keyframes chat-input-placeholder-scroll {
+              0% {
+                transform: translateX(0);
+              }
+              100% {
+                transform: translateX(-42%);
+              }
+            }
+          `}</style>
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
     </>
   )
 }

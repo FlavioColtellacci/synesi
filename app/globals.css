@@ -169,6 +169,44 @@ body {
   display: none;
 }
 
+/* Sigma chat scrollbar: subtle, rounded, dark-theme friendly. */
+.sigma-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(240, 240, 240, 0.12) transparent;
+}
+
+.sigma-scrollbar::-webkit-scrollbar {
+  width: 9px;
+}
+
+.sigma-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.sigma-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(240, 240, 240, 0.12);
+  border-radius: 9999px;
+  border: 2px solid rgba(10, 10, 12, 0.96);
+  transition: background-color 160ms ease;
+}
+
+.sigma-scrollbar:hover {
+  scrollbar-color: rgba(240, 240, 240, 0.45) transparent;
+}
+
+.sigma-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(240, 240, 240, 0.45);
+}
+
+.sigma-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(240, 240, 240, 0.58);
+}
+
+.sigma-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(240, 240, 240, 0.7);
+}
+
 @keyframes synesi-icon-glitch {
   0%,
   100% {
