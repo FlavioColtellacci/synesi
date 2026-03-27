@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createLlm, getTextModel, type LlmProvider } from "@/lib/llm"
+import { createLlm, getTextModel } from "@/lib/llm"
 import { getPerplexityResearchContext } from "@/lib/perplexity"
 import { createClient } from "@/lib/supabase/server"
 
@@ -17,27 +17,6 @@ type ExtractedThesis = {
   bearCase: string
   exitCriteria: string
   confidenceLevel: "high" | "medium" | "low"
-}
-
-function getProviderForUser(profile: {
-  subscription_status: string
-  trial_ends_at: string | null
-} | null): LlmProvider {
-  if (profile?.subscription_status === "active") {
-    return "anthropic"
-  }
-
-  if (profile?.trial_ends_at && new Date(profile.trial_ends_at).getTime() > Date.now()) {
-    return "minimax"
-  }
-
-  return "anthropic"
-}
-
-function isModelNotFoundError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const message = error.message.toLowerCase()
-  return message.includes("not_found_error") || message.includes("model:")
 }
 
 export async function POST(request: Request) {
@@ -65,14 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("subscription_status, trial_ends_at")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    const provider = getProviderForUser(profile)
-    const llm = createLlm(provider)
+    const llm = createLlm()
 
     let researchBlock = ""
     if (useRealTimeData) {
@@ -118,24 +90,10 @@ User input: ${rawInput}${researchBlock}`,
       ],
     }
 
-    let completion: Awaited<ReturnType<typeof llm.messages.create>>
-    try {
-      completion = await llm.messages.create({
-        model: getTextModel(provider),
-        ...requestPayload,
-      })
-    } catch (error: unknown) {
-      // Trial users may have a provider/model mismatch; retry on Anthropic.
-      if (provider === "minimax" && isModelNotFoundError(error)) {
-        const fallbackLlm = createLlm("anthropic")
-        completion = await fallbackLlm.messages.create({
-          model: getTextModel("anthropic"),
-          ...requestPayload,
-        })
-      } else {
-        throw error
-      }
-    }
+    const completion = await llm.messages.create({
+      model: getTextModel(),
+      ...requestPayload,
+    })
 
     const responseText = completion.content
       .filter((block) => block.type === "text")

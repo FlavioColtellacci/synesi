@@ -10,12 +10,6 @@ type Mode = (typeof VALID_MODES)[number]
 type MinConfidence = (typeof VALID_MIN_CONFIDENCE)[number]
 type SourceType = (typeof VALID_SOURCE_TYPES)[number]
 
-function isModelNotFoundError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const message = error.message.toLowerCase()
-  return message.includes("not_found_error") || message.includes("model:")
-}
-
 function looksLikeFeedUrl(value: string) {
   const input = value.trim().toLowerCase()
   if (!input) return false
@@ -101,30 +95,17 @@ export async function POST(
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())
       .join("\n")}\n\nUSER INTENT:\n${intent}\n`
 
-    const llm = createLlm("minimax")
+    const llm = createLlm()
     const requestPayload = {
       max_tokens: 1400,
       system,
       messages: [{ role: "user" as const, content: userPrompt }],
     }
 
-    let completion: Awaited<ReturnType<typeof llm.messages.create>>
-    try {
-      completion = await llm.messages.create({
-        model: getTextModel("minimax"),
-        ...requestPayload,
-      })
-    } catch (error: unknown) {
-      if (isModelNotFoundError(error)) {
-        const fallback = createLlm("anthropic")
-        completion = await fallback.messages.create({
-          model: getTextModel("anthropic"),
-          ...requestPayload,
-        })
-      } else {
-        throw error
-      }
-    }
+    const completion = await llm.messages.create({
+      model: getTextModel(),
+      ...requestPayload,
+    })
 
     const responseText = completion.content
       .filter((block) => block.type === "text")

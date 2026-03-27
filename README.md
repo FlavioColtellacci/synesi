@@ -16,18 +16,15 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## LLM provider (Anthropic vs MiniMax)
+## LLM provider (MiniMax only)
 
-This app uses an Anthropic-compatible client for text generation. You can switch providers via env vars.
+This app uses a MiniMax endpoint through an Anthropic-compatible client.
 
-- **Default (Anthropic)**:
-  - `ANTHROPIC_API_KEY=...`
-  - Optional: `LLM_TEXT_MODEL=claude-sonnet-4-6`
-
-- **MiniMax (cheaper for tests)**:
-  - `LLM_PROVIDER=minimax`
+- **Required**:
   - `MINIMAX_API_KEY=...`
-  - Optional: `LLM_TEXT_MODEL=MiniMax-M2.7` (or `MiniMax-M2.7-highspeed`)
+- **Optional**:
+  - `MINIMAX_TEXT_MODEL=MiniMax-M2.7` (or `MiniMax-M2.7-highspeed`)
+  - `MINIMAX_ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic`
 
 MiniMax uses an Anthropic-compatible endpoint under the hood (default base URL: `https://api.minimax.io/anthropic`).
 
