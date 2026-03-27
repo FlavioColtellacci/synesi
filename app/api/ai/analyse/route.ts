@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createLlm, getTextModel } from "@/lib/llm"
-import { getPerplexityResearchContext } from "@/lib/perplexity"
+import { getWebResearchContext } from "@/lib/web-research"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
     let researchBlock = ""
     if (useRealTimeData) {
-      const research = await getPerplexityResearchContext({
+      const research = await getWebResearchContext({
         focus: "company",
         query: `Gather fresh, relevant public context to help stress-test an investment thesis for ${thesis.ticker} (${thesis.company_name}). Include: recent notable news (last 30-90 days), major product/strategy updates, competitive landscape, key risks, and any obvious factual corrections.\n\nThesis statement:\n${thesis.thesis_statement}\n\nAssumptions:\n${assumptions
           .map((a) => `- [${a.category}] ${a.statement} (break: ${a.break_condition || "n/a"})`)

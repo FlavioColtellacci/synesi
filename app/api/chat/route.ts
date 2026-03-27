@@ -6,6 +6,7 @@ import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback } from "@/lib/chat/parse"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
+import { getWebResearchContext } from "@/lib/web-research"
 import { createClient } from "@/lib/supabase/server"
 
 type ChatRequestBody = {
@@ -88,9 +89,30 @@ function isPositionsQuestion(message: string) {
 }
 
 function isInternetLookupQuestion(message: string) {
-  return /(look up|lookup|search (the )?web|web search|internet|latest news|recent news|what happened (today|this week))/i.test(
+  return /((look(\s+those)?\s+(up|online))|lookup|search (the )?(web|internet|online)|web search|internet|online|latest news|recent news|headlines?|news (on|about)|read (the )?articles?|fetch (the )?(news|headlines|articles?)|what happened (today|this week|this month))/i.test(
     message,
   )
+}
+
+function hasWebCapabilityDenial(answer: string) {
+  const normalized = answer.toLowerCase()
+  return (
+    /(i\s+(do not|don't|cannot|can't)\s+.*(browse|fetch|access|open)).*(web|internet|url|urls|online|external)/i.test(
+      normalized,
+    ) ||
+    /without (real[- ]?time|internet) access/i.test(normalized)
+  )
+}
+
+function buildWebLookupUnavailableNowResponse(): ChatAssistantResponse {
+  return {
+    answer:
+      "I can help with web lookups, but live retrieval is temporarily unavailable in this session. Share one or more public HTTPS article links and I will summarize them precisely.",
+    sourceTags: ["PolicyGuide", "WorkflowGuide"],
+    confidence: "medium",
+    escalation: "none",
+    followUpActions: ["Share the article URLs", "Paste key excerpts here", "Ask me to compare sources once shared"],
+  }
 }
 
 function buildRecentConvictionsLine(positions: PositionSnapshot[]) {
@@ -306,6 +328,7 @@ export async function POST(request: Request) {
     let latestMessageForModel = latestMessage
     const liveContextSections: string[] = []
     let usedSafeWebContext = false
+    let webContextSource: ChatAssistantResponse["webContextSource"] | undefined
     const shouldUseModelWebLookup = !sharedUrl && isInternetLookupQuestion(latestMessage)
 
     if (sharedUrl) {
@@ -320,6 +343,7 @@ export async function POST(request: Request) {
 
       latestMessageForModel = `${latestMessage}\n\nThe user included a URL that has already been safely fetched. Use the provided live web context in your answer when relevant.`
       usedSafeWebContext = true
+      webContextSource = "safe_link"
     }
 
     const model = getTextModel()
@@ -370,11 +394,93 @@ export async function POST(request: Request) {
         throw lookupError
       }
 
+      const braveResearch = await getWebResearchContext({
+        focus: "company",
+        query: latestMessage,
+      })
+
+      if (braveResearch.ok) {
+        const braveContext = [
+          "LIVE WEB CONTEXT (Brave Search fallback)",
+          braveResearch.content,
+          braveResearch.citations.length
+            ? `Sources:\n${braveResearch.citations.map((url) => `- ${url}`).join("\n")}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+        webContextSource = "brave_search"
+
+        completion = await llm.messages.create({
+          ...completionBaseRequest,
+          system: `${completionBaseRequest.system}\n\n${braveContext}`,
+          messages: toModelMessages(
+            history,
+            `${latestMessageForModel}\n\nUse the Brave search context included in the system prompt when relevant.`,
+          ),
+        })
+
+        const rawTextWithBrave = completion.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("")
+          .trim()
+
+        const parsedWithBrave = parseAssistantResponse(rawTextWithBrave)
+        const textFallbackWithBrave = parseAssistantTextFallback(rawTextWithBrave)
+        const fallbackWithBrave: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
+
+        const responsePayloadWithBrave = enforceResponseGuardrails(
+          parsedWithBrave ?? textFallbackWithBrave ?? fallbackWithBrave,
+        )
+        const webLookupTemporarilyUnavailableWithBrave = hasWebCapabilityDenial(responsePayloadWithBrave.answer)
+        const normalizedResponsePayloadWithBrave = webLookupTemporarilyUnavailableWithBrave
+          ? buildWebLookupUnavailableNowResponse()
+          : responsePayloadWithBrave
+        const responsePayloadWithWebContext: ChatAssistantResponse = {
+          ...normalizedResponsePayloadWithBrave,
+          webContextVerified: usedSafeWebContext,
+          webContextSource,
+          webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
+        }
+
+        try {
+          await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+        } catch (persistError) {
+          console.warn(
+            JSON.stringify({
+              event: "chat_persist_warning",
+              requestId,
+              userId: user.id,
+              error: persistError instanceof Error ? persistError.message : "Unknown persist error",
+            }),
+          )
+        }
+
+        console.info(
+          JSON.stringify({
+            event: "chat_request",
+            requestId,
+            userId: user.id,
+            model,
+            latencyMs: Date.now() - startedAt,
+            sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
+            confidence: normalizedResponsePayloadWithBrave.confidence,
+            escalation: normalizedResponsePayloadWithBrave.escalation,
+            usedSafeWebContext,
+            webContextSource,
+            webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
+          }),
+        )
+
+        return NextResponse.json(responsePayloadWithWebContext)
+      }
+
       completion = await llm.messages.create({
         ...completionBaseRequest,
         messages: toModelMessages(
           history,
-          `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, say that clearly and ask the user to share a public HTTPS URL for a precise summary.`,
+          `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, do not claim a permanent inability to browse. Say it is temporarily unavailable in this session, then ask for public HTTPS URLs for precise summarization.`,
         ),
       })
     }
@@ -390,9 +496,16 @@ export async function POST(request: Request) {
     const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
 
     const responsePayload = enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
+    const webLookupTemporarilyUnavailable =
+      shouldUseModelWebLookup && hasWebCapabilityDenial(responsePayload.answer)
+    const normalizedResponsePayload = webLookupTemporarilyUnavailable
+      ? buildWebLookupUnavailableNowResponse()
+      : responsePayload
     const responsePayloadWithWebContext: ChatAssistantResponse = {
-      ...responsePayload,
+      ...normalizedResponsePayload,
       webContextVerified: usedSafeWebContext,
+      webContextSource,
+      webLookupTemporarilyUnavailable,
     }
 
     try {
@@ -415,10 +528,12 @@ export async function POST(request: Request) {
         userId: user.id,
         model,
         latencyMs: Date.now() - startedAt,
-        sourceTags: responsePayload.sourceTags,
-        confidence: responsePayload.confidence,
-        escalation: responsePayload.escalation,
+        sourceTags: normalizedResponsePayload.sourceTags,
+        confidence: normalizedResponsePayload.confidence,
+        escalation: normalizedResponsePayload.escalation,
         usedSafeWebContext,
+        webContextSource,
+        webLookupTemporarilyUnavailable,
       }),
     )
 

@@ -11,6 +11,8 @@ export type ChatAssistantResponse = {
   escalation: ChatEscalation
   followUpActions: string[]
   webContextVerified?: boolean
+  webContextSource?: "safe_link" | "brave_search"
+  webLookupTemporarilyUnavailable?: boolean
 }
 
 export type ChatMessageRole = "user" | "assistant"

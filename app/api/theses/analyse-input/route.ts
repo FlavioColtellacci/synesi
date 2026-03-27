@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createLlm, getTextModel } from "@/lib/llm"
-import { getPerplexityResearchContext } from "@/lib/perplexity"
+import { getWebResearchContext } from "@/lib/web-research"
 import { createClient } from "@/lib/supabase/server"
 
 type ExtractedThesis = {
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     let researchBlock = ""
     if (useRealTimeData) {
-      const research = await getPerplexityResearchContext({
+      const research = await getWebResearchContext({
         focus: "thesis",
         query: `The user is writing an investment thesis. Gather fresh, relevant public context to help analyse their input (company overview, recent notable news, key risks, competitive landscape, and any obvious factual corrections if the user mentions something inaccurate). User input:\n\n${rawInput}`,
       })
