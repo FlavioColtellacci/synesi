@@ -85,6 +85,7 @@ export default function TrustedSourcesSection({
   const [url, setUrl] = useState("")
   const [sourceType, setSourceType] = useState<SourceType>("analyst")
   const [isAdding, setIsAdding] = useState(false)
+  const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -93,6 +94,35 @@ export default function TrustedSourcesSection({
     setSourceType(feed.sourceType)
     setUrl(feed.url)
     setError(null)
+  }
+
+  function hasMatchingSource(nextName: string, nextUrl: string) {
+    const normalizedName = nextName.trim().toLowerCase()
+    const normalizedUrl = nextUrl.trim().toLowerCase()
+    return sources.some((source) => {
+      const sourceName = source.name.trim().toLowerCase()
+      const sourceUrl = (source.url ?? "").trim().toLowerCase()
+      return sourceName === normalizedName || (normalizedUrl.length > 0 && sourceUrl === normalizedUrl)
+    })
+  }
+
+  async function persistSource(input: { name: string; url: string; sourceType: SourceType }) {
+    const response = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    })
+
+    const payload = (await response.json().catch(() => null)) as
+      | { source?: TrustedSource; error?: string }
+      | null
+
+    if (!response.ok || !payload?.source) {
+      throw new Error(payload?.error ?? "Failed to add trusted source.")
+    }
+
+    setSources((prev) => [payload.source, ...prev])
+    router.refresh()
   }
 
   async function handleAddSource() {
@@ -108,39 +138,48 @@ export default function TrustedSourcesSection({
       )
       return
     }
+    if (hasMatchingSource(trimmedName, trimmedUrl)) {
+      setError("That source already exists in your trusted list.")
+      return
+    }
 
     setIsAdding(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmedName,
-          url: trimmedUrl,
-          sourceType,
-        }),
+      await persistSource({
+        name: trimmedName,
+        url: trimmedUrl,
+        sourceType,
       })
-
-      const payload = (await response.json().catch(() => null)) as
-        | { source?: TrustedSource; error?: string }
-        | null
-
-      if (!response.ok || !payload?.source) {
-        setError(payload?.error ?? "Failed to add trusted source.")
-        return
-      }
-
-      setSources((prev) => [payload.source!, ...prev])
       setName("")
       setUrl("")
       setSourceType("analyst")
-      router.refresh()
-    } catch {
-      setError("Failed to add trusted source.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add trusted source.")
     } finally {
       setIsAdding(false)
+    }
+  }
+
+  async function handleAddSuggestedFeed(feed: SuggestedFeed) {
+    if (hasMatchingSource(feed.name, feed.url)) {
+      setError("That suggested source is already in your trusted list.")
+      return
+    }
+
+    setAddingSuggestion(feed.label)
+    setError(null)
+    try {
+      await persistSource({
+        name: feed.name,
+        url: feed.url,
+        sourceType: feed.sourceType,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add trusted source.")
+    } finally {
+      setAddingSuggestion(null)
     }
   }
 
@@ -171,10 +210,13 @@ export default function TrustedSourcesSection({
   return (
     <section className="mb-6">
       <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
-        TRUSTED SOURCES
+        TRUSTED SOURCES · STEP 1
       </p>
 
       <article className="mb-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
+        <p className="mb-3 text-xs text-[#6B6B7B]">
+          Add the few sources you trust most. These are later used by alert preferences.
+        </p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.3fr_1fr]">
           <input
             type="text"
@@ -227,7 +269,7 @@ export default function TrustedSourcesSection({
           Suggested feeds (known working examples)
         </p>
         <p className="mt-1 text-xs text-[#6B6B7B]">
-          Click one to auto-fill the form, then press Add Source.
+          Use autofill, or add instantly with one click.
         </p>
         <div className="mt-3 space-y-2">
           {suggestedFeeds.map((feed) => (
@@ -246,6 +288,16 @@ export default function TrustedSourcesSection({
               >
                 USE THIS
               </button>
+              <button
+                type="button"
+                disabled={addingSuggestion === feed.label}
+                onClick={() => {
+                  void handleAddSuggestedFeed(feed)
+                }}
+                className="shrink-0 rounded-lg border border-[#00D1B2]/40 px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
+              >
+                {addingSuggestion === feed.label ? "ADDING..." : "ADD NOW"}
+              </button>
             </div>
           ))}
         </div>
@@ -261,6 +313,7 @@ export default function TrustedSourcesSection({
         </article>
       ) : (
         <div className="space-y-3">
+          <p className="text-xs text-[#6B6B7B]">{sources.length} trusted source(s) saved.</p>
           {sources.map((source) => (
             <article
               key={source.id}
