@@ -98,6 +98,9 @@ export default function LoginPage() {
         >
           {isLoading ? 'SIGNING IN...' : 'SIGN IN'}
         </button>
+        <p className="text-center font-[var(--font-sans)] text-xs text-synesi-muted">
+          New here? Start your 7-day free trial after signup.
+        </p>
       </form>
 
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
@@ -105,7 +108,7 @@ export default function LoginPage() {
       <p className="mt-4 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
         Don&apos;t have an account?{' '}
         <Link href="/signup" className="text-white">
-          Sign up →
+          Sign up and start your trial →
         </Link>
       </p>
     </section>
