@@ -328,10 +328,10 @@ export default function SigmaDemoSection() {
   }
 
   return (
-    <section id="sigma-demo" className="px-6 py-14 md:px-10 md:py-20">
+    <section id="sigma-demo" className="px-6 pb-14 pt-24 md:px-10 md:pb-20 md:pt-32">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-8 text-center">
-          <p className="mb-4 font-mono text-xs uppercase tracking-[0.28em] text-[#6B6B7B]">SIGMA DEMO</p>
+        <div className="mb-10 text-center md:mb-12">
+          <p className="mb-5 font-mono text-xs uppercase tracking-[0.28em] text-[#6B6B7B] md:mb-6">SIGMA DEMO</p>
           <h2 className="font-mono text-2xl font-medium uppercase tracking-wider text-[#F0F0F0] md:text-3xl">
             See Sigma in action
           </h2>

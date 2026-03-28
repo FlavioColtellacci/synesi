@@ -101,7 +101,7 @@ export default function HeroSection() {
 
       <section
         id="hero"
-        className="relative min-h-screen overflow-hidden pt-36 md:pt-32"
+        className="relative min-h-screen overflow-hidden pt-36 pb-20 md:pt-32 md:pb-28"
       >
         <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col justify-center px-6 md:min-h-[calc(100vh-8rem)] md:px-10">
           <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2 md:gap-8">
@@ -185,7 +185,7 @@ export default function HeroSection() {
           </div>
 
           {/* Floating Thesis Card */}
-          <div className="relative mt-16 flex justify-center md:mt-24">
+          <div className="relative mt-24 flex justify-center md:mt-32">
             <div className="w-full max-w-lg rounded-xl border border-[#2A2A32] bg-[#141418] p-5 shadow-[0_25px_60px_rgba(0,0,0,0.7)] md:p-6">
               <div className="flex items-start justify-between">
                 <div>
