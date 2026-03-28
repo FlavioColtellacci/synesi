@@ -1,13 +1,8 @@
 import Link from "next/link"
+import { PRO_PLAN_FEATURE_BULLETS } from "@/lib/marketing/pricing-features"
 
 export default function PricingSection() {
-  const features = [
-    "Unlimited thesis positions",
-    "AI thesis analysis",
-    "Event-triggered review prompts",
-    "Full audit trail",
-    "Thesis health dashboard",
-  ]
+  const features = PRO_PLAN_FEATURE_BULLETS
 
   return (
     <section id="pricing" className="px-6 py-32 md:px-10">

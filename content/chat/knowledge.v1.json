@@ -11,7 +11,9 @@
         "A thesis has statuses: intact, at_risk, and broken.",
         "Users can create a thesis in /app/new by writing a plain-English thesis, reviewing extracted fields, and saving.",
         "Each thesis detail page includes thesis statement, assumptions, sell criteria, AI analysis, history, trusted sources, and alert preferences.",
-        "AI analysis in SYNESI is a thinking tool and explicitly not financial advice."
+        "AI analysis in SYNESI is a thinking tool and explicitly not financial advice.",
+        "Sigma is SYNESI's AI layer: the in-app assistant named Sigma helps with product and workflow questions using SYNESI context when available; Sigma Monitor is a daily (plus on-demand) digest of convictions and alerts with structured summary and suggested next steps.",
+        "Marketing and in-app copy describe Sigma as assistant plus Sigma Monitor; neither provides buy, sell, or hold recommendations."
       ]
     },
     {
@@ -32,7 +34,7 @@
       "entries": [
         "SYNESI pricing uses one paid plan family with monthly and annual options: $15/month (Pro Monthly) or $99/year (Pro Annual).",
         "New users start with a 7-day free trial created at account sign-in callback when no active subscription or existing trial window is found.",
-        "During trial, users can access /app routes; after trial expiry, app access requires an active subscription.",
+        "During trial, users can access /app routes, including Sigma (chat assistant and Sigma Monitor) and all other app features; after trial expiry, app access requires an active subscription.",
         "If trial is expired and no active subscription exists, protected app routes redirect users to /pricing with reason=trial-expired.",
         "There is no permanent free tier after trial; continued usage requires converting to a paid monthly or annual plan.",
         "Checkout and subscription lifecycle management are handled through Stripe-backed flows."

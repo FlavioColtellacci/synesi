@@ -14,6 +14,11 @@ const faqs = [
       "Most trading journals track what you bought and when. SYNESI tracks why, and whether your reasons still hold. It structures your thesis into falsifiable assumptions, monitors for significant events, and uses AI to challenge your logic over time. It's a narrative keeper, not a ledger.",
   },
   {
+    question: "What is Sigma?",
+    answer:
+      "Sigma is SYNESI's built-in AI layer. The Sigma assistant answers product and workflow questions in the app, using your SYNESI context when available, and does not give buy, sell, or hold recommendations. Sigma Monitor is an autonomous digest of your convictions and alerts: it runs on a daily schedule and can be refreshed on demand, with a structured summary and suggested next steps.",
+  },
+  {
     question: "How does the AI thesis analysis work?",
     answer:
       "When you request an analysis, SYNESI sends your thesis, assumptions, and exit criteria to an AI thinking partner. It checks clarity, stress-tests each assumption, scans for cognitive biases, suggests monitoring KPIs, and surfaces research questions, all without giving buy/sell advice.",
@@ -31,7 +36,7 @@ const faqs = [
   {
     question: "How does the 7-day free trial work?",
     answer:
-      "Your 7-day free trial starts after signup. During the trial, you get full access to all features. When the trial ends, choose a plan to keep access: $15/month or $99/year.",
+      "Your 7-day free trial starts after you first sign in, when you have no active subscription and no trial window yet. During the trial you get full access to the app, including Sigma (chat assistant and Sigma Monitor), thesis tools, and dashboards—same as a paid subscriber. When the trial ends, choose a plan to keep access: $15/month or $99/year.",
   },
 ]
 

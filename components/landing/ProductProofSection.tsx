@@ -9,7 +9,7 @@ export default function ProductProofSection() {
           See the engine behind your conviction
         </h2>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Dashboard card */}
           <div className="rounded-xl border border-[#2A2A32] bg-[#141418] p-6">
             <p className="mb-4 font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
@@ -78,6 +78,36 @@ export default function ProductProofSection() {
                   margin trends. Review thesis after each earnings call.&rdquo;
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Sigma Monitor card */}
+          <div className="rounded-xl border border-[#2A2A32] bg-[#141418] p-6 md:col-span-2 lg:col-span-1">
+            <p className="mb-4 font-mono text-xs uppercase tracking-widest text-[#6B6B7B]">
+              SIGMA MONITOR
+            </p>
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-[#00D1B2]">
+              Daily digest · refreshed now
+            </p>
+            <div className="space-y-3 rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-4">
+              <p className="font-mono text-sm font-medium text-[#F0F0F0]">
+                Conviction pulse
+              </p>
+              <p className="font-sans text-sm leading-relaxed text-[#6B6B7B]">
+                Two positions saw elevated alert activity; one thesis assumption
+                is worth revisiting this week. No buy/sell guidance—just a
+                structured read on drift and pressure.
+              </p>
+              <ul className="space-y-2 border-t border-[#2A2A32] pt-3 font-sans text-xs leading-relaxed text-[#6B6B7B]">
+                <li className="flex gap-2">
+                  <span className="font-mono text-[#FFB800]">•</span>
+                  <span>Review NVDA: hyperscaler capex sensitivity</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-mono text-[#6B6B7B]">•</span>
+                  <span>AAPL: no material thesis conflicts flagged</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>

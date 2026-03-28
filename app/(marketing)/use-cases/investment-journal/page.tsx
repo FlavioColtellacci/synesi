@@ -81,7 +81,8 @@ export default function InvestmentJournalPage() {
             START YOUR CONVICTION JOURNAL&nbsp;→
           </Link>
           <span className="whitespace-nowrap font-sans text-sm text-[#6B6B7B]">
-            7-day free trial. Then $15/month or $99/year.
+            7-day free trial—Sigma and all features included. Then $15/month or
+            $99/year.
           </span>
         </div>
 

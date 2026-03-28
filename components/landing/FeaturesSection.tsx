@@ -18,13 +18,13 @@ export default function FeaturesSection() {
           WHAT SYNESI DOES
         </p>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
             <p
               className="mb-6 inline-block font-mono text-[2rem] leading-none text-[#F0F0F0]"
               style={glitchAnimatedStyle}
             >
-              Σ
+              ◆
             </p>
             <h3 className="mb-3 font-mono text-base font-medium tracking-wide text-[#F0F0F0]">
               Capture your conviction
@@ -67,6 +67,26 @@ export default function FeaturesSection() {
               Every update, status change, and AI analysis is logged. A full
               audit trail of your conviction per holding, months and years of
               your own thinking, reviewable.
+            </p>
+          </article>
+
+          <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)]">
+            <p
+              className="mb-6 inline-block font-mono text-[2rem] leading-none text-[#F0F0F0]"
+              style={glitchAnimatedStyle}
+            >
+              Σ
+            </p>
+            <h3 className="mb-3 font-mono text-base font-medium tracking-wide text-[#F0F0F0]">
+              Sigma: assistant &amp; monitor
+            </h3>
+            <p className="font-sans text-sm leading-relaxed text-[#6B6B7B]">
+              Sigma is SYNESI&apos;s AI layer. Ask the in-app assistant for
+              guidance on convictions, alerts, and workflows, grounded in your
+              SYNESI context when available. Sigma Monitor runs a daily digest
+              of your convictions and alert pressure, with on-demand refresh,
+              headline, risk read, and suggested next steps. Sigma does not
+              give buy, sell, or hold advice.
             </p>
           </article>
         </div>

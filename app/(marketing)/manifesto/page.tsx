@@ -99,6 +99,12 @@ export default function ManifestoPage() {
               When a significant event touches one of your assumptions, you are
               prompted to revisit your reasoning, not your P&amp;L.
             </p>
+            <p>
+              Sigma—SYNESI&apos;s in-app assistant and Sigma Monitor digest—helps
+              you navigate the product and see a scheduled, structured read on
+              conviction and alerts. It does not replace your judgment or give
+              trade recommendations.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -169,7 +175,8 @@ export default function ManifestoPage() {
             GET STARTED →
           </Link>
           <span className="text-sm text-[#6B6B7B]">
-            7-day free trial. Then $15/month or $99/year.
+            7-day free trial—full app including Sigma. Then $15/month or
+            $99/year.
           </span>
         </div>
 

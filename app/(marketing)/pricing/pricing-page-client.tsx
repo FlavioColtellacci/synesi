@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { trackFunnelEvent } from '@/lib/analytics'
+import { PRO_PLAN_FEATURE_BULLETS } from '@/lib/marketing/pricing-features'
 import LandingFooter from '@/components/landing/LandingFooter'
 import MarketingPageNav from '@/components/landing/MarketingPageNav'
 
@@ -27,13 +28,7 @@ export function PricingPageContent() {
   const [monthlyLoading, setMonthlyLoading] = useState(false)
   const [annualLoading, setAnnualLoading] = useState(false)
   const isTrialExpiredRedirect = searchParams.get('reason') === 'trial-expired'
-  const features = [
-    'Unlimited thesis positions',
-    'AI thesis analysis',
-    'Event-triggered review prompts',
-    'Full audit trail',
-    'Thesis health dashboard',
-  ]
+  const features = [...PRO_PLAN_FEATURE_BULLETS]
 
   useEffect(() => {
     trackFunnelEvent('pricing_view')
