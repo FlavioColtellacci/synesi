@@ -39,7 +39,7 @@ export default function FinancialRefreshButton({
       const response = await fetch("/api/financial/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, source: "web" }),
+        body: JSON.stringify({ ticker, source: "provider" }),
       })
 
       const payload = (await response.json().catch(() => null)) as
