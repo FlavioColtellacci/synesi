@@ -1,16 +1,34 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import FAQSection from "@/components/landing/FAQSection"
-import FeaturesSection from "@/components/landing/FeaturesSection"
-import HeroSection from "@/components/landing/HeroSection"
-import LandingFooter from "@/components/landing/LandingFooter"
-import MarketingNav from "@/components/landing/MarketingNav"
-import PersonasSection from "@/components/landing/PersonasSection"
-import PricingSection from "@/components/landing/PricingSection"
-import ProblemSection from "@/components/landing/ProblemSection"
-import ProductProofSection from "@/components/landing/ProductProofSection"
-import SigmaDemoSection from "@/components/landing/SigmaDemoSection"
-import { SmokeBackground } from "@/components/ui/spooky-smoke-animation"
+import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import FAQSection from '@/components/landing/FAQSection'
+import FeaturesSection from '@/components/landing/FeaturesSection'
+import HeroSection from '@/components/landing/HeroSection'
+import LandingFooter from '@/components/landing/LandingFooter'
+import MarketingNav from '@/components/landing/MarketingNav'
+import PersonasSection from '@/components/landing/PersonasSection'
+import PricingSection from '@/components/landing/PricingSection'
+import ProblemSection from '@/components/landing/ProblemSection'
+import ProductProofSection from '@/components/landing/ProductProofSection'
+import SigmaDemoSection from '@/components/landing/SigmaDemoSection'
+import { SmokeBackground } from '@/components/ui/spooky-smoke-animation'
+
+const homeTitle =
+  'Investment & Trading Journal with Sigma Monitor | SYNESI'
+
+export const metadata: Metadata = {
+  title: {
+    absolute: homeTitle,
+  },
+  description:
+    'SYNESI helps investors and traders track every thesis, log conviction changes, and stress-test decisions with Sigma AI and Sigma Monitor.',
+  openGraph: {
+    title: homeTitle,
+  },
+  twitter: {
+    title: homeTitle,
+  },
+}
 
 type HomePageProps = {
   searchParams: Promise<{ code?: string }>

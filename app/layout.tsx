@@ -34,14 +34,14 @@ export const metadata: Metadata = {
     template: '%s | SYNESI',
   },
   description:
-    'The narrative keeper for thesis-driven investors and traders, powered by Sigma. Document your thesis, track how conviction evolves, and know when reality challenges your story.',
+    'SYNESI is an investment and trading journal for thesis-driven investors. Track conviction over time, stress-test ideas with Sigma AI, and monitor your thesis with Sigma Monitor.',
   openGraph: {
     type: 'website',
     url: 'https://synesi.app',
     siteName: 'SYNESI',
     title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
+      'Investment and trading journal for thesis tracking, Sigma AI stress-tests, and Sigma Monitor alerts that keep your conviction grounded in evidence.',
     images: [
       {
         url: '/opengraph-image',
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'SYNESI, Your Conviction, Tracked.',
     description:
-      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
+      'Track your investment thesis, stress-test decisions with Sigma AI, and use Sigma Monitor to catch drift before conviction breaks.',
     images: ['/opengraph-image'],
   },
 }
