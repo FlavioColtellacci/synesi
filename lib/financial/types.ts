@@ -34,9 +34,46 @@ export type FinancialSnapshotPayload = {
   }>
 }
 
-export type FinancialSnapshotCoverage = Partial<
-  Record<keyof FinancialSnapshotPayload, "ok" | "missing" | "computed" | "unsupported">
->
+export type FinancialCoverageStatus = "ok" | "missing" | "computed" | "unsupported"
+export type FinancialMetricTier = "core" | "extended" | "optional"
+export type FinancialMetricKey = keyof FinancialSnapshotPayload
+export type FinancialFieldSource = "provider" | "alpha_vantage" | "brave_web" | "sonar_pro"
+
+export const CORE_FINANCIAL_FIELDS = [
+  "price",
+  "consensusTarget",
+  "pe",
+  "forwardPe",
+  "eps",
+  "nextEarningsDate",
+  "marginOfSafety",
+] as const satisfies readonly FinancialMetricKey[]
+
+export const EXTENDED_FINANCIAL_FIELDS = ["peg", "rsi14", "fcfPerShare", "roic"] as const satisfies readonly FinancialMetricKey[]
+
+export const OPTIONAL_FINANCIAL_FIELDS = [
+  "insiderActivity30d",
+  "recentTargetChanges",
+  "indexChanges",
+] as const satisfies readonly FinancialMetricKey[]
+
+export type FinancialFieldProvenance = {
+  source: FinancialFieldSource
+  confidence: number | null
+  citations: string[]
+  observedAt: string
+}
+
+export type FinancialSnapshotCoverage = Partial<Record<FinancialMetricKey, FinancialCoverageStatus>> & {
+  _provenance?: Partial<Record<FinancialMetricKey, FinancialFieldProvenance>>
+  _metrics?: {
+    coreFilled: number
+    coreTotal: number
+    extendedFilled: number
+    extendedTotal: number
+    sonarFallbackUsed: boolean
+  }
+}
 
 export type SnapshotBuildResult =
   | {
@@ -46,6 +83,7 @@ export type SnapshotBuildResult =
       asOf: string
       payload: FinancialSnapshotPayload
       coverage: FinancialSnapshotCoverage
+      provenance?: Partial<Record<FinancialMetricKey, FinancialFieldProvenance>>
     }
   | {
       ok: false

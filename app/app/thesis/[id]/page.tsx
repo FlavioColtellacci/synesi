@@ -12,7 +12,14 @@ import type { ThesisChallengeEvent } from "@/components/thesis/ThesisChallengeBa
 import TrustedSourcesSection from "@/components/thesis/TrustedSourcesSection"
 import { refreshFinancialSnapshot } from "@/lib/financial/refresh"
 import { createAdminClient, createClient } from "@/lib/supabase/server"
-import type { FinancialSnapshotPayload } from "@/lib/financial/types"
+import {
+  CORE_FINANCIAL_FIELDS,
+  EXTENDED_FINANCIAL_FIELDS,
+  type FinancialFieldProvenance,
+  type FinancialMetricKey,
+  type FinancialSnapshotCoverage,
+  type FinancialSnapshotPayload,
+} from "@/lib/financial/types"
 import type { Database } from "@/types/database"
 
 type Assumption = Database["public"]["Tables"]["assumptions"]["Row"]
@@ -23,9 +30,7 @@ type ThesisUpdate = Pick<
 type TrustedSource = Database["public"]["Tables"]["trusted_sources"]["Row"]
 type AlertRule = Database["public"]["Tables"]["alert_rules"]["Row"]
 type FinancialSnapshot = Database["public"]["Tables"]["financial_snapshots"]["Row"]
-type FinancialCoverage = Partial<
-  Record<keyof FinancialSnapshotPayload, "ok" | "missing" | "computed" | "unsupported">
->
+type FinancialCoverage = FinancialSnapshotCoverage
 type AlertRuleWithSources = AlertRule & { sourceIds: string[] }
 
 type ParsedAnalysisSection = {
@@ -201,6 +206,20 @@ function getFinancialSourceLabel(provider: string | null | undefined) {
   if (provider === "ai_web") return "AI WEB SNAPSHOT"
   if (provider === "eodhd") return "PROVIDER API (EODHD)"
   return "UNKNOWN SOURCE"
+}
+
+function getFieldSourceLabel(provenance: FinancialFieldProvenance | undefined) {
+  if (!provenance) return null
+  if (provenance.source === "provider") return "Provider"
+  if (provenance.source === "alpha_vantage") return "Alpha Vantage"
+  if (provenance.source === "brave_web") return "Brave Web"
+  if (provenance.source === "sonar_pro") return "Sonar Pro"
+  return "Unknown"
+}
+
+function formatConfidence(provenance: FinancialFieldProvenance | undefined) {
+  if (!provenance || provenance.confidence === null || !Number.isFinite(provenance.confidence)) return null
+  return `${Math.round(provenance.confidence * 100)}%`
 }
 
 function parseFinancialSnapshotPayload(raw: Record<string, unknown>): FinancialSnapshotPayload | null {
@@ -447,70 +466,124 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   const usedToday = refreshUsedTodayCount ?? 0
   const effectiveDailyLimit = Number.isFinite(dailyRefreshLimit) ? dailyRefreshLimit : 8
   const hasRefreshRemaining = usedToday < effectiveDailyLimit
-  const missingCoverageCount = Object.values(financialCoverage).filter(
-    (value) => value === "missing" || value === "unsupported",
-  ).length
+  const provenanceByField = (financialCoverage._provenance ?? {}) as Partial<
+    Record<FinancialMetricKey, FinancialFieldProvenance>
+  >
+  const coreCoverageFromPayload = CORE_FINANCIAL_FIELDS.filter((field) => {
+    if (field === "nextEarningsDate") return Boolean(financialPayload?.nextEarningsDate)
+    if (field === "marginOfSafety") return typeof financialPayload?.marginOfSafety === "number"
+    return typeof financialPayload?.[field] === "number"
+  }).length
+  const coreMetrics = financialCoverage._metrics
+  const coreFilled = coreMetrics?.coreFilled ?? coreCoverageFromPayload
+  const coreTotal = coreMetrics?.coreTotal ?? CORE_FINANCIAL_FIELDS.length
+  const coreMissingCount = Math.max(0, coreTotal - coreFilled)
+  const extendedFilled =
+    coreMetrics?.extendedFilled ??
+    EXTENDED_FINANCIAL_FIELDS.filter((field) => {
+      const value = financialPayload?.[field]
+      return typeof value === "number" && Number.isFinite(value)
+    }).length
+  const extendedTotal = coreMetrics?.extendedTotal ?? EXTENDED_FINANCIAL_FIELDS.length
   const hasOnlyPriceSignal =
     (financialPayload?.price ?? null) !== null &&
-    (financialPayload?.consensusTarget ?? null) === null &&
-    (financialPayload?.pe ?? null) === null &&
-    (financialPayload?.forwardPe ?? null) === null &&
-    (financialPayload?.peg ?? null) === null &&
-    (financialPayload?.roic ?? null) === null &&
-    (financialPayload?.eps ?? null) === null &&
-    (financialPayload?.fcfPerShare ?? null) === null &&
-    (financialPayload?.rsi14 ?? null) === null &&
-    (financialPayload?.nextEarningsDate ?? null) === null &&
-    (financialPayload?.insiderActivity30d ?? null) === null
+    coreFilled <= 1
   const primaryMetrics = [
     {
+      key: "price" as const,
       label: "Price",
       raw: financialPayload?.price ?? null,
       value: formatPrice(financialPayload?.price ?? null),
     },
     {
+      key: "consensusTarget" as const,
       label: "Consensus Target",
       raw: financialPayload?.consensusTarget ?? null,
       value: formatPrice(financialPayload?.consensusTarget ?? null),
     },
     {
+      key: "marginOfSafety" as const,
       label: "Margin Of Safety",
       raw: financialPayload?.marginOfSafety ?? null,
       value: formatPercent(financialPayload?.marginOfSafety ?? null),
     },
-    { label: "P/E", raw: financialPayload?.pe ?? null, value: formatNumber(financialPayload?.pe ?? null) },
     {
+      key: "pe" as const,
+      label: "P/E",
+      raw: financialPayload?.pe ?? null,
+      value: formatNumber(financialPayload?.pe ?? null),
+    },
+    {
+      key: "forwardPe" as const,
       label: "Forward P/E",
       raw: financialPayload?.forwardPe ?? null,
       value: formatNumber(financialPayload?.forwardPe ?? null),
     },
-    { label: "PEG", raw: financialPayload?.peg ?? null, value: formatNumber(financialPayload?.peg ?? null) },
     {
+      key: "eps" as const,
+      label: "EPS",
+      raw: financialPayload?.eps ?? null,
+      value: formatNumber(financialPayload?.eps ?? null),
+    },
+    {
+      key: "nextEarningsDate" as const,
+      label: "Next Earnings",
+      raw: null,
+      value: financialPayload?.nextEarningsDate ?? "N/A",
+    },
+  ].filter((metric) => metric.value !== "N/A")
+  const secondaryMetrics = [
+    {
+      key: "peg" as const,
+      label: "PEG",
+      raw: financialPayload?.peg ?? null,
+      value: formatNumber(financialPayload?.peg ?? null),
+    },
+    {
+      key: "roic" as const,
       label: "ROIC",
       raw: financialPayload?.roic ?? null,
       value: formatPercent(financialPayload?.roic ?? null),
     },
-    { label: "EPS", raw: financialPayload?.eps ?? null, value: formatNumber(financialPayload?.eps ?? null) },
     {
+      key: "fcfPerShare" as const,
       label: "FCF / Share",
       raw: financialPayload?.fcfPerShare ?? null,
       value: formatNumber(financialPayload?.fcfPerShare ?? null),
     },
     {
+      key: "rsi14" as const,
       label: "RSI (14)",
       raw: financialPayload?.rsi14 ?? null,
       value: formatNumber(financialPayload?.rsi14 ?? null),
     },
+  ].filter((metric) => metric.value !== "N/A")
+  const optionalDetailMetrics = [
     {
+      key: "insiderActivity30d" as const,
       label: "Insider Activity",
-      raw: null,
       value: financialPayload?.insiderActivity30d?.label ?? "N/A",
+    },
+    {
+      key: "recentTargetChanges" as const,
+      label: "Recent Target Changes",
+      value:
+        (financialPayload?.recentTargetChanges?.length ?? 0) > 0
+          ? String(financialPayload?.recentTargetChanges?.length ?? 0)
+          : "N/A",
+    },
+    {
+      key: "indexChanges" as const,
+      label: "Index Changes",
+      value:
+        (financialPayload?.indexChanges?.length ?? 0) > 0
+          ? String(financialPayload?.indexChanges?.length ?? 0)
+          : "N/A",
     },
   ].filter((metric) => metric.value !== "N/A")
   const hasSecondaryMetrics =
-    (financialPayload?.nextEarningsDate ?? null) !== null ||
-    (financialPayload?.recentTargetChanges?.length ?? 0) > 0 ||
-    (financialPayload?.indexChanges?.length ?? 0) > 0
+    secondaryMetrics.length > 0 ||
+    optionalDetailMetrics.length > 0
 
   // Preserve API quota: auto-refresh only stale snapshots when user still has daily budget.
   if (financialSnapshot && isSnapshotStale && hasRefreshRemaining) {
@@ -705,21 +778,26 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                   initialHasData={primaryMetrics.length > 0}
                 />
               </div>
-              {missingCoverageCount > 0 ? (
+              {coreTotal > 0 ? (
                 <p className="mb-4 text-xs text-[#6B6B7B]">
-                  Partial coverage: {missingCoverageCount} metric
-                  {missingCoverageCount === 1 ? "" : "s"} unavailable from current provider access.
-                </p>
-              ) : null}
-              {hasOnlyPriceSignal ? (
-                <p className="mb-4 text-xs text-[#6B6B7B]">
-                  Price-only mode: live quote is available via fallback source; most advanced fields
-                  require a higher EODHD plan.
+                  Core metrics: {coreFilled}/{coreTotal} filled
+                  {coreMissingCount > 0
+                    ? ` (${coreMissingCount} missing)`
+                    : " (complete)"}
                 </p>
               ) : null}
               <p className="mb-4 text-xs text-[#6B6B7B]">
-                We currently show only metrics reliably available on the active provider tier. More
-                financial data coverage is coming soon.
+                Extended metrics: {extendedFilled}/{extendedTotal} available.
+              </p>
+              {hasOnlyPriceSignal ? (
+                <p className="mb-4 text-xs text-[#6B6B7B]">
+                  Price-only core mode: hybrid fallback is still searching for additional reliable
+                  fundamentals.
+                </p>
+              ) : null}
+              <p className="mb-4 text-xs text-[#6B6B7B]">
+                Coverage focuses on high-signal core metrics first, with optional metrics shown as
+                detail when available.
               </p>
               <p className="mb-4 text-xs text-[#6B6B7B]">
                 Green means favorable signal, red means caution. AI-extracted values can be stale or
@@ -736,6 +814,14 @@ export default async function ThesisDetailPage({ params }: PageProps) {
                       <p className={`mt-1 text-sm ${getMetricValueClass(metric, financialPayload)}`}>
                         {metric.value}
                       </p>
+                      {provenanceByField[metric.key] ? (
+                        <p className="mt-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
+                          {getFieldSourceLabel(provenanceByField[metric.key])}
+                          {formatConfidence(provenanceByField[metric.key])
+                            ? ` · ${formatConfidence(provenanceByField[metric.key])}`
+                            : ""}
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -748,17 +834,25 @@ export default async function ThesisDetailPage({ params }: PageProps) {
               {hasSecondaryMetrics ? (
                 <details className="mt-4 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3">
                   <summary className="cursor-pointer font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">
-                    More Metrics
+                    Extended & Optional Details
                   </summary>
                   <div className="mt-3 space-y-2 text-sm text-[#6B6B7B]">
-                    {financialPayload?.nextEarningsDate ? (
-                      <p>Next earnings: {financialPayload.nextEarningsDate}</p>
-                    ) : null}
-                    {(financialPayload?.recentTargetChanges?.length ?? 0) > 0 ? (
-                      <p>Recent target changes: {financialPayload?.recentTargetChanges?.length ?? 0}</p>
-                    ) : null}
-                    {(financialPayload?.indexChanges?.length ?? 0) > 0 ? (
-                      <p>Index changes: {financialPayload?.indexChanges?.length ?? 0}</p>
+                    {secondaryMetrics.map((metric) => (
+                      <p key={metric.label}>
+                        {metric.label}: {metric.value}
+                      </p>
+                    ))}
+                    {optionalDetailMetrics.length > 0 ? (
+                      <div className="pt-2">
+                        <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                          Optional details
+                        </p>
+                        {optionalDetailMetrics.map((metric) => (
+                          <p key={metric.label}>
+                            {metric.label}: {metric.value}
+                          </p>
+                        ))}
+                      </div>
                     ) : null}
                   </div>
                 </details>
