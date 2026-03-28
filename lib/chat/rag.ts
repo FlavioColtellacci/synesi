@@ -8,7 +8,7 @@ type RagEvidence = {
 type RagContextResult = {
   /** Top snippets injected into the model prompt (ranked; may have zero keyword overlap). */
   snippets: string[]
-  /** Subset shown under “Evidence used” in the chat UI — only items with real query overlap. */
+  /** Subset shown under “Evidence used” in the chat UI: only items with real query overlap. */
   clientEvidenceSnippets: string[]
   block: string | null
 }

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: '%s | SYNESI',
   },
   description:
-    'The narrative keeper for thesis-driven investors and traders. Document your thesis, track how conviction evolves, and know when reality challenges your story.',
+    'The narrative keeper for thesis-driven investors and traders, powered by Sigma. Document your thesis, track how conviction evolves, and know when reality challenges your story.',
   openGraph: {
     type: 'website',
     url: 'https://synesi.app',

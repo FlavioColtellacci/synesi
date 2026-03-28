@@ -78,7 +78,7 @@ export function DashboardDeleteThesis({ thesisId, ticker, companyName, onDeleted
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-[#B8B8C4]">
               <span className="font-mono text-[#F0F0F0]">{ticker}</span>
-              <span className="text-[#6B6B7B]"> — </span>
+              <span className="text-[#6B6B7B]">, </span>
               {companyName}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-[#6B6B7B]">

@@ -6,7 +6,7 @@ import LandingFooter from "@/components/landing/LandingFooter"
 export const metadata: Metadata = {
   title: "Investment Journal for Thesis-Driven Investors",
   description:
-    "SYNESI replaces scattered notes with a structured investment journal. Document your thesis, track assumptions, and review your conviction over time with AI-powered analysis.",
+    "SYNESI replaces scattered notes with a structured investment journal. Document your thesis, track assumptions, and review your conviction over time with Sigma-powered analysis.",
 }
 
 export default function InvestmentJournalPage() {
@@ -22,8 +22,8 @@ export default function InvestmentJournalPage() {
           The Investment Journal That Challenges You Back
         </h1>
         <p className="mb-12 font-sans text-lg leading-relaxed text-[#6B6B7B]">
-          Most journals record what happened. SYNESI records why you believed what you believed, then
-          checks whether it still holds.
+          Most journals record what happened. SYNESI records why you believed what you believed,
+          then Sigma helps check whether it still holds.
         </p>
 
         <div className="space-y-10 text-[#A0A0A8] leading-relaxed">
@@ -81,7 +81,7 @@ export default function InvestmentJournalPage() {
             START YOUR CONVICTION JOURNAL&nbsp;→
           </Link>
           <span className="whitespace-nowrap font-sans text-sm text-[#6B6B7B]">
-            7-day free trial—Sigma and all features included. Then $15/month or
+            7-day free trial: Sigma and all features included. Then $15/month or
             $99/year.
           </span>
         </div>

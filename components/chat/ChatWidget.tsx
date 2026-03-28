@@ -8,11 +8,12 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
+import { renderAssistantContent, renderUserContent } from "@/components/chat/message-rendering"
+import { SigmaThinkingIndicator } from "@/components/chat/SigmaThinkingIndicator"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 
 type ChatMessage = {
@@ -57,178 +58,6 @@ const INITIAL_MESSAGE: ChatMessage = {
   confidence: "high",
   escalation: "none",
   followUpActions: ["Review open alerts", "Set up personalized alerts", "Check convictions status"],
-}
-
-function renderInlineMarkdown(text: string): ReactNode[] {
-  const chunks: ReactNode[] = []
-  const tokenRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*)/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-  let tokenIndex = 0
-
-  while ((match = tokenRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      chunks.push(text.slice(lastIndex, match.index))
-    }
-
-    if (match[2] && match[3]) {
-      chunks.push(
-        <a
-          key={`token-link-${tokenIndex}`}
-          href={match[3]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#8BE8D8] underline decoration-[#8BE8D8]/40 underline-offset-2 hover:decoration-[#8BE8D8]"
-        >
-          {match[2]}
-        </a>,
-      )
-    } else if (match[4]) {
-      chunks.push(
-        <code
-          key={`token-code-${tokenIndex}`}
-          className="rounded border border-[#2A2A32] bg-[#0E0E13] px-1 py-0.5 font-mono text-[12px] text-[#D9D9E2]"
-        >
-          {match[4]}
-        </code>,
-      )
-    } else if (match[5]) {
-      chunks.push(
-        <strong key={`token-strong-${tokenIndex}`} className="font-semibold text-[#FAFAFC]">
-          {match[5]}
-        </strong>,
-      )
-    } else if (match[6]) {
-      chunks.push(
-        <em key={`token-em-${tokenIndex}`} className="italic text-[#E4E4EC]">
-          {match[6]}
-        </em>,
-      )
-    }
-
-    lastIndex = tokenRegex.lastIndex
-    tokenIndex += 1
-  }
-
-  if (lastIndex < text.length) {
-    chunks.push(text.slice(lastIndex))
-  }
-
-  return chunks
-}
-
-function renderAssistantContent(content: string): ReactNode {
-  const normalized = content.replace(/\r\n/g, "\n").trim()
-  if (!normalized) return null
-
-  const lines = normalized.split("\n")
-  const isCompactMobile = normalized.length > 560 || lines.length > 11
-  const blocks: ReactNode[] = []
-  let listType: "ul" | "ol" | null = null
-  let listItems: string[] = []
-  let blockIndex = 0
-
-  const flushList = () => {
-    if (!listType || listItems.length === 0) return
-
-    const listBody = listItems.map((item, itemIndex) => (
-      <li key={`li-${blockIndex}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
-    ))
-
-    if (listType === "ul") {
-      blocks.push(
-        <div key={`ul-wrap-${blockIndex}`} className="rounded-lg border border-[#2A2A32]/80 bg-[#101018]/80 px-3 py-2">
-          <ul className="list-disc space-y-1.5 pl-5 text-[#EAEAF0] marker:text-[#8BE8D8]">{listBody}</ul>
-        </div>,
-      )
-    } else {
-      blocks.push(
-        <div key={`ol-wrap-${blockIndex}`} className="rounded-lg border border-[#2A2A32]/80 bg-[#101018]/80 px-3 py-2">
-          <ol className="list-decimal space-y-1.5 pl-5 text-[#EAEAF0] marker:text-[#8BE8D8]">{listBody}</ol>
-        </div>,
-      )
-    }
-
-    listType = null
-    listItems = []
-    blockIndex += 1
-  }
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
-    if (!line) {
-      flushList()
-      continue
-    }
-
-    if (line === "---") {
-      flushList()
-      blocks.push(<div key={`hr-${blockIndex}`} className="my-1 h-px w-full bg-[#2A2A32]" />)
-      blockIndex += 1
-      continue
-    }
-
-    const headingMatch = line.match(/^#{1,6}\s+(.+)$/)
-    if (headingMatch) {
-      flushList()
-      blocks.push(
-        <p key={`h-${blockIndex}`} className="pt-1 text-xs font-mono uppercase tracking-widest text-[#9FA0B3]">
-          {headingMatch[1]}
-        </p>,
-      )
-      blockIndex += 1
-      continue
-    }
-
-    const unorderedMatch = line.match(/^[-*]\s+(.+)$/)
-    if (unorderedMatch) {
-      if (listType && listType !== "ul") {
-        flushList()
-      }
-      listType = "ul"
-      listItems.push(unorderedMatch[1])
-      continue
-    }
-
-    const orderedMatch = line.match(/^\d+\.\s+(.+)$/)
-    if (orderedMatch) {
-      if (listType && listType !== "ol") {
-        flushList()
-      }
-      listType = "ol"
-      listItems.push(orderedMatch[1])
-      continue
-    }
-
-    const labelMatch = line.match(/^([A-Za-z][A-Za-z0-9 /&-]{1,50}):$/)
-    if (labelMatch) {
-      flushList()
-      blocks.push(
-        <p key={`label-${blockIndex}`} className="pt-1 text-xs font-mono uppercase tracking-widest text-[#8B8B9A]">
-          {labelMatch[1]}
-        </p>,
-      )
-      blockIndex += 1
-      continue
-    }
-
-    flushList()
-    blocks.push(
-      <p key={`p-${blockIndex}`} className="whitespace-pre-wrap text-[#F0F0F0]/95">
-        {renderInlineMarkdown(line)}
-      </p>,
-    )
-    blockIndex += 1
-  }
-
-  flushList()
-  return (
-    <div
-      className={`min-w-0 text-sm break-words ${isCompactMobile ? "space-y-2 leading-[1.5] sm:space-y-2.5 sm:leading-relaxed" : "space-y-2.5 leading-relaxed"}`}
-    >
-      {blocks}
-    </div>
-  )
 }
 
 export default function ChatWidget() {
@@ -794,7 +623,7 @@ export default function ChatWidget() {
                     {message.role === "assistant" ? (
                       renderAssistantContent(message.content)
                     ) : (
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#F0F0F0]">{message.content}</p>
+                      renderUserContent(message.content)
                     )}
 
                     {message.role === "assistant" && message.webContextSource === "safe_link" ? (
@@ -878,23 +707,8 @@ export default function ChatWidget() {
                   className="flex w-full justify-start"
                 >
                   <div className="inline-flex max-w-[min(92%,26rem)] items-center gap-2 rounded-2xl rounded-bl-md bg-[#14141A] px-3 py-2">
-                  <span className="font-mono text-xs text-[#6B6B7B]">Thinking</span>
-                  <motion.span
-                    animate={{ opacity: [0.2, 1, 0.2] }}
-                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2 }}
-                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
-                  />
-                  <motion.span
-                    animate={{ opacity: [0.2, 1, 0.2] }}
-                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.15 }}
-                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
-                  />
-                  <motion.span
-                    animate={{ opacity: [0.2, 1, 0.2] }}
-                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2, delay: 0.3 }}
-                    className="h-1.5 w-1.5 rounded-full bg-[#6B6B7B]"
-                  />
-                </div>
+                    <SigmaThinkingIndicator label="Thinking" />
+                  </div>
                 </motion.div>
               ) : null}
             </motion.div>
@@ -951,9 +765,10 @@ export default function ChatWidget() {
               <button
                 type="submit"
                 disabled={isSending || input.trim().length === 0}
-                className="rounded-full bg-[#F0F0F0] px-4 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-busy={isSending}
+                className="inline-flex min-w-[4.25rem] items-center justify-center rounded-full bg-[#F0F0F0] px-4 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isSending ? "..." : "SEND"}
+                {isSending ? <SigmaThinkingIndicator compact /> : "SEND"}
               </button>
             </div>
             <p className="mt-2 text-[11px] text-[#6B6B7B]">

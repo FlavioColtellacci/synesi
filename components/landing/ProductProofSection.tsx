@@ -95,7 +95,7 @@ export default function ProductProofSection() {
               </p>
               <p className="font-sans text-sm leading-relaxed text-[#6B6B7B]">
                 Two positions saw elevated alert activity; one thesis assumption
-                is worth revisiting this week. No buy/sell guidance—just a
+                is worth revisiting this week. No buy/sell guidance, just a
                 structured read on drift and pressure.
               </p>
               <ul className="space-y-2 border-t border-[#2A2A32] pt-3 font-sans text-xs leading-relaxed text-[#6B6B7B]">

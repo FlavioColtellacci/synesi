@@ -106,7 +106,8 @@ export function PricingPageContent() {
               CONVICTION HAS A PRICE.
             </h1>
             <p className="mt-3 font-[var(--font-sans)] text-sm text-synesi-muted">
-              One plan. All features. Start with a 7-day free trial.
+              One plan. All features, including Sigma assistant and Sigma Monitor. Start with a
+              7-day free trial.
             </p>
           </header>
 

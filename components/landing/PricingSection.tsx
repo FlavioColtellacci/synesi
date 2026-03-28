@@ -14,8 +14,8 @@ export default function PricingSection() {
           One plan. All features. Start with a 7-day free trial.
         </h2>
         <p className="mb-16 text-center font-sans text-sm text-[#6B6B7B]">
-          SYNESI is built for serious investors. Serious enough to pay for a tool that holds
-          them accountable.
+          Includes Sigma assistant + Sigma Monitor in every plan. SYNESI is built for serious
+          investors who want an accountable process.
         </p>
 
         <div className="mx-auto grid max-w-2xl grid-cols-1 gap-6 md:grid-cols-2">

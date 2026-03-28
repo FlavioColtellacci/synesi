@@ -36,7 +36,7 @@ const faqs = [
   {
     question: "How does the 7-day free trial work?",
     answer:
-      "Your 7-day free trial starts after you first sign in, when you have no active subscription and no trial window yet. During the trial you get full access to the app, including Sigma (chat assistant and Sigma Monitor), thesis tools, and dashboards—same as a paid subscriber. When the trial ends, choose a plan to keep access: $15/month or $99/year.",
+      "Your 7-day free trial starts after you first sign in, when you have no active subscription and no trial window yet. During the trial you get full access to the app, including Sigma (chat assistant and Sigma Monitor), thesis tools, and dashboards, the same as a paid subscriber. When the trial ends, choose a plan to keep access: $15/month or $99/year.",
   },
 ]
 
@@ -50,7 +50,7 @@ export default function FAQSection() {
           Frequently Asked Questions
         </h2>
         <p className="mb-16 text-center font-sans text-sm text-[#6B6B7B]">
-          Everything you need to know about SYNESI and conviction tracking.
+          Everything you need to know about SYNESI, Sigma, and conviction tracking.
         </p>
 
         <div className="space-y-3">

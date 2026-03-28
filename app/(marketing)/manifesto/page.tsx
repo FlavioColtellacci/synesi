@@ -5,7 +5,7 @@ import MarketingPageNav from '@/components/landing/MarketingPageNav'
 export const metadata = {
   title: 'Manifesto | SYNESI',
   description:
-    'Why SYNESI exists. A statement on conviction, narrative, and what it means to keep your investment story honest over time.',
+    'Why SYNESI and Sigma exist. A statement on conviction, narrative, and what it means to keep your investment story honest over time.',
 }
 
 export default function ManifestoPage() {
@@ -100,7 +100,7 @@ export default function ManifestoPage() {
               prompted to revisit your reasoning, not your P&amp;L.
             </p>
             <p>
-              Sigma—SYNESI&apos;s in-app assistant and Sigma Monitor digest—helps
+              Sigma, SYNESI&apos;s in-app assistant and Sigma Monitor digest, helps
               you navigate the product and see a scheduled, structured read on
               conviction and alerts. It does not replace your judgment or give
               trade recommendations.
@@ -175,7 +175,7 @@ export default function ManifestoPage() {
             GET STARTED →
           </Link>
           <span className="text-sm text-[#6B6B7B]">
-            7-day free trial—full app including Sigma. Then $15/month or
+            7-day free trial with the full app, including Sigma. Then $15/month or
             $99/year.
           </span>
         </div>

@@ -256,7 +256,7 @@ export async function POST(
 
     const braveSection = brave.merged
       ? `\n\n${brave.merged}\n`
-      : "\n\n(No live web research available — rely on known feed patterns and conservative guesses; empty urlCandidates when uncertain.)\n"
+      : "\n\n(No live web research available; rely on known feed patterns and conservative guesses; empty urlCandidates when uncertain.)\n"
 
     const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${(existingSources ?? [])
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())

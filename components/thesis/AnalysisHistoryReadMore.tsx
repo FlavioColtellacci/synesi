@@ -22,8 +22,8 @@ type Props = {
 }
 
 function sanitizeAnalysisText(text: string) {
-  // The model sometimes returns em-dashes; replace them everywhere in the UI.
-  return text.replaceAll("—", "-").replaceAll("–", "-")
+  // The model sometimes returns em/en dashes; normalize to ASCII hyphen for the UI.
+  return text.replaceAll("\u2014", "-").replaceAll("\u2013", "-")
 }
 
 export function AnalysisHistoryReadMore({ preview, analysis }: Props) {

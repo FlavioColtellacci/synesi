@@ -20,7 +20,7 @@ export type MonitorEventRow = {
 const MAX_SIGNAL_ITEMS = 4
 const MAX_EVIDENCE_ITEMS = 4
 
-/** Minimum characters for a high-signal line (filters noise like "ok" or "—"). */
+/** Minimum characters for a high-signal line (filters noise like "ok" or a lone dash). */
 const MIN_SIGNAL_LINE_CHARS = 12
 const MIN_EVIDENCE_LINE_CHARS = 10
 

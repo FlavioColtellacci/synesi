@@ -47,9 +47,9 @@ export default function FeaturesSection() {
               Get challenged, not just notified
             </h3>
             <p className="font-sans text-sm leading-relaxed text-[#6B6B7B]">
-              AI surfaces conflicts between what you believed and what&apos;s
-              actually happening. When your stock moves 5%+, SYNESI asks: does
-              this change anything?
+              Sigma surfaces conflicts between what you believed and what&apos;s
+              actually happening. When your stock moves 5%+, SYNESI asks:
+              does this change anything?
             </p>
           </article>
 

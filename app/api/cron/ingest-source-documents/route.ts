@@ -259,7 +259,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient()
 
   // -------------------------------------------------------------------------
-  // Phase 1 — Ingest
+  // Phase 1: Ingest
   // -------------------------------------------------------------------------
   const { data: allSources, error: sourcesError } = await supabase
     .from("trusted_sources")
@@ -270,7 +270,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: sourcesError.message }, { status: 500 })
   }
 
-  // Deduplicate by URL — keep first source_name/type per URL; same feed used by
+  // Deduplicate by URL: keep first source_name/type per URL; same feed used by
   // multiple users triggers only one HTTP fetch.
   const uniqueFeeds = new Map<string, { sourceName: string; sourceType: string }>()
   for (const src of allSources ?? []) {
@@ -344,7 +344,7 @@ export async function GET(request: Request) {
   }
 
   // -------------------------------------------------------------------------
-  // Phase 2 — Match
+  // Phase 2: Match
   // -------------------------------------------------------------------------
   if (insertedDocs.length === 0) {
     return NextResponse.json({
@@ -443,7 +443,7 @@ export async function GET(request: Request) {
         }
       } else {
         matchesInserted++
-        // Only successful inserts are eligible for event emission — this is the
+        // Only successful inserts are eligible for event emission; this is the
         // dedup gate: a 23505 means the match already existed, so no duplicate event.
         pendingEvents.push({
           thesis_id: ts.thesis_id,
@@ -461,7 +461,7 @@ export async function GET(request: Request) {
   }
 
   // -------------------------------------------------------------------------
-  // Phase 3 — Events
+  // Phase 3: Events
   // -------------------------------------------------------------------------
   const eventThesisIds = [...new Set(pendingEvents.map((event) => event.thesis_id))]
   const enabledRulesByThesis = new Map<string, AlertRuleRow[]>()
@@ -535,7 +535,7 @@ export async function GET(request: Request) {
     const truncatedTitle =
       pending.docTitle.length > 120 ? pending.docTitle.slice(0, 120) + "\u2026" : pending.docTitle
 
-    const event_detail = `${pending.sourceName} \u2014 "${truncatedTitle}" \u2014 ${pending.matchReason} \u2014 ${pending.docUrl}`
+    const event_detail = `${pending.sourceName} | "${truncatedTitle}" | ${pending.matchReason} | ${pending.docUrl}`
 
     const eventRow: EventInsert = {
       thesis_id: pending.thesis_id,

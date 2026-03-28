@@ -6,7 +6,7 @@ import LandingFooter from "@/components/landing/LandingFooter"
 export const metadata: Metadata = {
   title: "AI-Powered Investment Thesis Validation",
   description:
-    "SYNESI uses AI to stress-test your investment thesis against your own reasoning. Surface biases, validate assumptions, and get a monitoring plan, without buy/sell advice.",
+    "SYNESI and Sigma use AI to stress-test your investment thesis against your own reasoning. Surface biases, validate assumptions, and get a monitoring plan, without buy/sell advice.",
 }
 
 export default function ThesisValidationPage() {
@@ -22,8 +22,8 @@ export default function ThesisValidationPage() {
           AI That Challenges Your Thesis, Not Replaces It
         </h1>
         <p className="mb-12 font-sans text-lg leading-relaxed text-[#6B6B7B]">
-          Your best investment decisions come from rigorous thinking. SYNESI&apos;s AI acts as a
-          thinking partner, not an oracle.
+          Your best investment decisions come from rigorous thinking. Sigma, SYNESI&apos;s AI layer,
+          acts as a thinking partner, not an oracle.
         </p>
 
         <div className="space-y-10 text-[#A0A0A8] leading-relaxed">
@@ -81,7 +81,7 @@ export default function ThesisValidationPage() {
             STRESS-TEST YOUR THESIS →
           </Link>
           <span className="font-sans text-sm text-[#6B6B7B]">
-            7-day free trial—Sigma and all features included. Then $15/month or
+            7-day free trial: Sigma and all features included. Then $15/month or
             $99/year.
           </span>
         </div>

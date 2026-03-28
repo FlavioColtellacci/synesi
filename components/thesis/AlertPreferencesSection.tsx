@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { SigmaThinkingIndicator } from "@/components/chat/SigmaThinkingIndicator"
 import type { AlertRule, TrustedSource } from "@/types/database"
 
 type AlertRuleWithSources = AlertRule & {
@@ -495,7 +496,7 @@ export default function AlertPreferencesSection({
               maxLength={2000}
             />
             <p className="mt-2 text-xs text-[#6B6B7B]">
-              Write naturally: outlets, analysts, topics, and what to ignore. You do not need to paste feed URLs — Sigma
+              Write naturally: outlets, analysts, topics, and what to ignore. You do not need to paste feed URLs; Sigma
               tries to discover them from web results (with safe fallbacks when needed).
             </p>
 
@@ -508,7 +509,11 @@ export default function AlertPreferencesSection({
                 }}
                 className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
               >
-                {copilotLoading ? "SIGMA…" : "RUN SIGMA"}
+                {copilotLoading ? (
+                  <SigmaThinkingIndicator label="SIGMA" compact labelClassName="text-[#F0F0F0] tracking-widest" />
+                ) : (
+                  "RUN SIGMA"
+                )}
               </button>
             </div>
 
@@ -537,11 +542,11 @@ export default function AlertPreferencesSection({
                     <p className="mt-1 text-xs text-[#6B6B7B]">
                       Keywords: include{" "}
                       <span className="text-[#F0F0F0]">
-                        {copilotSuggestion.includeKeywords.length ? copilotSuggestion.includeKeywords.join(", ") : "—"}
+                        {copilotSuggestion.includeKeywords.length ? copilotSuggestion.includeKeywords.join(", ") : "none"}
                       </span>{" "}
                       • exclude{" "}
                       <span className="text-[#F0F0F0]">
-                        {copilotSuggestion.excludeKeywords.length ? copilotSuggestion.excludeKeywords.join(", ") : "—"}
+                        {copilotSuggestion.excludeKeywords.length ? copilotSuggestion.excludeKeywords.join(", ") : "none"}
                       </span>
                     </p>
                   ) : null}
@@ -638,7 +643,7 @@ export default function AlertPreferencesSection({
           <details className="group mt-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
             <summary className="cursor-pointer list-none font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase marker:content-none [&::-webkit-details-marker]:hidden">
               <span className="text-[#8BE8D8] group-open:text-[#8BE8D8]">Advanced tuning</span>
-              <span className="ml-2 text-[#6B6B7B] normal-case tracking-normal">— mode and manual keywords</span>
+              <span className="ml-2 text-[#6B6B7B] normal-case tracking-normal">: mode and manual keywords</span>
             </summary>
 
             <div className="mt-4">

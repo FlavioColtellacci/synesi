@@ -42,8 +42,8 @@ function formatDateTime(value: string) {
 }
 
 function sanitizeAnalysisText(text: string) {
-  // Ensure the UI never shows em-dashes coming from model output.
-  return text.replaceAll("—", "-").replaceAll("–", "-")
+  // Ensure the UI never shows em/en dashes coming from model output.
+  return text.replaceAll("\u2014", "-").replaceAll("\u2013", "-")
 }
 
 function sanitizeAnalysisResult(analysis: AnalysisResult): AnalysisResult {

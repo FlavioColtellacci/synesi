@@ -9,6 +9,7 @@ import PersonasSection from "@/components/landing/PersonasSection"
 import PricingSection from "@/components/landing/PricingSection"
 import ProblemSection from "@/components/landing/ProblemSection"
 import ProductProofSection from "@/components/landing/ProductProofSection"
+import SigmaDemoSection from "@/components/landing/SigmaDemoSection"
 import { SmokeBackground } from "@/components/ui/spooky-smoke-animation"
 
 type HomePageProps = {
@@ -34,6 +35,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
       <MarketingNav />
       <HeroSection />
+      <SigmaDemoSection />
       <ProblemSection />
       <FeaturesSection />
       <ProductProofSection />

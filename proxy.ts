@@ -8,7 +8,8 @@ export async function proxy(request: NextRequest) {
   if (
     request.nextUrl.pathname === '/api/stripe/webhook' ||
     request.nextUrl.pathname.startsWith('/api/cron/') ||
-    request.nextUrl.pathname === '/api/financial/refresh'
+    request.nextUrl.pathname === '/api/financial/refresh' ||
+    request.nextUrl.pathname === '/api/marketing/sigma-demo'
   ) {
     return NextResponse.next()
   }
@@ -77,5 +78,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/|financial/refresh).*)'],
+  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/|financial/refresh|marketing/sigma-demo).*)'],
 }

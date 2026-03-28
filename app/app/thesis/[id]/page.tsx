@@ -200,8 +200,8 @@ function formatTimestamp(value: string | null) {
   }
 }
 
-function emDashIfMissing(formatted: string): string {
-  return formatted === "N/A" ? "—" : formatted
+function dashIfMissing(formatted: string): string {
+  return formatted === "N/A" ? "-" : formatted
 }
 
 function parseFinancialSnapshotPayload(raw: Record<string, unknown>): FinancialSnapshotPayload | null {
@@ -473,43 +473,43 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       key: "price" as const,
       label: "Price",
       raw: financialPayload?.price ?? null,
-      value: emDashIfMissing(formatPrice(financialPayload?.price ?? null)),
+      value: dashIfMissing(formatPrice(financialPayload?.price ?? null)),
     },
     {
       key: "consensusTarget" as const,
       label: "Consensus Target",
       raw: financialPayload?.consensusTarget ?? null,
-      value: emDashIfMissing(formatPrice(financialPayload?.consensusTarget ?? null)),
+      value: dashIfMissing(formatPrice(financialPayload?.consensusTarget ?? null)),
     },
     {
       key: "marginOfSafety" as const,
       label: "Margin Of Safety",
       raw: financialPayload?.marginOfSafety ?? null,
-      value: emDashIfMissing(formatPercent(financialPayload?.marginOfSafety ?? null)),
+      value: dashIfMissing(formatPercent(financialPayload?.marginOfSafety ?? null)),
     },
     {
       key: "pe" as const,
       label: "P/E",
       raw: financialPayload?.pe ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.pe ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.pe ?? null)),
     },
     {
       key: "forwardPe" as const,
       label: "Forward P/E",
       raw: financialPayload?.forwardPe ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.forwardPe ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.forwardPe ?? null)),
     },
     {
       key: "eps" as const,
       label: "EPS",
       raw: financialPayload?.eps ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.eps ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.eps ?? null)),
     },
     {
       key: "nextEarningsDate" as const,
       label: "Next Earnings",
       raw: null,
-      value: financialPayload?.nextEarningsDate?.trim() ? financialPayload.nextEarningsDate : "—",
+      value: financialPayload?.nextEarningsDate?.trim() ? financialPayload.nextEarningsDate : "-",
     },
   ]
   const secondaryMetrics = [
@@ -517,25 +517,25 @@ export default async function ThesisDetailPage({ params }: PageProps) {
       key: "peg" as const,
       label: "PEG",
       raw: financialPayload?.peg ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.peg ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.peg ?? null)),
     },
     {
       key: "roic" as const,
       label: "ROIC",
       raw: financialPayload?.roic ?? null,
-      value: emDashIfMissing(formatPercent(financialPayload?.roic ?? null)),
+      value: dashIfMissing(formatPercent(financialPayload?.roic ?? null)),
     },
     {
       key: "fcfPerShare" as const,
       label: "FCF / Share",
       raw: financialPayload?.fcfPerShare ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.fcfPerShare ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.fcfPerShare ?? null)),
     },
     {
       key: "rsi14" as const,
       label: "RSI (14)",
       raw: financialPayload?.rsi14 ?? null,
-      value: emDashIfMissing(formatNumber(financialPayload?.rsi14 ?? null)),
+      value: dashIfMissing(formatNumber(financialPayload?.rsi14 ?? null)),
     },
   ]
   const optionalDetailMetrics = [
@@ -562,7 +562,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     },
   ].filter((metric) => metric.value !== "N/A")
   const hasSecondaryMetrics =
-    secondaryMetrics.some((m) => m.value !== "—") || optionalDetailMetrics.length > 0
+    secondaryMetrics.some((m) => m.value !== "-") || optionalDetailMetrics.length > 0
 
   // Preserve API quota: auto-refresh only stale snapshots when user still has daily budget.
   if (financialSnapshot && isSnapshotStale && hasRefreshRemaining) {

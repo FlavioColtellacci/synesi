@@ -30,8 +30,14 @@ function truncate(text: string, maxLength: number) {
   return `${text.slice(0, maxLength - 1)}...`
 }
 
+const LEGACY_EVENT_SEP = ` \u2014 `
+
 function parseEventDetail(raw: string): ParsedEventDetail {
-  const parts = raw.includes(" — ") ? raw.split(" — ") : raw.split(" - ")
+  const parts = raw.includes(" | ")
+    ? raw.split(" | ")
+    : raw.includes(LEGACY_EVENT_SEP)
+      ? raw.split(LEGACY_EVENT_SEP)
+      : raw.split(" - ")
   const [sourcePart, titlePart, reasonPart, urlPart] = parts
 
   const source = sourcePart?.trim() || "Trusted source"

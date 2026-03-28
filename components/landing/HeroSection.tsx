@@ -118,7 +118,7 @@ export default function HeroSection() {
                 tested against reality.
               </p>
               <p className="mt-3 max-w-sm font-sans text-sm leading-relaxed text-[#6B6B7B] md:text-base">
-                Powered by Sigma—your in-app assistant and daily Sigma Monitor
+                Powered by Sigma, your in-app assistant and daily Sigma Monitor
                 digest. Not investment advice.
               </p>
 
@@ -130,7 +130,7 @@ export default function HeroSection() {
               </Link>
 
               <p className="mt-6 font-mono text-xs tracking-widest text-[#6B6B7B]">
-                7-day free trial—full app including Sigma. Then $15/month or
+                7-day free trial with the full app, including Sigma. Then $15/month or
                 $99/year.
               </p>
             </div>

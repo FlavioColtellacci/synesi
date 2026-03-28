@@ -173,7 +173,7 @@ function buildPositionsFallback(message: string, positions: PositionSnapshot[]):
     const top = positions.slice(0, 5).map((position) => `${position.ticker} (${position.status})`).join(", ")
 
     return {
-      answer: `Current snapshot: ${positions.length} convictions total — ${intact} intact, ${atRisk} at risk, ${broken} broken. Recent convictions: ${top}.`,
+      answer: `Current snapshot: ${positions.length} convictions total; ${intact} intact, ${atRisk} at risk, ${broken} broken. Recent convictions: ${top}.`,
       sourceTags: ["ProductGuide"],
       confidence: "high",
       escalation: "none",
