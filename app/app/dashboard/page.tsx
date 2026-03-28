@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import {
   ThesisChallengeBanner,
@@ -31,6 +31,32 @@ type ModalThesis = {
 }
 
 type FilterMode = "all" | "needs_review"
+
+type MonitorActionDraft = {
+  actionType: "open_thesis" | "filter_needs_review" | "open_alerts_panel" | "draft_alert_rule_update"
+  label: string
+  rationale: string
+  thesisId?: string
+}
+
+type MonitorSummary = {
+  headline: string
+  summary: string
+  riskLevel: "stable" | "watch" | "critical"
+  highSignalChanges: string[]
+  recommendedActions: MonitorActionDraft[]
+  evidenceSnippets: string[]
+}
+
+type MonitorSnapshot = {
+  id: string
+  runKey: string
+  triggerSource: "manual" | "cron"
+  status: "running" | "success" | "failed"
+  summary: MonitorSummary | null
+  completedAt: string | null
+  createdAt: string
+}
 
 const STATUS_PRIORITY: Record<string, number> = {
   broken: 0,
@@ -94,12 +120,24 @@ const STATUS_CHANGE_NOTE_COLOR = "text-[#FFB800]"
 
 export default function Page() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [theses, setTheses] = useState<DashboardThesis[]>([])
   const [challengeEvents, setChallengeEvents] = useState<ThesisChallengeEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshingMonitor, setIsRefreshingMonitor] = useState(false)
+  const [monitorSnapshot, setMonitorSnapshot] = useState<MonitorSnapshot | null>(null)
   const [modalThesis, setModalThesis] = useState<ModalThesis | null>(null)
   const [filter, setFilter] = useState<FilterMode>("all")
   const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get("filter") === "needs_review") {
+      setFilter("needs_review")
+    }
+    if (searchParams.get("panel") === "alerts") {
+      setIsAlertsPanelOpen(true)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     const load = async () => {
@@ -114,7 +152,7 @@ export default function Page() {
         return
       }
 
-      const [thesesResult, eventsResult, updatesResult] = await Promise.all([
+      const [thesesResult, eventsResult, updatesResult, monitorResult] = await Promise.all([
         supabase
           .from("theses")
           .select(
@@ -135,6 +173,9 @@ export default function Page() {
           .eq("update_type", "status_change")
           .not("note", "is", null)
           .order("created_at", { ascending: false }),
+        fetch("/api/chat/monitor", { method: "GET" })
+          .then((response) => response.json())
+          .catch(() => ({ monitor: null })),
       ])
 
       const latestNoteByThesis = new Map<string, { note: string; status: string }>()
@@ -161,6 +202,10 @@ export default function Page() {
         })),
       )
 
+      if (monitorResult && typeof monitorResult === "object" && "monitor" in monitorResult && monitorResult.monitor) {
+        setMonitorSnapshot(monitorResult.monitor as MonitorSnapshot)
+      }
+
       setIsLoading(false)
     }
 
@@ -177,6 +222,33 @@ export default function Page() {
       : theses
 
   const sortedTheses = sortByUrgency(filteredTheses)
+
+  function resolveMonitorActionHref(action: MonitorActionDraft): string {
+    if (action.actionType === "filter_needs_review") return "/app/dashboard?filter=needs_review"
+    if (action.actionType === "open_alerts_panel") return "/app/dashboard?panel=alerts"
+    if ((action.actionType === "open_thesis" || action.actionType === "draft_alert_rule_update") && action.thesisId) {
+      return `/app/thesis/${action.thesisId}`
+    }
+    return "/app/dashboard"
+  }
+
+  async function refreshMonitorNow() {
+    if (isRefreshingMonitor) return
+    setIsRefreshingMonitor(true)
+    try {
+      const response = await fetch("/api/chat/monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      })
+      const payload = (await response.json()) as { monitor?: MonitorSnapshot }
+      if (payload.monitor) {
+        setMonitorSnapshot(payload.monitor)
+      }
+    } finally {
+      setIsRefreshingMonitor(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -264,6 +336,57 @@ export default function Page() {
           )}
         </section>
       )}
+
+      {/* ── Sigma Monitor ── */}
+      <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-[#8BE8D8]">Sigma Monitor</p>
+            <p className="text-sm text-[#F0F0F0]">
+              {monitorSnapshot?.summary?.headline ?? "No monitor summary yet. Run Sigma Monitor to generate one."}
+            </p>
+            <p className="text-xs text-[#6B6B7B]">
+              {monitorSnapshot?.summary?.summary ??
+                "Sigma Monitor highlights high-signal conviction drift, open-alert pressure, and next actions."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void refreshMonitorNow()
+            }}
+            disabled={isRefreshingMonitor}
+            className="min-h-[36px] rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRefreshingMonitor ? "RUNNING..." : "RUN NOW"}
+          </button>
+        </div>
+
+        {(monitorSnapshot?.summary?.highSignalChanges.length ?? 0) > 0 ? (
+          <ul className="mt-3 space-y-1 text-sm text-[#D9D9E2]">
+            {monitorSnapshot?.summary?.highSignalChanges.map((item, index) => (
+              <li key={`${index}-${item}`} className="leading-relaxed">
+                - {item}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {(monitorSnapshot?.summary?.recommendedActions.length ?? 0) > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {monitorSnapshot?.summary?.recommendedActions.map((action, index) => (
+              <Link
+                key={`${action.actionType}-${action.thesisId ?? "none"}-${index}`}
+                href={resolveMonitorActionHref(action)}
+                className="rounded-full border border-[#2A2A32] bg-[#101018] px-3 py-1.5 text-xs text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35"
+                title={action.rationale}
+              >
+                {action.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       {/* ── Filter Toggle ── */}
       {theses.length > 0 && (

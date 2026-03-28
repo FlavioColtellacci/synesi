@@ -1,7 +1,9 @@
 import type {
+  ChatActionDraft,
   ChatAssistantResponse,
   ChatConfidence,
   ChatEscalation,
+  ChatRetrievalEvidence,
   ChatRequestMessage,
   ChatSourceTag,
 } from "@/lib/chat/types"
@@ -16,6 +18,13 @@ const SOURCE_TAGS: ChatSourceTag[] = [
 
 const CONFIDENCE_VALUES: ChatConfidence[] = ["high", "medium", "low"]
 const ESCALATION_VALUES: ChatEscalation[] = ["none", "support", "action_confirmation"]
+const ACTION_TYPES: ChatActionDraft["actionType"][] = [
+  "open_thesis",
+  "filter_needs_review",
+  "open_alerts_panel",
+  "draft_alert_rule_update",
+]
+const RETRIEVAL_SOURCES: ChatRetrievalEvidence["source"][] = ["assumption", "source_match", "status_note"]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -42,6 +51,50 @@ function sanitizeActions(input: unknown): string[] {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 3)
+}
+
+function sanitizeActionDrafts(input: unknown): ChatActionDraft[] {
+  if (!Array.isArray(input)) return []
+  const actionDrafts: ChatActionDraft[] = []
+
+  for (const item of input) {
+    if (!isRecord(item)) continue
+    const actionType = ACTION_TYPES.includes(item.actionType as ChatActionDraft["actionType"])
+      ? (item.actionType as ChatActionDraft["actionType"])
+      : null
+    if (!actionType) continue
+
+    const label = typeof item.label === "string" ? item.label.trim().slice(0, 80) : ""
+    const rationale = typeof item.rationale === "string" ? item.rationale.trim().slice(0, 240) : ""
+    if (!label || !rationale) continue
+
+    const draft: ChatActionDraft = { actionType, label, rationale }
+    if (typeof item.thesisId === "string" && item.thesisId.trim().length > 0) {
+      draft.thesisId = item.thesisId.trim().slice(0, 120)
+    }
+    actionDrafts.push(draft)
+    if (actionDrafts.length >= 3) break
+  }
+
+  return actionDrafts
+}
+
+function sanitizeRetrievalEvidence(input: unknown): ChatRetrievalEvidence[] {
+  if (!Array.isArray(input)) return []
+  const evidences: ChatRetrievalEvidence[] = []
+
+  for (const item of input) {
+    if (!isRecord(item)) continue
+    const source = RETRIEVAL_SOURCES.includes(item.source as ChatRetrievalEvidence["source"])
+      ? (item.source as ChatRetrievalEvidence["source"])
+      : null
+    const snippet = typeof item.snippet === "string" ? item.snippet.trim().slice(0, 220) : ""
+    if (!source || !snippet) continue
+    evidences.push({ source, snippet })
+    if (evidences.length >= 5) break
+  }
+
+  return evidences
 }
 
 function stripCodeFences(input: string): string {
@@ -156,6 +209,8 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
     confidence: sanitizeConfidence(parsed.confidence),
     escalation: sanitizeEscalation(parsed.escalation),
     followUpActions: sanitizeActions(parsed.followUpActions),
+    actionDrafts: sanitizeActionDrafts(parsed.actionDrafts),
+    retrievalEvidence: sanitizeRetrievalEvidence(parsed.retrievalEvidence),
   }
 }
 
@@ -171,6 +226,8 @@ export function parseAssistantTextFallback(rawText: string): ChatAssistantRespon
       confidence: sanitizeConfidence(parsed.confidence),
       escalation: sanitizeEscalation(parsed.escalation),
       followUpActions: sanitizeActions(parsed.followUpActions),
+      actionDrafts: sanitizeActionDrafts(parsed.actionDrafts),
+      retrievalEvidence: sanitizeRetrievalEvidence(parsed.retrievalEvidence),
     }
   }
 

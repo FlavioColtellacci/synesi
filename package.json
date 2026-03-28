@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "secrets:scan": "gitleaks git --redact --verbose .",
     "secrets:scan:staged": "gitleaks git --staged --redact --verbose .",
     "postinstall": "node scripts/ensure-next-env.mjs",
@@ -41,6 +42,7 @@
     "eslint-config-next": "16.1.6",
     "husky": "^9.1.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

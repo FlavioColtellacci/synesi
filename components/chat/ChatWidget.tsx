@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 
@@ -23,6 +23,8 @@ type ChatMessage = {
   confidence?: ChatAssistantResponse["confidence"]
   escalation?: ChatAssistantResponse["escalation"]
   followUpActions?: string[]
+  actionDrafts?: ChatAssistantResponse["actionDrafts"]
+  retrievalEvidence?: ChatAssistantResponse["retrievalEvidence"]
   webContextVerified?: boolean
   webContextSource?: ChatAssistantResponse["webContextSource"]
   webLookupTemporarilyUnavailable?: boolean
@@ -39,6 +41,7 @@ const VIEWPORT_WIDTH_RATIO = 0.92
 const TOP_BOTTOM_OFFSET_PX = 120
 
 const QUICK_ACTIONS = [
+  "Show my latest Sigma monitor summary",
   "How do I create a thesis?",
   "Set up personalized alerts",
   "Explain my dashboard in simple terms",
@@ -230,12 +233,14 @@ function renderAssistantContent(content: string): ReactNode {
 
 export default function ChatWidget() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [unreadAssistantReplies, setUnreadAssistantReplies] = useState(0)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isHydratingHistory, setIsHydratingHistory] = useState(false)
   const [isClearingHistory, setIsClearingHistory] = useState(false)
+  const [isConfirmingAction, setIsConfirmingAction] = useState<string | null>(null)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputHintOverflowPx, setInputHintOverflowPx] = useState(0)
@@ -483,6 +488,12 @@ export default function ChatWidget() {
           "followUpActions" in payload && Array.isArray(payload.followUpActions)
             ? payload.followUpActions.slice(0, 3)
             : [],
+        actionDrafts:
+          "actionDrafts" in payload && Array.isArray(payload.actionDrafts) ? payload.actionDrafts.slice(0, 3) : [],
+        retrievalEvidence:
+          "retrievalEvidence" in payload && Array.isArray(payload.retrievalEvidence)
+            ? payload.retrievalEvidence.slice(0, 5)
+            : [],
         webContextVerified: "webContextVerified" in payload ? payload.webContextVerified === true : false,
         webContextSource:
           "webContextSource" in payload &&
@@ -537,6 +548,45 @@ export default function ChatWidget() {
       setUnreadAssistantReplies(0)
       setHasHydratedHistory(true)
       setIsClearingHistory(false)
+    }
+  }
+
+  async function confirmActionDraft(action: NonNullable<ChatAssistantResponse["actionDrafts"]>[number]) {
+    const actionKey = `${action.actionType}:${action.thesisId ?? "none"}`
+    if (isConfirmingAction === actionKey) return
+    setIsConfirmingAction(actionKey)
+
+    try {
+      const response = await fetch("/api/chat/actions/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmed: true, action }),
+      })
+      const payload = (await response.json()) as {
+        execution?: { route?: string }
+      }
+
+      if (!response.ok || !payload.execution?.route) {
+        throw new Error("Action confirmation failed")
+      }
+
+      router.push(payload.execution.route)
+    } catch {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-action-error-${Date.now()}`,
+          role: "assistant",
+          content:
+            "I could not confirm that action right now. Please open the dashboard and continue manually.",
+          sourceTags: ["PolicyGuide"],
+          confidence: "low",
+          escalation: "support",
+          followUpActions: ["Open dashboard", "Try again", "Ask Sigma for manual steps"],
+        },
+      ])
+    } finally {
+      setIsConfirmingAction(null)
     }
   }
 
@@ -771,6 +821,47 @@ export default function ChatWidget() {
                       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-amber-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
                         Web lookup temporarily unavailable
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" && (message.actionDrafts?.length ?? 0) > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-[#8B8B9A]">
+                          Suggested actions
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {message.actionDrafts?.map((action, index) => {
+                            const actionKey = `${action.actionType}:${action.thesisId ?? "none"}`
+                            const isBusy = isConfirmingAction === actionKey
+                            return (
+                              <button
+                                key={`${actionKey}:${index}`}
+                                type="button"
+                                onClick={() => {
+                                  void confirmActionDraft(action)
+                                }}
+                                disabled={isBusy}
+                                title={action.rationale}
+                                className="rounded-full border border-[#2A2A32]/90 bg-[#101018] px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isBusy ? "CONFIRMING..." : action.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" && (message.retrievalEvidence?.length ?? 0) > 0 ? (
+                      <div className="mt-2 rounded-lg border border-[#2A2A32]/70 bg-[#101018]/80 px-2.5 py-2">
+                        <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
+                          Evidence used
+                        </p>
+                        <ul className="space-y-1 text-[11px] text-[#A8A8B8]">
+                          {message.retrievalEvidence?.map((item, index) => (
+                            <li key={`${item.source}-${index}`} className="leading-relaxed">
+                              - {item.snippet}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ) : null}
 

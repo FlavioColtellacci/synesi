@@ -19,6 +19,8 @@ type StoredChatMessage = {
   confidence?: ChatAssistantResponse["confidence"]
   escalation?: ChatAssistantResponse["escalation"]
   followUpActions?: string[]
+  actionDrafts?: ChatAssistantResponse["actionDrafts"]
+  retrievalEvidence?: ChatAssistantResponse["retrievalEvidence"]
   webContextVerified?: boolean
 }
 
@@ -28,6 +30,8 @@ function assistantMetadataFromResponse(response: ChatAssistantResponse): Record<
     confidence: response.confidence,
     escalation: response.escalation,
     followUpActions: response.followUpActions,
+    actionDrafts: response.actionDrafts ?? [],
+    retrievalEvidence: response.retrievalEvidence ?? [],
     webContextVerified: response.webContextVerified ?? false,
   }
 }
@@ -43,6 +47,12 @@ function mapStoredMessage(row: PersistedRow): StoredChatMessage {
     confidence: typeof metadata.confidence === "string" ? (metadata.confidence as ChatAssistantResponse["confidence"]) : undefined,
     escalation: typeof metadata.escalation === "string" ? (metadata.escalation as ChatAssistantResponse["escalation"]) : undefined,
     followUpActions: Array.isArray(metadata.followUpActions) ? (metadata.followUpActions as string[]) : [],
+    actionDrafts: Array.isArray(metadata.actionDrafts)
+      ? (metadata.actionDrafts as ChatAssistantResponse["actionDrafts"])
+      : [],
+    retrievalEvidence: Array.isArray(metadata.retrievalEvidence)
+      ? (metadata.retrievalEvidence as ChatAssistantResponse["retrievalEvidence"])
+      : [],
     webContextVerified: metadata.webContextVerified === true,
   }
 }

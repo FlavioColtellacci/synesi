@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
+import { getLatestSigmaMonitorRun } from "@/lib/chat/monitor"
 import { persistChatExchange } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback } from "@/lib/chat/parse"
+import { buildRagContextBlock } from "@/lib/chat/rag"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -92,6 +94,10 @@ function isInternetLookupQuestion(message: string) {
   return /((look(\s+those)?\s+(up|online))|lookup|search (the )?(web|internet|online)|web search|internet|online|latest news|recent news|headlines?|news (on|about)|read (the )?articles?|fetch (the )?(news|headlines|articles?)|what happened (today|this week|this month))/i.test(
     message,
   )
+}
+
+function isMonitorSummaryQuestion(message: string) {
+  return /(sigma monitor|monitor summary|what changed since last run|latest monitor)/i.test(message)
 }
 
 function hasWebCapabilityDenial(answer: string) {
@@ -189,6 +195,39 @@ function buildPositionsFallback(message: string, positions: PositionSnapshot[]):
   }
 }
 
+function mapMonitorSnapshotToChatResponse(snapshot: NonNullable<Awaited<ReturnType<typeof getLatestSigmaMonitorRun>>>): ChatAssistantResponse {
+  if (!snapshot.summary) {
+    return {
+      answer:
+        "A monitor run exists, but the summary is not available yet. You can trigger a fresh monitor run from the dashboard monitor card.",
+      sourceTags: ["WorkflowGuide", "ProductGuide"],
+      confidence: "medium",
+      escalation: "none",
+      followUpActions: ["Open dashboard", "Refresh Sigma Monitor", "Ask for a convictions snapshot"],
+    }
+  }
+
+  const summary = snapshot.summary
+  const highSignals =
+    summary.highSignalChanges.length > 0
+      ? summary.highSignalChanges.map((line) => `- ${line}`).join("\n")
+      : "- No high-signal changes detected in this run."
+  const nextActions = summary.recommendedActions.map((action) => action.label).slice(0, 3)
+
+  return {
+    answer: `${summary.headline}\n\n${summary.summary}\n\nWhat changed:\n${highSignals}`,
+    sourceTags: ["ProductGuide", "WorkflowGuide"],
+    confidence: summary.riskLevel === "critical" ? "high" : "medium",
+    escalation: summary.recommendedActions.length > 0 ? "action_confirmation" : "none",
+    followUpActions:
+      nextActions.length > 0
+        ? nextActions
+        : ["Open dashboard", "Review open alerts", "Ask for thesis-specific guidance"],
+    actionDrafts: summary.recommendedActions,
+    retrievalEvidence: summary.evidenceSnippets.map((snippet) => ({ source: "source_match", snippet })),
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
   const startedAt = Date.now()
@@ -230,6 +269,26 @@ export async function POST(request: Request) {
         },
         { status: 429 },
       )
+    }
+
+    if (isMonitorSummaryQuestion(latestMessage)) {
+      const monitor = await getLatestSigmaMonitorRun(supabase, user.id)
+      if (monitor) {
+        const monitorResponse = mapMonitorSnapshotToChatResponse(monitor)
+        try {
+          await persistChatExchange(supabase, user.id, latestMessage, monitorResponse)
+        } catch (persistError) {
+          console.warn(
+            JSON.stringify({
+              event: "chat_persist_warning",
+              requestId,
+              userId: user.id,
+              error: persistError instanceof Error ? persistError.message : "Unknown persist error",
+            }),
+          )
+        }
+        return NextResponse.json(monitorResponse)
+      }
     }
 
     const cachedContext = userContextCache.get(user.id)
@@ -330,6 +389,11 @@ export async function POST(request: Request) {
     let usedSafeWebContext = false
     let webContextSource: ChatAssistantResponse["webContextSource"] | undefined
     const shouldUseModelWebLookup = !sharedUrl && isInternetLookupQuestion(latestMessage)
+
+    const ragContext = await buildRagContextBlock(supabase, user.id, latestMessage)
+    if (ragContext.block) {
+      liveContextSections.push(ragContext.block)
+    }
 
     if (sharedUrl) {
       const webContext = await fetchSafeWebContext(sharedUrl)
@@ -451,6 +515,10 @@ export async function POST(request: Request) {
               : responsePayloadWithBrave
             const responsePayloadWithWebContext: ChatAssistantResponse = {
               ...normalizedResponsePayloadWithBrave,
+              retrievalEvidence:
+                ragContext.snippets.length > 0
+                  ? ragContext.snippets.map((snippet) => ({ source: "source_match" as const, snippet }))
+                  : normalizedResponsePayloadWithBrave.retrievalEvidence,
               webContextVerified: usedSafeWebContext,
               webContextSource,
               webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
@@ -519,6 +587,10 @@ export async function POST(request: Request) {
       : responsePayload
     const responsePayloadWithWebContext: ChatAssistantResponse = {
       ...normalizedResponsePayload,
+      retrievalEvidence:
+        ragContext.snippets.length > 0
+          ? ragContext.snippets.map((snippet) => ({ source: "source_match" as const, snippet }))
+          : normalizedResponsePayload.retrievalEvidence,
       webContextVerified: usedSafeWebContext,
       webContextSource,
       webLookupTemporarilyUnavailable,
