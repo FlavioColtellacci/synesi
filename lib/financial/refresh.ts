@@ -153,58 +153,100 @@ function guardWebNumeric(value: number | null, min: number, max: number): number
   return value
 }
 
-function extractJsonObject(input: string): Record<string, unknown> | null {
-  const trimmed = input.trim()
+function tryParseFinancialJson(candidate: string): Record<string, unknown> | null {
+  const trimmed = candidate.trim()
+  const withoutTrailingCommas = trimmed.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
   try {
-    const parsed = JSON.parse(trimmed) as unknown
-    if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>
-  } catch {
-    // continue to codeblock/object extraction
-  }
-
-  const codeBlockMatch = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i)
-  const candidateFromCodeBlock = codeBlockMatch?.[1]?.trim()
-  if (candidateFromCodeBlock) {
-    try {
-      const parsed = JSON.parse(candidateFromCodeBlock) as unknown
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>
-    } catch {
-      // continue to brace extraction
+    const parsed = JSON.parse(withoutTrailingCommas) as unknown
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
     }
+  } catch {
+    // ignore
   }
+  return null
+}
 
-  const firstBrace = trimmed.indexOf("{")
-  const lastBrace = trimmed.lastIndexOf("}")
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const candidate = trimmed.slice(firstBrace, lastBrace + 1)
-    try {
-      const parsed = JSON.parse(candidate) as unknown
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>
-    } catch {
-      return null
+/** First `{` … matching `}` with string/escape awareness (lastIndexOf breaks on `}` inside strings). */
+function extractFirstBalancedJsonObject(value: string): Record<string, unknown> | null {
+  const text = value.trim()
+  const start = text.indexOf("{")
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let isEscaped = false
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i]!
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false
+      } else if (char === "\\") {
+        isEscaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === "{") {
+      depth += 1
+      continue
+    }
+    if (char === "}") {
+      depth -= 1
+      if (depth === 0) {
+        const slice = text.slice(start, i + 1)
+        const parsed = tryParseFinancialJson(slice)
+        if (parsed) return parsed
+        return null
+      }
     }
   }
 
   return null
 }
 
+function extractJsonObject(input: string): Record<string, unknown> | null {
+  const trimmed = input.trim()
+
+  const direct = tryParseFinancialJson(trimmed)
+  if (direct) return direct
+
+  const codeBlockMatch = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i)
+  const candidateFromCodeBlock = codeBlockMatch?.[1]?.trim()
+  if (candidateFromCodeBlock) {
+    const fromFence = tryParseFinancialJson(candidateFromCodeBlock)
+    if (fromFence) return fromFence
+    const fromFenceBalanced = extractFirstBalancedJsonObject(candidateFromCodeBlock)
+    if (fromFenceBalanced) return fromFenceBalanced
+  }
+
+  return extractFirstBalancedJsonObject(trimmed)
+}
+
+const WEB_SNAPSHOT_FOR_MODEL_MAX_CHARS = 5_500
+
+/** Drop prose before the first `{` so parsers see JSON even if the model prefixes explanation. */
+function stripLeadingProseBeforeJson(text: string) {
+  const trimmed = text.trim()
+  const i = trimmed.indexOf("{")
+  return i > 0 ? trimmed.slice(i) : trimmed
+}
+
 async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildResult> {
   const normalizedTicker = ticker.trim().toUpperCase()
   const nowIso = new Date().toISOString()
+  // Short query so web search stays under provider limits and returns finance-focused hits.
   const research = await getWebResearchContext({
     focus: "company",
-    query: [
-      `Return financial metrics for ${normalizedTicker}.`,
-      "Respond ONLY with JSON object using keys:",
-      "price, consensusTarget, pe, forwardPe, peg, roic, eps, fcfPerShare, rsi14, nextEarningsDate.",
-      "Use null for unknown values.",
-      "Rules:",
-      "- price/targets/multiples/eps/fcfPerShare/rsi14/roic must be numbers or null",
-      "- roic should be decimal form (e.g. 0.21 for 21%)",
-      "- nextEarningsDate should be YYYY-MM-DD or null",
-      "- do not include extra text",
-      "- keep queries short and factual",
-    ].join("\n"),
+    query: `${normalizedTicker} stock price PE ratio forward PE EPS analyst consensus target next earnings date RSI fundamentals`,
   })
 
   if (!research.ok) {
@@ -216,27 +258,36 @@ async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildRes
     }
   }
 
+  const snapshotForModel =
+    research.content.length > WEB_SNAPSHOT_FOR_MODEL_MAX_CHARS
+      ? `${research.content.slice(0, WEB_SNAPSHOT_FOR_MODEL_MAX_CHARS)}\n\n[snapshot truncated]`
+      : research.content
+
+  const systemPrompt =
+    "You extract structured financial fields from web search snippets. Reply with ONE JSON object only. Keys exactly: price, consensusTarget, pe, forwardPe, peg, roic, eps, fcfPerShare, rsi14, nextEarningsDate. Use null for unknown. Numbers only for numeric fields (no strings). roic as decimal (0.21 = 21%). nextEarningsDate as YYYY-MM-DD or null. No markdown, no prose, no code fences."
+
+  const userPrompt = `Ticker ${normalizedTicker}. Use only the evidence below; guess null if not stated.
+
+${snapshotForModel}`
+
   let extractedText = ""
   try {
     const llm = createLlm()
     const completion = await llm.messages.create({
       model: getTextModel(),
-      max_tokens: 500,
-      system:
-        "You are a strict financial data extractor. Return JSON only with keys: price, consensusTarget, pe, forwardPe, peg, roic, eps, fcfPerShare, rsi14, nextEarningsDate. Use null for unknown fields. Do not include markdown or extra keys.",
-      messages: [
-        {
-          role: "user",
-          content: `Ticker: ${normalizedTicker}\n\nWeb research snapshot:\n${research.content}`,
-        },
-      ],
+      max_tokens: 900,
+      temperature: 0,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
     })
 
-    extractedText = completion.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim()
+    extractedText = stripLeadingProseBeforeJson(
+      completion.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim(),
+    )
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown extraction error"
     return {
@@ -247,7 +298,37 @@ async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildRes
     }
   }
 
-  const parsed = extractJsonObject(extractedText)
+  let parsed = extractJsonObject(extractedText)
+
+  if (!parsed) {
+    try {
+      const llm = createLlm()
+      const repair = await llm.messages.create({
+        model: getTextModel(),
+        max_tokens: 600,
+        temperature: 0,
+        system:
+          "Convert the user text into one valid JSON object only. Keys: price, consensusTarget, pe, forwardPe, peg, roic, eps, fcfPerShare, rsi14, nextEarningsDate. null if unknown. No markdown.",
+        messages: [
+          {
+            role: "user",
+            content: `Fix into valid JSON only. Input:\n${extractedText.slice(0, 3_000)}`,
+          },
+        ],
+      })
+      const repaired = stripLeadingProseBeforeJson(
+        repair.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("\n")
+          .trim(),
+      )
+      parsed = extractJsonObject(repaired)
+    } catch {
+      parsed = null
+    }
+  }
+
   if (!parsed) {
     return {
       ok: false,
