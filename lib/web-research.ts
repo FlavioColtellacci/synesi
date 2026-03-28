@@ -1,5 +1,5 @@
 // Server-only, do not import in client components
-// Brave Search retrieval for MiniMax and other synthesis steps (no Perplexity).
+// Web research retrieval for synthesis steps.
 
 type ResearchFocus = "markets" | "company" | "thesis"
 
@@ -34,10 +34,12 @@ function getFocusHint(focus: ResearchFocus) {
   return "Focus on thesis-relevant context, factual checks, and key risks from recent months."
 }
 
-function clampBraveQuery(input: string, maxChars: number) {
+function clampWebSearchQuery(input: string, maxChars: number, maxWords: number) {
   const normalized = input.replace(/\s+/g, " ").trim()
-  if (normalized.length <= maxChars) return normalized
-  return normalized.slice(0, maxChars)
+  const words = normalized.split(" ").filter(Boolean)
+  const limitedByWords = words.slice(0, maxWords).join(" ")
+  if (limitedByWords.length <= maxChars) return limitedByWords
+  return limitedByWords.slice(0, maxChars)
 }
 
 type BraveWebHit = NonNullable<NonNullable<BraveWebSearchResponse["web"]>["results"]>[number]
@@ -75,7 +77,7 @@ export async function getWebResearchContext(params: {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY?.trim()
 
   if (!apiKey) {
-    return { ok: false, error: "BRAVE_SEARCH_API_KEY is not set" }
+    return { ok: false, error: "Web search API key is not configured" }
   }
 
   const query = params.query.trim()
@@ -89,8 +91,8 @@ export async function getWebResearchContext(params: {
 
   try {
     const url = new URL("https://api.search.brave.com/res/v1/web/search")
-    // Brave rejects q > 400 chars. Keep headroom below hard limit.
-    const braveQuery = clampBraveQuery(`${query} ${getFocusHint(focus)}`, 380)
+    // Provider-side limits can include both word count and character count.
+    const braveQuery = clampWebSearchQuery(`${query} ${getFocusHint(focus)}`, 360, 45)
     url.searchParams.set("q", braveQuery)
     url.searchParams.set("count", "10")
     url.searchParams.set("search_lang", "en")
@@ -110,7 +112,7 @@ export async function getWebResearchContext(params: {
       const text = (await response.text().catch(() => "")).trim()
       return {
         ok: false,
-        error: `Brave request failed (${response.status}): ${text || response.statusText}`,
+        error: `Web lookup request failed (${response.status}): ${text || response.statusText}`,
       }
     }
 
@@ -118,7 +120,7 @@ export async function getWebResearchContext(params: {
     const results = (data.web?.results ?? []).filter((item) => typeof item.url === "string" && item.url.length > 0)
 
     if (results.length === 0) {
-      return { ok: false, error: "Brave returned no web results" }
+      return { ok: false, error: "Web lookup returned no results" }
     }
 
     const citations = Array.from(new Set(results.map((item) => item.url!.trim()).filter(Boolean))).slice(0, 15)
@@ -130,7 +132,7 @@ export async function getWebResearchContext(params: {
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error"
-    return { ok: false, error: `Brave fetch failed: ${message}` }
+    return { ok: false, error: `Web lookup failed: ${message}` }
   } finally {
     clearTimeout(timeoutId)
   }

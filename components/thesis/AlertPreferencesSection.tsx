@@ -480,7 +480,7 @@ export default function AlertPreferencesSection({
                 Sigma · plain English setup
               </p>
               <p className="mt-1 text-xs text-[#6B6B7B]">
-                Sigma searches the web (Brave) for real RSS/Atom feeds, proposes sources and keywords, and you confirm
+                Sigma searches the web for real RSS/Atom feeds, proposes sources and keywords, and you confirm
                 before anything is saved.
               </p>
             </div>
@@ -508,7 +508,7 @@ export default function AlertPreferencesSection({
                 }}
                 className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
               >
-                {copilotLoading ? "SIGMA + BRAVE…" : "RUN SIGMA"}
+                {copilotLoading ? "SIGMA + WEB…" : "RUN SIGMA"}
               </button>
             </div>
 

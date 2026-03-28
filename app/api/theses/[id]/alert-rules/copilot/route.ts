@@ -146,7 +146,7 @@ async function gatherBraveContextForAlerts(intent: string, ticker: string, compa
       : rawMergedBody
   const merged =
     mergedBody.length > 0
-      ? `BRAVE WEB RESEARCH (merged queries; use URLs and titles below to pick real RSS/Atom feeds)\n\n${mergedBody}`
+      ? `WEB RESEARCH (merged queries; use URLs and titles below to pick real RSS/Atom feeds)\n\n${mergedBody}`
       : ""
 
   const errors = results.filter((r): r is { ok: false; error: string } => !r.ok).map((r) => r.error)
@@ -252,7 +252,7 @@ export async function POST(
 
     const brave = await gatherBraveContextForAlerts(intent, thesis.ticker ?? "", thesis.company_name ?? "")
 
-    const system = `You are Sigma (Synesi). You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- When BRAVE WEB RESEARCH is included in the user message, STRONGLY PREFER urlCandidates that appear in that research (titles/snippets/URL list) and that look like feeds (rss, atom, /feed, .xml).\n- Never invent URLs. If Brave did not surface a feed for an outlet, use empty urlCandidates for that source (downstream logic may add Google News RSS fallbacks).\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
+    const system = `You are Sigma (Synesi). You help set up deterministic personalized alerts for an investment thesis.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- When WEB RESEARCH is included in the user message, STRONGLY PREFER urlCandidates that appear in that research (titles/snippets/URL list) and that look like feeds (rss, atom, /feed, .xml).\n- Never invent URLs. If web search did not surface a feed for an outlet, use empty urlCandidates for that source (downstream logic may add Google News RSS fallbacks).\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
 
     const braveSection = brave.merged
       ? `\n\n${brave.merged}\n`
@@ -339,10 +339,10 @@ export async function POST(
       },
       braveSearchUsed: brave.anyOk,
       braveSearchNote: brave.anyOk
-        ? "Sigma used Brave Search to ground feed URLs."
+        ? "Sigma used live web research to ground feed URLs."
         : brave.errors[0]
-          ? `Brave Search unavailable (${brave.errors[0]}). Feeds may rely on fallbacks.`
-          : "Brave Search returned no usable results; feeds may rely on fallbacks.",
+          ? `Live web research unavailable (${brave.errors[0]}). Feeds may rely on fallbacks.`
+          : "Live web research returned no usable results; feeds may rely on fallbacks.",
     })
   } catch (error) {
     console.error("Alert rule copilot failed:", error)

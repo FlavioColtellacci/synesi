@@ -814,7 +814,7 @@ export default function ChatWidget() {
                     {message.role === "assistant" && message.webContextSource === "brave_search" ? (
                       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-sky-300/30 bg-sky-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-sky-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
-                        Web context via Brave
+                        Web context verified
                       </div>
                     ) : null}
                     {message.role === "assistant" && message.webLookupTemporarilyUnavailable ? (
