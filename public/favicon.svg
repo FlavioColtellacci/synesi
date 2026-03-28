@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SYNESI">
+  <rect width="32" height="32" rx="6" fill="#0A0A0C"/>
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="20" text-anchor="middle">
+    <text x="17" y="23" fill="rgba(255, 50, 50, 0.85)">£</text>
+    <text x="15" y="23" fill="rgba(0, 210, 255, 0.85)">£</text>
+    <text x="16" y="23" fill="#FFFFFF">£</text>
+  </g>
+</svg>

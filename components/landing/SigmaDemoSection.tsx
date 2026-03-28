@@ -328,7 +328,7 @@ export default function SigmaDemoSection() {
   }
 
   return (
-    <section id="sigma-demo" className="px-6 py-20 md:px-10">
+    <section id="sigma-demo" className="px-6 py-14 md:px-10 md:py-20">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 text-center">
           <p className="mb-4 font-mono text-xs uppercase tracking-[0.28em] text-[#6B6B7B]">SIGMA DEMO</p>
@@ -358,7 +358,7 @@ export default function SigmaDemoSection() {
 
               <p className="font-mono text-[10px] uppercase tracking-widest text-[#8B8B9A]">{activeExample.title}</p>
 
-              <div className="h-[28rem] min-h-0 overflow-hidden rounded-xl border border-[#2A2A32]/60 bg-[#0B0B0F]/40">
+              <div className="h-[20rem] min-h-0 overflow-hidden rounded-xl border border-[#2A2A32]/60 bg-[#0B0B0F]/40 sm:h-[22rem]">
                 <div
                   ref={previewTranscriptRef}
                   className="sigma-scrollbar h-full overflow-y-auto overscroll-y-contain px-1 py-3 [overflow-anchor:none]"
@@ -419,7 +419,7 @@ export default function SigmaDemoSection() {
 
               <div
                 ref={interactiveTranscriptRef}
-                className="sigma-scrollbar h-[28rem] min-h-0 space-y-3 overflow-y-auto overscroll-y-contain px-1 py-0.5 [overflow-anchor:none]"
+                className="sigma-scrollbar h-[20rem] min-h-0 space-y-3 overflow-y-auto overscroll-y-contain px-1 py-0.5 [overflow-anchor:none] sm:h-[22rem]"
               >
                 {messages.map((message) => (
                   <article

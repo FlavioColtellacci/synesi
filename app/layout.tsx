@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import './globals.css'
@@ -15,8 +15,20 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ['400', '500'],
 })
 
+export const viewport: Viewport = {
+  themeColor: '#0A0A0C',
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://synesi.app'),
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon', type: 'image/png', sizes: '32x32' },
+    ],
+    apple: [{ url: '/apple-icon', type: 'image/png', sizes: '180x180' }],
+    shortcut: '/favicon.svg',
+  },
   title: {
     default: 'SYNESI, Your Conviction, Tracked.',
     template: '%s | SYNESI',
