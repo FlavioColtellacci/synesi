@@ -3,7 +3,13 @@
 import Link from "next/link"
 
 type NavItem = {
-  key: "product" | "pricing" | "manifesto" | "investment-journal" | "thesis-validation"
+  key:
+    | "product"
+    | "pricing"
+    | "manifesto"
+    | "investment-journal"
+    | "thesis-validation"
+    | "confirmation-bias"
   label: string
   href: string
 }
@@ -21,6 +27,11 @@ const navItems: NavItem[] = [
     key: "thesis-validation",
     label: "AI Thesis Validation",
     href: "/use-cases/thesis-validation",
+  },
+  {
+    key: "confirmation-bias",
+    label: "Confirmation Bias",
+    href: "/learn/confirmation-bias-investing",
   },
 ]
 
