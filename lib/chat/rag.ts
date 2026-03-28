@@ -6,7 +6,10 @@ type RagEvidence = {
 }
 
 type RagContextResult = {
+  /** Top snippets injected into the model prompt (ranked; may have zero keyword overlap). */
   snippets: string[]
+  /** Subset shown under “Evidence used” in the chat UI — only items with real query overlap. */
+  clientEvidenceSnippets: string[]
   block: string | null
 }
 
@@ -41,7 +44,10 @@ function trimSnippet(input: string): string {
   return `${normalized.slice(0, MAX_SNIPPET_LENGTH - 1)}…`
 }
 
-function rankEvidence(query: string, candidates: string[]): string[] {
+function rankEvidence(
+  query: string,
+  candidates: string[],
+): { promptSnippets: string[]; clientEvidenceSnippets: string[] } {
   const ranked: RagEvidence[] = candidates
     .map((text) => ({
       text: trimSnippet(text),
@@ -50,8 +56,11 @@ function rankEvidence(query: string, candidates: string[]): string[] {
     .filter((item) => item.text.length > 0)
     .sort((a, b) => b.score - a.score)
 
-  const selected = ranked.slice(0, MAX_SNIPPETS).map((item) => item.text)
-  return selected
+  const top = ranked.slice(0, MAX_SNIPPETS)
+  return {
+    promptSnippets: top.map((item) => item.text),
+    clientEvidenceSnippets: top.filter((item) => item.score > 0).map((item) => item.text),
+  }
 }
 
 export async function buildRagContextBlock(
@@ -107,16 +116,16 @@ export async function buildRagContextBlock(
     candidates.push(`Status note (${row.thesis_id}): ${row.note} | status=${nextStatus}`)
   }
 
-  const snippets = rankEvidence(query, candidates)
-  if (snippets.length === 0) {
-    return { snippets: [], block: null }
+  const { promptSnippets, clientEvidenceSnippets } = rankEvidence(query, candidates)
+  if (promptSnippets.length === 0) {
+    return { snippets: [], clientEvidenceSnippets: [], block: null }
   }
 
   const block = [
     "SYNESI RETRIEVED EVIDENCE (user-scoped, ranked by query relevance)",
-    ...snippets.map((snippet) => `- ${snippet}`),
+    ...promptSnippets.map((snippet) => `- ${snippet}`),
     "Use this as supporting evidence only when directly relevant. Do not claim certainty beyond these snippets.",
   ].join("\n")
 
-  return { snippets, block }
+  return { snippets: promptSnippets, clientEvidenceSnippets, block }
 }

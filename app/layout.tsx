@@ -54,7 +54,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable} [scrollbar-gutter:stable]`}
+    >
       <body className="bg-synesi-bg text-synesi-text antialiased">
         {children}
         <Analytics />

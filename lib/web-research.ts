@@ -34,6 +34,12 @@ function getFocusHint(focus: ResearchFocus) {
   return "Focus on thesis-relevant context, factual checks, and key risks from recent months."
 }
 
+function clampBraveQuery(input: string, maxChars: number) {
+  const normalized = input.replace(/\s+/g, " ").trim()
+  if (normalized.length <= maxChars) return normalized
+  return normalized.slice(0, maxChars)
+}
+
 type BraveWebHit = NonNullable<NonNullable<BraveWebSearchResponse["web"]>["results"]>[number]
 
 function buildResearchContent(query: string, focus: ResearchFocus, results: BraveWebHit[]) {
@@ -83,7 +89,9 @@ export async function getWebResearchContext(params: {
 
   try {
     const url = new URL("https://api.search.brave.com/res/v1/web/search")
-    url.searchParams.set("q", `${truncate(query, 4_000)}\n\n${getFocusHint(focus)}`)
+    // Brave rejects q > 400 chars. Keep headroom below hard limit.
+    const braveQuery = clampBraveQuery(`${query} ${getFocusHint(focus)}`, 380)
+    url.searchParams.set("q", braveQuery)
     url.searchParams.set("count", "10")
     url.searchParams.set("search_lang", "en")
     url.searchParams.set("country", "us")

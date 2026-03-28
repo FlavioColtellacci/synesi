@@ -516,8 +516,11 @@ export async function POST(request: Request) {
             const responsePayloadWithWebContext: ChatAssistantResponse = {
               ...normalizedResponsePayloadWithBrave,
               retrievalEvidence:
-                ragContext.snippets.length > 0
-                  ? ragContext.snippets.map((snippet) => ({ source: "source_match" as const, snippet }))
+                ragContext.clientEvidenceSnippets.length > 0
+                  ? ragContext.clientEvidenceSnippets.map((snippet) => ({
+                      source: "source_match" as const,
+                      snippet,
+                    }))
                   : normalizedResponsePayloadWithBrave.retrievalEvidence,
               webContextVerified: usedSafeWebContext,
               webContextSource,
@@ -588,8 +591,8 @@ export async function POST(request: Request) {
     const responsePayloadWithWebContext: ChatAssistantResponse = {
       ...normalizedResponsePayload,
       retrievalEvidence:
-        ragContext.snippets.length > 0
-          ? ragContext.snippets.map((snippet) => ({ source: "source_match" as const, snippet }))
+        ragContext.clientEvidenceSnippets.length > 0
+          ? ragContext.clientEvidenceSnippets.map((snippet) => ({ source: "source_match" as const, snippet }))
           : normalizedResponsePayload.retrievalEvidence,
       webContextVerified: usedSafeWebContext,
       webContextSource,

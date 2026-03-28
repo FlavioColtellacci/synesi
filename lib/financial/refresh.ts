@@ -14,6 +14,7 @@ import type { Database } from "@/types/database"
 import { getGlobalQuotePrice } from "@/lib/alpha-vantage"
 import { getWebResearchContext } from "@/lib/web-research"
 import type { FinancialSnapshotCoverage, FinancialSnapshotPayload } from "./types"
+import { createLlm, getTextModel } from "@/lib/llm"
 
 function toYmd(date: Date): string {
   return date.toISOString().slice(0, 10)
@@ -202,6 +203,7 @@ async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildRes
       "- roic should be decimal form (e.g. 0.21 for 21%)",
       "- nextEarningsDate should be YYYY-MM-DD or null",
       "- do not include extra text",
+      "- keep queries short and factual",
     ].join("\n"),
   })
 
@@ -214,7 +216,38 @@ async function buildWebSnapshotPayload(ticker: string): Promise<SnapshotBuildRes
     }
   }
 
-  const parsed = extractJsonObject(research.content)
+  let extractedText = ""
+  try {
+    const llm = createLlm()
+    const completion = await llm.messages.create({
+      model: getTextModel(),
+      max_tokens: 500,
+      system:
+        "You are a strict financial data extractor. Return JSON only with keys: price, consensusTarget, pe, forwardPe, peg, roic, eps, fcfPerShare, rsi14, nextEarningsDate. Use null for unknown fields. Do not include markdown or extra keys.",
+      messages: [
+        {
+          role: "user",
+          content: `Ticker: ${normalizedTicker}\n\nWeb research snapshot:\n${research.content}`,
+        },
+      ],
+    })
+
+    extractedText = completion.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown extraction error"
+    return {
+      ok: false,
+      ticker: normalizedTicker,
+      provider: "eodhd",
+      error: `Failed to extract financial data from web context: ${message}`,
+    }
+  }
+
+  const parsed = extractJsonObject(extractedText)
   if (!parsed) {
     return {
       ok: false,

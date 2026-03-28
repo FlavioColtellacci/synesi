@@ -540,7 +540,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div>
           <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">THESIS</p>
           <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-6">

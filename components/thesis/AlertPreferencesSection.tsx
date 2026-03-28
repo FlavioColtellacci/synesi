@@ -26,8 +26,6 @@ type CopilotSuggestion = {
   }>
 }
 
-type CopilotSelection = { nameIndex: number; urlIndex: number; selected: boolean }
-
 const MODE_OPTIONS: Array<{ value: AlertRule["mode"]; label: string; hint: string }> = [
   {
     value: "only_sources",
@@ -44,11 +42,6 @@ const MODE_OPTIONS: Array<{ value: AlertRule["mode"]; label: string; hint: strin
     label: "Exclude selected sources",
     hint: "Alert from every source except the selected sources.",
   },
-]
-
-const CONFIDENCE_OPTIONS: Array<{ value: AlertRule["min_confidence"]; label: string }> = [
-  { value: "high", label: "High only" },
-  { value: "medium", label: "Medium and high" },
 ]
 
 async function parseJson<T>(response: Response): Promise<T | null> {
@@ -75,9 +68,6 @@ export default function AlertPreferencesSection({
   const [copilotLoading, setCopilotLoading] = useState(false)
   const [copilotError, setCopilotError] = useState<string | null>(null)
   const [copilotSuggestion, setCopilotSuggestion] = useState<CopilotSuggestion | null>(null)
-  const [copilotApplyRule, setCopilotApplyRule] = useState(true)
-  const [copilotAddSources, setCopilotAddSources] = useState(true)
-  const [copilotSelections, setCopilotSelections] = useState<CopilotSelection[]>([])
   const primaryRule = rules[0] ?? null
 
   const selectedSourceIds = useMemo(() => new Set(primaryRule?.sourceIds ?? []), [primaryRule?.sourceIds])
@@ -88,7 +78,7 @@ export default function AlertPreferencesSection({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Personalized source rule",
+        name: "Personalized alert rule",
         mode: "only_sources",
         minConfidence: "high",
         isEnabled: true,
@@ -174,30 +164,6 @@ export default function AlertPreferencesSection({
     }
   }
 
-  async function handleMinConfidenceChange(nextMinConfidence: AlertRule["min_confidence"]) {
-    setIsBusy(true)
-    setError(null)
-    try {
-      const rule = await ensurePrimaryRule()
-      if (!rule) return
-
-      const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ minConfidence: nextMinConfidence }),
-      })
-      const payload = await parseJson<{ error?: string }>(response)
-      if (!response.ok) {
-        throw new Error(payload?.error ?? "Failed to update minimum confidence")
-      }
-      updatePrimaryRule({ min_confidence: nextMinConfidence })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update confidence")
-    } finally {
-      setIsBusy(false)
-    }
-  }
-
   async function handleSourceToggle(sourceId: string, shouldSelect: boolean) {
     setIsBusy(true)
     setError(null)
@@ -228,23 +194,11 @@ export default function AlertPreferencesSection({
   }
 
   const activeMode = primaryRule?.mode ?? "only_sources"
-  const activeConfidence = primaryRule?.min_confidence ?? "high"
   const isEnabled = primaryRule?.is_enabled ?? false
   const includeKeywords = primaryRule?.include_keywords ?? []
   const excludeKeywords = primaryRule?.exclude_keywords ?? []
   const selectedSourcesCount = primaryRule?.sourceIds?.length ?? 0
-
-  function getFeedLikeCandidates(source: CopilotSuggestion["sources"][number]) {
-    return source.urlCandidates.filter((candidate) => candidate.isFeedLike)
-  }
-
-  const hasBlockedSourceSelections = Boolean(
-    copilotSuggestion?.sources.some((source, index) => {
-      const selection = copilotSelections[index]
-      if (!selection?.selected) return false
-      return getFeedLikeCandidates(source).length === 0
-    }),
-  )
+  const selectedSources = trustedSources.filter((source) => selectedSourceIds.has(source.id))
 
   function normalizeKeyword(value: string) {
     return value.trim().toLowerCase()
@@ -355,13 +309,6 @@ export default function AlertPreferencesSection({
 
       setCopilotSuggestion(payload.suggestion)
       setSigmaWebNote(typeof payload.braveSearchNote === "string" ? payload.braveSearchNote : null)
-      setCopilotSelections(
-        payload.suggestion.sources.map((source) => ({
-          nameIndex: 0,
-          urlIndex: 0,
-          selected: source.urlCandidates.some((candidate) => candidate.isFeedLike),
-        })),
-      )
     } catch (err) {
       setCopilotError(err instanceof Error ? err.message : "Copilot request failed")
     } finally {
@@ -382,108 +329,98 @@ export default function AlertPreferencesSection({
         setCopilotError("Could not initialize alert preferences.")
         return
       }
-
-      if (copilotApplyRule) {
-        const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: copilotSuggestion.recommendedMode,
-            minConfidence: copilotSuggestion.recommendedMinConfidence,
-            includeKeywords: copilotSuggestion.includeKeywords,
-            excludeKeywords: copilotSuggestion.excludeKeywords,
-            isEnabled: true,
-          }),
-        })
-        const payload = await parseJson<{ error?: string }>(response)
-        if (!response.ok) {
-          throw new Error(payload?.error ?? "Failed to apply rule settings")
-        }
-        updatePrimaryRule({
+      const response = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           mode: copilotSuggestion.recommendedMode,
-          min_confidence: copilotSuggestion.recommendedMinConfidence,
-          include_keywords: copilotSuggestion.includeKeywords,
-          exclude_keywords: copilotSuggestion.excludeKeywords,
-          is_enabled: true,
-        })
+          minConfidence: "high",
+          includeKeywords: copilotSuggestion.includeKeywords,
+          excludeKeywords: copilotSuggestion.excludeKeywords,
+          isEnabled: true,
+        }),
+      })
+      const payload = await parseJson<{ error?: string }>(response)
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Failed to save alert settings")
       }
 
-      if (copilotAddSources) {
-        const nextSelectedSourceIds = new Set(primaryRule?.sourceIds ?? [])
-        const createdOrMatchedSources: TrustedSource[] = []
-        const selections = copilotSelections
-        for (let i = 0; i < copilotSuggestion.sources.length; i++) {
-          const selection = selections[i]
-          const source = copilotSuggestion.sources[i]
-          if (!selection?.selected) continue
+      const nextSelectedSourceIds = new Set(primaryRule?.sourceIds ?? [])
+      const createdOrMatchedSources: TrustedSource[] = []
+      let addedCount = 0
+      let skippedNoFeedCount = 0
 
-          const name = source.nameCandidates[selection.nameIndex] ?? source.nameCandidates[0] ?? ""
-          const feedLikeCandidates = getFeedLikeCandidates(source)
-          const chosenUrl = feedLikeCandidates[selection.urlIndex]?.url ?? feedLikeCandidates[0]?.url ?? ""
-          const isFeedLike = feedLikeCandidates[selection.urlIndex]?.isFeedLike ?? false
-
-          if (!name) continue
-          if (!chosenUrl) {
-            throw new Error(
-              `No feed URL found for "${name}". Uncheck it or regenerate with a more specific source instruction.`,
-            )
-          }
-          if (!isFeedLike) {
-            throw new Error(`"${chosenUrl}" doesn't look like an RSS/Atom feed URL. Pick a different URL.`)
-          }
-
-          const matchedSource = [...trustedSources, ...createdOrMatchedSources].find((candidate) => {
-            const nameMatches = normalizeSourceField(candidate.name) === normalizeSourceField(name)
-            const urlMatches = normalizeSourceField(candidate.url) === normalizeSourceField(chosenUrl)
-            return nameMatches || urlMatches
-          })
-
-          let sourceIdToAttach = matchedSource?.id ?? ""
-
-          if (!sourceIdToAttach) {
-            const addResponse = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name,
-                url: chosenUrl,
-                sourceType: source.sourceType,
-              }),
-            })
-            const addPayload = await parseJson<{ source?: TrustedSource; error?: string }>(addResponse)
-            if (!addResponse.ok || !addPayload?.source) {
-              throw new Error(addPayload?.error ?? `Failed to add trusted source "${name}"`)
-            }
-            sourceIdToAttach = addPayload.source.id
-            createdOrMatchedSources.push(addPayload.source)
-          }
-
-          if (!sourceIdToAttach || nextSelectedSourceIds.has(sourceIdToAttach)) {
-            continue
-          }
-
-          const attachResponse = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}/sources`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ trustedSourceId: sourceIdToAttach }),
-          })
-          const attachPayload = await parseJson<{ error?: string }>(attachResponse)
-          if (!attachResponse.ok && attachResponse.status !== 409) {
-            throw new Error(
-              attachPayload?.error ??
-                `Failed to attach source "${name}" to your personalized challenge alerts.`,
-            )
-          }
-
-          nextSelectedSourceIds.add(sourceIdToAttach)
+      for (const source of copilotSuggestion.sources) {
+        const name = source.nameCandidates[0] ?? ""
+        const chosenUrl = source.urlCandidates.find((candidate) => candidate.isFeedLike)?.url ?? ""
+        if (!name || !chosenUrl) {
+          skippedNoFeedCount += 1
+          continue
         }
 
-        updatePrimaryRule({ sourceIds: [...nextSelectedSourceIds] })
+        const matchedSource = [...trustedSources, ...createdOrMatchedSources].find((candidate) => {
+          const nameMatches = normalizeSourceField(candidate.name) === normalizeSourceField(name)
+          const urlMatches = normalizeSourceField(candidate.url) === normalizeSourceField(chosenUrl)
+          return nameMatches || urlMatches
+        })
+
+        let sourceIdToAttach = matchedSource?.id ?? ""
+
+        if (!sourceIdToAttach) {
+          const addResponse = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              url: chosenUrl,
+              sourceType: source.sourceType,
+            }),
+          })
+          const addPayload = await parseJson<{ source?: TrustedSource; error?: string }>(addResponse)
+          if (!addResponse.ok || !addPayload?.source) {
+            throw new Error(addPayload?.error ?? `Failed to add trusted source "${name}"`)
+          }
+          sourceIdToAttach = addPayload.source.id
+          createdOrMatchedSources.push(addPayload.source)
+        }
+
+        if (!sourceIdToAttach || nextSelectedSourceIds.has(sourceIdToAttach)) {
+          continue
+        }
+
+        const attachResponse = await fetch(`/api/theses/${thesisId}/alert-rules/${rule.id}/sources`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trustedSourceId: sourceIdToAttach }),
+        })
+        const attachPayload = await parseJson<{ error?: string }>(attachResponse)
+        if (!attachResponse.ok && attachResponse.status !== 409) {
+          throw new Error(
+            attachPayload?.error ?? `Failed to attach source "${name}" to your personalized alerts.`,
+          )
+        }
+
+        nextSelectedSourceIds.add(sourceIdToAttach)
+        addedCount += 1
+      }
+
+      updatePrimaryRule({
+        mode: copilotSuggestion.recommendedMode,
+        min_confidence: "high",
+        include_keywords: copilotSuggestion.includeKeywords,
+        exclude_keywords: copilotSuggestion.excludeKeywords,
+        is_enabled: true,
+        sourceIds: [...nextSelectedSourceIds],
+      })
+
+      if (addedCount === 0 && skippedNoFeedCount > 0) {
+        setCopilotError("Sigma could not find feed URLs for the proposed sources. Try a more specific prompt.")
+      } else if (skippedNoFeedCount > 0) {
+        setSigmaWebNote(`Saved ${addedCount} source(s). Skipped ${skippedNoFeedCount} without feed URLs.`)
       }
 
       setCopilotSuggestion(null)
       setCopilotIntent("")
-      setSigmaWebNote(null)
       router.refresh()
     } catch (err) {
       setCopilotError(err instanceof Error ? err.message : "Failed to apply copilot suggestion")
@@ -500,9 +437,9 @@ export default function AlertPreferencesSection({
       <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-[#F0F0F0]">Personalized challenge alerts</p>
+            <p className="text-sm text-[#F0F0F0]">Personalized alerts</p>
             <p className="mt-1 text-xs text-[#6B6B7B]">
-              Control which trusted sources can trigger thesis challenge notifications.
+              Decide in plain English when Sigma should notify you about this thesis.
             </p>
             <p className="mt-2 text-xs text-[#6B6B7B]">
               Saved now:{" "}
@@ -532,7 +469,7 @@ export default function AlertPreferencesSection({
 
         <p className="mt-3 text-xs text-[#6B6B7B]">
           {isEnabled
-            ? "Advanced options save immediately. Sigma’s draft is saved only after you click APPLY SELECTIONS."
+            ? "Advanced options save immediately. Sigma suggestions are saved after you click SAVE ALERT SETUP."
             : "Turn alerts on to describe what you want in plain English."}
         </p>
 
@@ -573,25 +510,6 @@ export default function AlertPreferencesSection({
               >
                 {copilotLoading ? "SIGMA + BRAVE…" : "RUN SIGMA"}
               </button>
-
-              <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
-                <input
-                  type="checkbox"
-                  checked={copilotApplyRule}
-                  disabled={copilotLoading || isBusy}
-                  onChange={(event) => setCopilotApplyRule(event.target.checked)}
-                />
-                Apply rule settings
-              </label>
-              <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
-                <input
-                  type="checkbox"
-                  checked={copilotAddSources}
-                  disabled={copilotLoading || isBusy}
-                  onChange={(event) => setCopilotAddSources(event.target.checked)}
-                />
-                Add trusted sources
-              </label>
             </div>
 
             {copilotError ? <p className="mt-3 font-mono text-xs text-[#FF3B30]">{copilotError}</p> : null}
@@ -604,7 +522,7 @@ export default function AlertPreferencesSection({
 
             {copilotSuggestion ? (
               <p className="mt-3 rounded-lg border border-[#00D1B2]/30 bg-[#00D1B2]/10 px-3 py-2 text-xs text-[#00D1B2]">
-                Draft ready. Review below, then click APPLY SELECTIONS to save feeds and rules for cron ingestion.
+                Draft ready. Review below, then click SAVE ALERT SETUP.
               </p>
             ) : null}
 
@@ -613,8 +531,7 @@ export default function AlertPreferencesSection({
                 <div className="rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-3">
                   <p className="text-xs text-[#6B6B7B]">
                     Recommended: <span className="text-[#F0F0F0]">{copilotSuggestion.recommendedMode}</span>{" "}
-                    • min confidence{" "}
-                    <span className="text-[#F0F0F0]">{copilotSuggestion.recommendedMinConfidence}</span>
+                    • confidence fixed to <span className="text-[#F0F0F0]">high</span>
                   </p>
                   {(copilotSuggestion.includeKeywords.length > 0 || copilotSuggestion.excludeKeywords.length > 0) ? (
                     <p className="mt-1 text-xs text-[#6B6B7B]">
@@ -630,112 +547,78 @@ export default function AlertPreferencesSection({
                   ) : null}
                 </div>
 
-                {copilotSuggestion.sources.map((src, index) => {
-                  const selection = copilotSelections[index] ?? { nameIndex: 0, urlIndex: 0, selected: true }
-                  const feedLikeCandidates = getFeedLikeCandidates(src)
-                  const hasUrlCandidates = feedLikeCandidates.length > 0
-                  return (
-                    <div
-                      key={`${src.sourceType}-${index}`}
-                      className="rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-3"
-                    >
-                      <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
-                        <input
-                          type="checkbox"
-                          checked={selection.selected}
-                          disabled={copilotLoading || isBusy}
-                          onChange={(event) => {
-                            setCopilotSelections((current) =>
-                              current.map((item, i) =>
-                                i === index ? { ...item, selected: event.target.checked } : item,
-                              ),
-                            )
-                          }}
-                        />
-                        Include this source ({src.sourceType})
-                      </label>
-
-                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                        <label className="block">
-                          <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                            Name
-                          </span>
-                          <select
-                            value={selection.nameIndex}
-                            disabled={copilotLoading || isBusy}
-                            onChange={(event) => {
-                              const nameIndex = Number.parseInt(event.target.value, 10) || 0
-                              setCopilotSelections((current) =>
-                                current.map((item, i) => (i === index ? { ...item, nameIndex } : item)),
-                              )
-                            }}
-                            className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                          >
-                            {src.nameCandidates.map((name, i) => (
-                              <option key={`${name}-${i}`} value={i}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="block">
-                          <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                            URL
-                          </span>
-                          <select
-                            value={selection.urlIndex}
-                            disabled={copilotLoading || isBusy || !hasUrlCandidates}
-                            onChange={(event) => {
-                              const urlIndex = Number.parseInt(event.target.value, 10) || 0
-                              setCopilotSelections((current) =>
-                                current.map((item, i) => (i === index ? { ...item, urlIndex } : item)),
-                              )
-                            }}
-                            className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                          >
-                            {hasUrlCandidates ? (
-                              feedLikeCandidates.map((u, i) => (
-                                <option key={`${u.url}-${i}`} value={i}>
-                                  ✅ {u.url}
-                                </option>
-                              ))
-                            ) : (
-                              <option value={0}>No feed URL found</option>
-                            )}
-                          </select>
-                          {!hasUrlCandidates ? (
-                            <p className="mt-1 text-xs text-[#FFB800]">
-                              No feed-like URL for this source. Uncheck it or run Sigma again with a clearer outlet name.
-                            </p>
-                          ) : null}
-                        </label>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {hasBlockedSourceSelections ? (
-                  <p className="text-xs text-[#FFB800]">
-                    At least one selected source has no feed-like URL. Uncheck it or generate a new draft before
-                    applying.
-                  </p>
-                ) : null}
+                <div className="rounded-lg border border-[#2A2A32] bg-[#0A0A0C] p-3">
+                  <p className="text-xs text-[#6B6B7B]">Proposed sources:</p>
+                  <div className="mt-2 space-y-2">
+                    {copilotSuggestion.sources.map((src, index) => {
+                      const name = src.nameCandidates[0] ?? "Unnamed source"
+                      const firstFeed = src.urlCandidates.find((candidate) => candidate.isFeedLike)?.url ?? ""
+                      return (
+                        <div key={`${src.sourceType}-${index}`} className="rounded-lg border border-[#2A2A32] p-2">
+                          <p className="text-sm text-[#F0F0F0]">
+                            {name} <span className="text-xs text-[#6B6B7B]">({src.sourceType})</span>
+                          </p>
+                          <p className="mt-1 break-all text-xs text-[#6B6B7B]">
+                            {firstFeed || "No feed URL found (Sigma will skip this source)."}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
 
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    disabled={isBusy || hasBlockedSourceSelections}
+                    disabled={isBusy}
                     onClick={() => {
                       void applyCopilotSuggestion()
                     }}
                     className="rounded-lg border border-[#00D1B2]/40 px-4 py-2 font-mono text-xs tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
                   >
-                    APPLY SELECTIONS
+                    SAVE ALERT SETUP
                   </button>
                 </div>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {isEnabled ? (
+          <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
+            <p className="font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase">Current alert sources</p>
+            {selectedSources.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {selectedSources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-[#F0F0F0]">{source.name}</p>
+                      <p className="truncate text-xs text-[#6B6B7B]">{source.url ?? "No URL"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => {
+                        void handleSourceToggle(source.id, false)
+                      }}
+                      className="shrink-0 rounded-lg border border-[#FF3B30]/40 px-3 py-1 font-mono text-[10px] tracking-widest text-[#FF3B30] hover:bg-[#FF3B30]/10 disabled:opacity-60"
+                    >
+                      REMOVE
+                    </button>
+                  </div>
+                ))}
+                <p className="pt-1 text-xs text-[#6B6B7B]">
+                  Need to edit a source URL/name? Use the Trusted Sources section, then run Sigma again if needed.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[#6B6B7B]">
+                No sources selected yet. Run Sigma above and save the setup to add them.
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -747,7 +630,7 @@ export default function AlertPreferencesSection({
 
         {!isEnabled ? (
           <p className="mt-3 text-xs text-[#6B6B7B]">
-            Enable personalized challenge alerts to describe what you want in plain English with Sigma.
+            Enable personalized alerts to describe what you want in plain English with Sigma.
           </p>
         ) : null}
 
@@ -755,13 +638,11 @@ export default function AlertPreferencesSection({
           <details className="group mt-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
             <summary className="cursor-pointer list-none font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase marker:content-none [&::-webkit-details-marker]:hidden">
               <span className="text-[#8BE8D8] group-open:text-[#8BE8D8]">Advanced tuning</span>
-              <span className="ml-2 text-[#6B6B7B] normal-case tracking-normal">
-                — mode, per-source toggles, manual keywords
-              </span>
+              <span className="ml-2 text-[#6B6B7B] normal-case tracking-normal">— mode and manual keywords</span>
             </summary>
 
             <div className="mt-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3">
                 <label className="block">
                   <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">Mode</span>
                   <select
@@ -779,57 +660,14 @@ export default function AlertPreferencesSection({
                     ))}
                   </select>
                 </label>
-
-                <label className="block">
-                  <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                    Minimum confidence
-                  </span>
-                  <select
-                    disabled={isBusy}
-                    value={activeConfidence}
-                    onChange={(event) => {
-                      void handleMinConfidenceChange(event.target.value as AlertRule["min_confidence"])
-                    }}
-                    className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                  >
-                    {CONFIDENCE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
 
               <p className="mt-2 text-xs text-[#6B6B7B]">
                 {MODE_OPTIONS.find((option) => option.value === activeMode)?.hint}
               </p>
-
-              {trustedSources.length === 0 ? (
-                <p className="mt-4 text-xs text-[#6B6B7B]">
-                  No saved sources yet for this thesis. Run Sigma above to add RSS feeds, or add them in the trusted
-                  sources section.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-2">
-                  {trustedSources.map((source) => (
-                    <label
-                      key={source.id}
-                      className="flex items-center gap-3 rounded-lg border border-[#2A2A32] bg-[#0F0F12] px-3 py-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedSourceIds.has(source.id)}
-                        disabled={isBusy}
-                        onChange={(event) => {
-                          void handleSourceToggle(source.id, event.target.checked)
-                        }}
-                      />
-                      <span className="text-sm text-[#F0F0F0]">{source.name}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
+              <p className="mt-1 text-xs text-[#6B6B7B]">
+                Confidence is fixed to high signal only to reduce noisy notifications.
+              </p>
 
               <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>

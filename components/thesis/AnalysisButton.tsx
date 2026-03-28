@@ -160,7 +160,7 @@ export function AnalysisButton({
           return (
             <article
               key={section.key}
-              className="bg-[#141418] border border-[#2A2A32] rounded-xl mb-3 overflow-hidden"
+              className="bg-[#141418] border border-[#2A2A32] rounded-xl mb-3 overflow-hidden [overflow-anchor:none]"
             >
               <button
                 type="button"

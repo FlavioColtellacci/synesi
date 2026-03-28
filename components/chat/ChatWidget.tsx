@@ -851,18 +851,19 @@ export default function ChatWidget() {
                       </div>
                     ) : null}
                     {message.role === "assistant" && (message.retrievalEvidence?.length ?? 0) > 0 ? (
-                      <div className="mt-2 rounded-lg border border-[#2A2A32]/70 bg-[#101018]/80 px-2.5 py-2">
-                        <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">
-                          Evidence used
-                        </p>
-                        <ul className="space-y-1 text-[11px] text-[#A8A8B8]">
+                      <details className="mt-2 rounded-lg border border-[#2A2A32]/70 bg-[#101018]/80 px-2.5 py-2">
+                        <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] marker:content-none [&::-webkit-details-marker]:hidden">
+                          Sources · {message.retrievalEvidence?.length ?? 0}{" "}
+                          <span className="font-sans normal-case tracking-normal text-[#5A5A68]">(tap to expand)</span>
+                        </summary>
+                        <ul className="mt-2 space-y-1 border-t border-[#2A2A32]/50 pt-2 text-[11px] text-[#A8A8B8]">
                           {message.retrievalEvidence?.map((item, index) => (
                             <li key={`${item.source}-${index}`} className="leading-relaxed">
                               - {item.snippet}
                             </li>
                           ))}
                         </ul>
-                      </div>
+                      </details>
                     ) : null}
 
                   </div>
