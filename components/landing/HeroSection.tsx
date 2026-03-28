@@ -117,22 +117,24 @@ export default function HeroSection() {
                 Where your investment story lives, grows, and gets
                 tested against reality.
               </p>
-              <p className="mt-3 max-w-sm font-sans text-sm leading-relaxed text-[#6B6B7B] md:text-base">
-                Powered by Sigma, your in-app assistant and daily Sigma Monitor
-                digest. Not investment advice.
-              </p>
+              <div className="mt-8 flex flex-col gap-8 md:mt-10 md:gap-10">
+                <p className="max-w-sm font-sans text-sm leading-relaxed text-[#6B6B7B] md:text-base">
+                  Powered by Sigma, your in-app assistant and daily Sigma Monitor
+                  digest. Not investment advice.
+                </p>
 
-              <Link
-                href="/signup"
-                className="mt-10 inline-block rounded-xl bg-[#FFFFFF] px-8 py-4 font-mono text-xs font-medium uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:text-sm"
-              >
-                START YOUR CONVICTION JOURNAL →
-              </Link>
+                <Link
+                  href="/signup"
+                  className="inline-block w-fit rounded-xl bg-[#FFFFFF] px-8 py-4 font-mono text-xs font-medium uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:text-sm"
+                >
+                  START YOUR CONVICTION JOURNAL →
+                </Link>
 
-              <p className="mt-6 font-mono text-xs tracking-widest text-[#6B6B7B]">
-                7-day free trial with the full app, including Sigma. Then $15/month or
-                $99/year.
-              </p>
+                <p className="font-mono text-xs tracking-widest text-[#6B6B7B] md:max-w-md">
+                  7-day free trial with the full app, including Sigma. Then $15/month or
+                  $99/year.
+                </p>
+              </div>
             </div>
 
             {/* Right column, Signature Sigma Visual */}
