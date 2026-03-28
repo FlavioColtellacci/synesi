@@ -339,10 +339,10 @@ export async function POST(
       },
       braveSearchUsed: brave.anyOk,
       braveSearchNote: brave.anyOk
-        ? "Sigma used live web research to ground feed URLs."
+        ? "Sigma proposed feeds from search results."
         : brave.errors[0]
-          ? `Live web research unavailable (${brave.errors[0]}). Feeds may rely on fallbacks.`
-          : "Live web research returned no usable results; feeds may rely on fallbacks.",
+          ? `Search unavailable (${brave.errors[0]}). Feeds may rely on fallbacks.`
+          : "Search returned no usable results; feeds may rely on fallbacks.",
     })
   } catch (error) {
     console.error("Alert rule copilot failed:", error)

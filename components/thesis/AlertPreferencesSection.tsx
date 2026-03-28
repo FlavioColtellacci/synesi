@@ -508,7 +508,7 @@ export default function AlertPreferencesSection({
                 }}
                 className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
               >
-                {copilotLoading ? "SIGMA + WEB…" : "RUN SIGMA"}
+                {copilotLoading ? "SIGMA…" : "RUN SIGMA"}
               </button>
             </div>
 

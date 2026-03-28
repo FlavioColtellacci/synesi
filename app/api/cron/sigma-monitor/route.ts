@@ -3,6 +3,8 @@ import { getSigmaMonitorDailyRunKey } from "@/lib/chat/monitor-logic"
 import { runSigmaMonitorForUser } from "@/lib/chat/monitor"
 import { createAdminClient } from "@/lib/supabase/server"
 
+export const maxDuration = 300
+
 type UserRow = { user_id: string }
 
 function getMaxUsersPerRun() {
