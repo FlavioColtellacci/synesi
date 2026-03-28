@@ -102,6 +102,8 @@ export default function SigmaDemoSection() {
   const [messages, setMessages] = useState<DemoMessage[]>([INTERACTIVE_WELCOME])
   const [requestError, setRequestError] = useState<string | null>(null)
   const typingTimeoutsRef = useRef<number[]>([])
+  const previewTranscriptRef = useRef<HTMLDivElement | null>(null)
+  const interactiveTranscriptRef = useRef<HTMLDivElement | null>(null)
 
   const activeExample = CURATED_EXAMPLES[activeExampleIndex]
   const promptsRemaining = Math.max(0, LANDING_SIGMA_DEMO_PROMPT_LIMIT - promptUsage)
@@ -175,6 +177,18 @@ export default function SigmaDemoSection() {
       clearTypingTimeouts()
     }
   }, [clearTypingTimeouts])
+
+  useEffect(() => {
+    const el = previewTranscriptRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [typedPreviewUserPrompt, typedPreviewAssistantReply, isPreviewUserTyping, isPreviewAssistantTyping])
+
+  useEffect(() => {
+    const el = interactiveTranscriptRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, isSending])
 
   useEffect(() => {
     if (isInteractive) return
@@ -344,24 +358,35 @@ export default function SigmaDemoSection() {
 
               <p className="font-mono text-[10px] uppercase tracking-widest text-[#8B8B9A]">{activeExample.title}</p>
 
-              <article className="flex w-full justify-end">
-                <div className="max-w-[min(92%,30rem)] rounded-2xl rounded-br-md bg-[#202029] px-3 py-2">
-                  {renderUserContent(`${typedPreviewUserPrompt}${isPreviewUserTyping ? "▍" : ""}`)}
+              <div className="h-[28rem] min-h-0 overflow-hidden rounded-xl border border-[#2A2A32]/60 bg-[#0B0B0F]/40">
+                <div
+                  ref={previewTranscriptRef}
+                  className="sigma-scrollbar h-full overflow-y-auto overscroll-y-contain px-1 py-3 [overflow-anchor:none]"
+                >
+                  <div className="space-y-4">
+                    <article className="flex w-full justify-end">
+                      <div className="max-w-[min(92%,30rem)] rounded-2xl rounded-br-md bg-[#202029] px-3 py-2">
+                        {renderUserContent(`${typedPreviewUserPrompt}${isPreviewUserTyping ? "▍" : ""}`)}
+                      </div>
+                    </article>
+                    <article className="flex w-full justify-start">
+                      <div className="max-w-[min(92%,30rem)] rounded-2xl rounded-bl-md bg-[#14141A] px-3 py-2 text-[#ECECF2]">
+                        {typedPreviewAssistantReply.length > 0
+                          ? renderAssistantContent(typedPreviewAssistantReply)
+                          : null}
+                        {isPreviewAssistantTyping ? (
+                          <div className="mt-1">
+                            <SigmaThinkingIndicator
+                              label="Typing"
+                              className="text-[11px] [&>span:first-child]:uppercase [&>span:first-child]:tracking-widest"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  </div>
                 </div>
-              </article>
-              <article className="flex w-full justify-start">
-                <div className="max-w-[min(92%,30rem)] rounded-2xl rounded-bl-md bg-[#14141A] px-3 py-2 text-[#ECECF2]">
-                  {typedPreviewAssistantReply.length > 0 ? renderAssistantContent(typedPreviewAssistantReply) : null}
-                  {isPreviewAssistantTyping ? (
-                    <div className="mt-1">
-                      <SigmaThinkingIndicator
-                        label="Typing"
-                        className="text-[11px] [&>span:first-child]:uppercase [&>span:first-child]:tracking-widest"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </article>
+              </div>
 
               <div className="pt-2">
                 <button
@@ -392,7 +417,10 @@ export default function SigmaDemoSection() {
                 <p className="font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B]">Prompts {promptCounterLabel}</p>
               </div>
 
-              <div className="sigma-scrollbar min-h-0 max-h-[28rem] space-y-3 overflow-y-auto px-1 py-0.5">
+              <div
+                ref={interactiveTranscriptRef}
+                className="sigma-scrollbar h-[28rem] min-h-0 space-y-3 overflow-y-auto overscroll-y-contain px-1 py-0.5 [overflow-anchor:none]"
+              >
                 {messages.map((message) => (
                   <article
                     key={message.id}
