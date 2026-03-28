@@ -73,7 +73,12 @@ export function renderAssistantContent(content: string): ReactNode {
     if (!listType || listItems.length === 0) return
 
     const listBody = listItems.map((item, itemIndex) => (
-      <li key={`li-${blockIndex}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+      <li
+        key={`li-${blockIndex}-${itemIndex}`}
+        className="min-w-0 break-words [overflow-wrap:anywhere]"
+      >
+        {renderInlineMarkdown(item)}
+      </li>
     ))
 
     if (listType === "ul") {
@@ -98,7 +103,9 @@ export function renderAssistantContent(content: string): ReactNode {
   for (const rawLine of lines) {
     const line = rawLine.trim()
     if (!line) {
-      flushList()
+      // Do not flush lists on blank lines: models often put empty lines between
+      // numbered steps, which used to create a new <ol> per item so every row
+      // showed "1." again. Lists end when a non-list line runs (see flushList below).
       continue
     }
 

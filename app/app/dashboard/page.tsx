@@ -338,14 +338,14 @@ export default function Page() {
       )}
 
       {/* ── Sigma Monitor ── */}
-      <section className="mb-6 rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
+      <section className="mb-6 min-w-0 overflow-hidden rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
+          <div className="min-w-0 flex-1 space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#8BE8D8]">Sigma Monitor</p>
-            <p className="text-sm text-[#F0F0F0]">
+            <p className="break-words text-sm text-[#F0F0F0]">
               {monitorSnapshot?.summary?.headline ?? "No monitor summary yet. Run Sigma Monitor to generate one."}
             </p>
-            <p className="text-xs text-[#6B6B7B]">
+            <p className="break-words text-xs text-[#6B6B7B]">
               {monitorSnapshot?.summary?.summary ??
                 "Sigma Monitor highlights high-signal conviction drift, open-alert pressure, and next actions."}
             </p>
@@ -363,9 +363,12 @@ export default function Page() {
         </div>
 
         {(monitorSnapshot?.summary?.highSignalChanges.length ?? 0) > 0 ? (
-          <ul className="mt-3 space-y-1 text-sm text-[#D9D9E2]">
+          <ul className="mt-3 min-w-0 space-y-1 text-sm text-[#D9D9E2]">
             {monitorSnapshot?.summary?.highSignalChanges.map((item, index) => (
-              <li key={`${index}-${item}`} className="leading-relaxed">
+              <li
+                key={`${index}-${item}`}
+                className="break-all leading-relaxed"
+              >
                 - {item}
               </li>
             ))}
@@ -373,12 +376,12 @@ export default function Page() {
         ) : null}
 
         {(monitorSnapshot?.summary?.recommendedActions.length ?? 0) > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">
             {monitorSnapshot?.summary?.recommendedActions.map((action, index) => (
               <Link
                 key={`${action.actionType}-${action.thesisId ?? "none"}-${index}`}
                 href={resolveMonitorActionHref(action)}
-                className="rounded-full border border-[#2A2A32] bg-[#101018] px-3 py-1.5 text-xs text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35"
+                className="max-w-full break-words rounded-full border border-[#2A2A32] bg-[#101018] px-3 py-1.5 text-xs text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35"
                 title={action.rationale}
               >
                 {action.label}
