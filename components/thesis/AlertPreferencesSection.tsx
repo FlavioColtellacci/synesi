@@ -70,8 +70,8 @@ export default function AlertPreferencesSection({
   const [isBusy, setIsBusy] = useState(false)
   const [includeInput, setIncludeInput] = useState("")
   const [excludeInput, setExcludeInput] = useState("")
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false)
   const [copilotIntent, setCopilotIntent] = useState("")
+  const [sigmaWebNote, setSigmaWebNote] = useState<string | null>(null)
   const [copilotLoading, setCopilotLoading] = useState(false)
   const [copilotError, setCopilotError] = useState<string | null>(null)
   const [copilotSuggestion, setCopilotSuggestion] = useState<CopilotSuggestion | null>(null)
@@ -138,12 +138,10 @@ export default function AlertPreferencesSection({
         throw new Error(payload?.error ?? "Failed to update alert preferences")
       }
       updatePrimaryRule({ is_enabled: nextEnabled })
-      if (nextEnabled) {
-        setIsCopilotOpen(true)
-      } else {
-        setIsCopilotOpen(false)
+      if (!nextEnabled) {
         setCopilotSuggestion(null)
         setCopilotError(null)
+        setSigmaWebNote(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update alert preferences")
@@ -338,6 +336,7 @@ export default function AlertPreferencesSection({
     setCopilotLoading(true)
     setCopilotError(null)
     setCopilotSuggestion(null)
+    setSigmaWebNote(null)
 
     try {
       const response = await fetch(`/api/theses/${thesisId}/alert-rules/copilot`, {
@@ -345,12 +344,17 @@ export default function AlertPreferencesSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ intent }),
       })
-      const payload = await parseJson<{ suggestion?: CopilotSuggestion; error?: string }>(response)
+      const payload = await parseJson<{
+        suggestion?: CopilotSuggestion
+        error?: string
+        braveSearchNote?: string
+      }>(response)
       if (!response.ok || !payload?.suggestion) {
         throw new Error(payload?.error ?? "Copilot request failed")
       }
 
       setCopilotSuggestion(payload.suggestion)
+      setSigmaWebNote(typeof payload.braveSearchNote === "string" ? payload.braveSearchNote : null)
       setCopilotSelections(
         payload.suggestion.sources.map((source) => ({
           nameIndex: 0,
@@ -479,6 +483,7 @@ export default function AlertPreferencesSection({
 
       setCopilotSuggestion(null)
       setCopilotIntent("")
+      setSigmaWebNote(null)
       router.refresh()
     } catch (err) {
       setCopilotError(err instanceof Error ? err.message : "Failed to apply copilot suggestion")
@@ -526,18 +531,20 @@ export default function AlertPreferencesSection({
         </div>
 
         <p className="mt-3 text-xs text-[#6B6B7B]">
-          Changes in this panel save immediately. Copilot suggestions are only saved after you click{" "}
-          <span className="text-[#F0F0F0]">APPLY SELECTIONS</span>.
+          {isEnabled
+            ? "Advanced options save immediately. Sigma’s draft is saved only after you click APPLY SELECTIONS."
+            : "Turn alerts on to describe what you want in plain English."}
         </p>
 
-        {isEnabled && isCopilotOpen ? (
+        {isEnabled ? (
           <div className="mt-4 rounded-xl border border-[#2A2A32] bg-[#0F0F12] p-4">
             <div>
-              <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                Generate personalized source setup
+              <p className="font-mono text-[10px] tracking-widest uppercase text-[#8BE8D8]">
+                Sigma · plain English setup
               </p>
               <p className="mt-1 text-xs text-[#6B6B7B]">
-                You&apos;ll review the suggestions before anything is saved.
+                Sigma searches the web (Brave) for real RSS/Atom feeds, proposes sources and keywords, and you confirm
+                before anything is saved.
               </p>
             </div>
 
@@ -545,13 +552,14 @@ export default function AlertPreferencesSection({
               value={copilotIntent}
               disabled={copilotLoading || isBusy}
               onChange={(event) => setCopilotIntent(event.target.value)}
-              placeholder='Example: "Only Dan Ives on NVDA AI news. Ignore everything else."'
-              className="mt-3 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-              rows={3}
-              maxLength={500}
+              placeholder='Example: "Alert me when Reuters or the WSJ publish anything that could challenge my thesis on margin pressure. Ignore price targets."'
+              className="mt-3 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm leading-relaxed text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+              rows={5}
+              maxLength={2000}
             />
             <p className="mt-2 text-xs text-[#6B6B7B]">
-              Describe people/outlets and topics. Don&apos;t paste regular website URLs; only feed-like links can be saved.
+              Write naturally: outlets, analysts, topics, and what to ignore. You do not need to paste feed URLs — Sigma
+              tries to discover them from web results (with safe fallbacks when needed).
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -563,7 +571,7 @@ export default function AlertPreferencesSection({
                 }}
                 className="rounded-lg border border-[#F0F0F0]/30 px-4 py-2 font-mono text-xs tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
               >
-                {copilotLoading ? "GENERATING..." : "GENERATE DRAFT"}
+                {copilotLoading ? "SIGMA + BRAVE…" : "RUN SIGMA"}
               </button>
 
               <label className="flex items-center gap-2 text-xs text-[#6B6B7B]">
@@ -588,9 +596,15 @@ export default function AlertPreferencesSection({
 
             {copilotError ? <p className="mt-3 font-mono text-xs text-[#FF3B30]">{copilotError}</p> : null}
 
+            {sigmaWebNote ? (
+              <p className="mt-3 rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-xs text-[#6B6B7B]">
+                {sigmaWebNote}
+              </p>
+            ) : null}
+
             {copilotSuggestion ? (
               <p className="mt-3 rounded-lg border border-[#00D1B2]/30 bg-[#00D1B2]/10 px-3 py-2 text-xs text-[#00D1B2]">
-                Draft generated. Review it below, then click APPLY SELECTIONS to save.
+                Draft ready. Review below, then click APPLY SELECTIONS to save feeds and rules for cron ingestion.
               </p>
             ) : null}
 
@@ -692,7 +706,7 @@ export default function AlertPreferencesSection({
                           </select>
                           {!hasUrlCandidates ? (
                             <p className="mt-1 text-xs text-[#FFB800]">
-                              Copilot could not find a feed URL for this source. Uncheck it or generate again.
+                              No feed-like URL for this source. Uncheck it or run Sigma again with a clearer outlet name.
                             </p>
                           ) : null}
                         </label>
@@ -733,182 +747,194 @@ export default function AlertPreferencesSection({
 
         {!isEnabled ? (
           <p className="mt-3 text-xs text-[#6B6B7B]">
-            Enable personalized challenge alerts to configure sources and keywords.
+            Enable personalized challenge alerts to describe what you want in plain English with Sigma.
           </p>
-        ) : trustedSources.length === 0 ? (
-          <p className="mt-3 text-xs text-[#6B6B7B]">
-            Add trusted sources first, then choose exactly which ones trigger alerts.
-          </p>
-        ) : (
-          <>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Mode
-                </span>
-                <select
-                  disabled={!isEnabled || isBusy}
-                  value={activeMode}
-                  onChange={(event) => {
-                    void handleModeChange(event.target.value as AlertRule["mode"])
-                  }}
-                  className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                >
-                  {MODE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+        ) : null}
 
-              <label className="block">
-                <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Minimum confidence
-                </span>
-                <select
-                  disabled={!isEnabled || isBusy}
-                  value={activeConfidence}
-                  onChange={(event) => {
-                    void handleMinConfidenceChange(event.target.value as AlertRule["min_confidence"])
-                  }}
-                  className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                >
-                  {CONFIDENCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+        {isEnabled ? (
+          <details className="group mt-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4">
+            <summary className="cursor-pointer list-none font-mono text-[10px] tracking-widest text-[#6B6B7B] uppercase marker:content-none [&::-webkit-details-marker]:hidden">
+              <span className="text-[#8BE8D8] group-open:text-[#8BE8D8]">Advanced tuning</span>
+              <span className="ml-2 text-[#6B6B7B] normal-case tracking-normal">
+                — mode, per-source toggles, manual keywords
+              </span>
+            </summary>
 
-            <p className="mt-2 text-xs text-[#6B6B7B]">
-              {MODE_OPTIONS.find((option) => option.value === activeMode)?.hint}
-            </p>
-
-            <div className="mt-4 space-y-2">
-              {trustedSources.map((source) => (
-                <label
-                  key={source.id}
-                  className="flex items-center gap-3 rounded-lg border border-[#2A2A32] bg-[#0F0F12] px-3 py-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedSourceIds.has(source.id)}
-                    disabled={!isEnabled || isBusy}
+            <div className="mt-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">Mode</span>
+                  <select
+                    disabled={isBusy}
+                    value={activeMode}
                     onChange={(event) => {
-                      void handleSourceToggle(source.id, event.target.checked)
+                      void handleModeChange(event.target.value as AlertRule["mode"])
                     }}
-                  />
-                  <span className="text-sm text-[#F0F0F0]">{source.name}</span>
+                    className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                  >
+                    {MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-              ))}
-            </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Include keywords (optional)
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={includeInput}
-                    disabled={!isEnabled || isBusy}
-                    onChange={(event) => setIncludeInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault()
-                        void handleAddKeyword("include")
-                      }
+                <label className="block">
+                  <span className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                    Minimum confidence
+                  </span>
+                  <select
+                    disabled={isBusy}
+                    value={activeConfidence}
+                    onChange={(event) => {
+                      void handleMinConfidenceChange(event.target.value as AlertRule["min_confidence"])
                     }}
-                    placeholder='e.g. "downgrade", "guidance"'
-                    className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    disabled={!isEnabled || isBusy}
-                    onClick={() => void handleAddKeyword("include")}
-                    className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+                    className="mt-1 w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
                   >
-                    ADD
-                  </button>
-                </div>
-                {includeKeywords.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {includeKeywords.map((kw) => (
-                      <button
-                        key={kw}
-                        type="button"
-                        disabled={!isEnabled || isBusy}
-                        onClick={() => void handleRemoveKeyword("include", kw)}
-                        className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
-                        title="Remove keyword"
-                      >
-                        {kw}
-                      </button>
+                    {CONFIDENCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
                     ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-[#6B6B7B]">
-                    If set, alerts only trigger when the article matches at least one keyword.
-                  </p>
-                )}
+                  </select>
+                </label>
               </div>
 
-              <div>
-                <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-                  Exclude keywords (optional)
+              <p className="mt-2 text-xs text-[#6B6B7B]">
+                {MODE_OPTIONS.find((option) => option.value === activeMode)?.hint}
+              </p>
+
+              {trustedSources.length === 0 ? (
+                <p className="mt-4 text-xs text-[#6B6B7B]">
+                  No saved sources yet for this thesis. Run Sigma above to add RSS feeds, or add them in the trusted
+                  sources section.
                 </p>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={excludeInput}
-                    disabled={!isEnabled || isBusy}
-                    onChange={(event) => setExcludeInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault()
-                        void handleAddKeyword("exclude")
-                      }
-                    }}
-                    placeholder='e.g. "technical analysis"'
-                    className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    disabled={!isEnabled || isBusy}
-                    onClick={() => void handleAddKeyword("exclude")}
-                    className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
-                  >
-                    ADD
-                  </button>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {trustedSources.map((source) => (
+                    <label
+                      key={source.id}
+                      className="flex items-center gap-3 rounded-lg border border-[#2A2A32] bg-[#0F0F12] px-3 py-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSourceIds.has(source.id)}
+                        disabled={isBusy}
+                        onChange={(event) => {
+                          void handleSourceToggle(source.id, event.target.checked)
+                        }}
+                      />
+                      <span className="text-sm text-[#F0F0F0]">{source.name}</span>
+                    </label>
+                  ))}
                 </div>
-                {excludeKeywords.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {excludeKeywords.map((kw) => (
-                      <button
-                        key={kw}
-                        type="button"
-                        disabled={!isEnabled || isBusy}
-                        onClick={() => void handleRemoveKeyword("exclude", kw)}
-                        className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
-                        title="Remove keyword"
-                      >
-                        {kw}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-[#6B6B7B]">
-                    If set, alerts never trigger when any excluded keyword matches.
+              )}
+
+              <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                    Include keywords (optional)
                   </p>
-                )}
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={includeInput}
+                      disabled={isBusy}
+                      onChange={(event) => setIncludeInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void handleAddKeyword("include")
+                        }
+                      }}
+                      placeholder='e.g. "downgrade", "guidance"'
+                      className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void handleAddKeyword("include")}
+                      className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+                    >
+                      ADD
+                    </button>
+                  </div>
+                  {includeKeywords.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {includeKeywords.map((kw) => (
+                        <button
+                          key={kw}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleRemoveKeyword("include", kw)}
+                          className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
+                          title="Remove keyword"
+                        >
+                          {kw}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-[#6B6B7B]">
+                      If set, alerts only trigger when the article matches at least one keyword.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+                    Exclude keywords (optional)
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={excludeInput}
+                      disabled={isBusy}
+                      onChange={(event) => setExcludeInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void handleAddKeyword("exclude")
+                        }
+                      }}
+                      placeholder='e.g. "technical analysis"'
+                      className="w-full rounded-lg border border-[#2A2A32] bg-[#0A0A0C] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#F0F0F0]/40 disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void handleAddKeyword("exclude")}
+                      className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-2 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5 disabled:opacity-60"
+                    >
+                      ADD
+                    </button>
+                  </div>
+                  {excludeKeywords.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {excludeKeywords.map((kw) => (
+                        <button
+                          key={kw}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleRemoveKeyword("exclude", kw)}
+                          className="rounded-full border border-[#2A2A32] bg-[#0F0F12] px-3 py-1 text-xs text-[#F0F0F0] hover:border-[#FF3B30]/40 hover:text-[#FF3B30] disabled:opacity-60"
+                          title="Remove keyword"
+                        >
+                          {kw}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-[#6B6B7B]">
+                      If set, alerts never trigger when any excluded keyword matches.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </>
-        )}
+          </details>
+        ) : null}
 
         {error ? <p className="mt-3 font-mono text-xs text-[#FF3B30]">{error}</p> : null}
       </article>

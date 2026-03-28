@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createLlm, getTextModel } from "@/lib/llm"
+import { getWebResearchContext } from "@/lib/web-research"
 
 const VALID_MODES = ["only_sources", "include_sources", "exclude_sources"] as const
 const VALID_MIN_CONFIDENCE = ["high", "medium"] as const
@@ -100,7 +101,56 @@ function cleanStringArray(value: unknown, maxItems = 8): string[] {
 }
 
 function normalizeIntent(value: string) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 500)
+  return value.replace(/\s+/g, " ").trim().slice(0, 2000)
+}
+
+function buildBraveQueries(intent: string, ticker: string, company: string): string[] {
+  const t = ticker.trim()
+  const c = company.trim()
+  const base = [intent, t, c].filter(Boolean).join(" ").trim()
+  return [
+    `${base} RSS feed OR atom feed OR xml feed`.trim(),
+    `${base} site:news.google.com OR site:feeds OR inurl:rss OR inurl:feed`.trim(),
+  ].filter((q) => q.length > 0)
+}
+
+async function gatherBraveContextForAlerts(intent: string, ticker: string, company: string) {
+  const queries = buildBraveQueries(intent, ticker, company)
+  const results = await Promise.all(
+    queries.map((query) => getWebResearchContext({ query, focus: "company" })),
+  )
+
+  const chunks: string[] = []
+  const citationSet = new Set<string>()
+  let anyOk = false
+
+  for (const r of results) {
+    if (r.ok) {
+      anyOk = true
+      chunks.push(r.content)
+      for (const url of r.citations) {
+        if (url) citationSet.add(url)
+      }
+    }
+  }
+
+  const citations = [...citationSet].slice(0, 25)
+  const rawMergedBody =
+    chunks.length > 0
+      ? `${chunks.join("\n\n---\n\n")}\n\nUNIQUE URLS FROM RESULTS:\n${citations.map((u) => `- ${u}`).join("\n")}`
+      : ""
+  const maxBodyChars = 10_000
+  const mergedBody =
+    rawMergedBody.length > maxBodyChars
+      ? `${rawMergedBody.slice(0, maxBodyChars)}\n\n[web research truncated for model context]`
+      : rawMergedBody
+  const merged =
+    mergedBody.length > 0
+      ? `BRAVE WEB RESEARCH (merged queries; use URLs and titles below to pick real RSS/Atom feeds)\n\n${mergedBody}`
+      : ""
+
+  const errors = results.filter((r): r is { ok: false; error: string } => !r.ok).map((r) => r.error)
+  return { merged, citations, anyOk, errors }
 }
 
 function toMode(value: unknown): Mode | null {
@@ -200,15 +250,21 @@ export async function POST(
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
 
-    const system = `You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
+    const brave = await gatherBraveContextForAlerts(intent, thesis.ticker ?? "", thesis.company_name ?? "")
+
+    const system = `You are Sigma (Synesi). You help set up deterministic, rule-based thesis challenge alerts.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- When BRAVE WEB RESEARCH is included in the user message, STRONGLY PREFER urlCandidates that appear in that research (titles/snippets/URL list) and that look like feeds (rss, atom, /feed, .xml).\n- Never invent URLs. If Brave did not surface a feed for an outlet, use empty urlCandidates for that source (downstream logic may add Google News RSS fallbacks).\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
+
+    const braveSection = brave.merged
+      ? `\n\n${brave.merged}\n`
+      : "\n\n(No live web research available — rely on known feed patterns and conservative guesses; empty urlCandidates when uncertain.)\n"
 
     const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${(existingSources ?? [])
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())
-      .join("\n")}\n\nUSER INTENT:\n${intent}\n`
+      .join("\n")}\n\nUSER INTENT (plain language):\n${intent}\n${braveSection}`
 
     const llm = createLlm()
     const requestPayload = {
-      max_tokens: 1400,
+      max_tokens: 2000,
       system,
       messages: [{ role: "user" as const, content: userPrompt }],
     }
@@ -281,6 +337,12 @@ export async function POST(
         excludeKeywords,
         sources,
       },
+      braveSearchUsed: brave.anyOk,
+      braveSearchNote: brave.anyOk
+        ? "Sigma used Brave Search to ground feed URLs."
+        : brave.errors[0]
+          ? `Brave Search unavailable (${brave.errors[0]}). Feeds may rely on fallbacks.`
+          : "Brave Search returned no usable results; feeds may rely on fallbacks.",
     })
   } catch (error) {
     console.error("Alert rule copilot failed:", error)
