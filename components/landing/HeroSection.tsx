@@ -99,8 +99,11 @@ export default function HeroSection() {
         }
       `}</style>
 
-      <section id="hero" className="relative min-h-screen overflow-hidden pt-24 md:pt-16">
-        <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-center px-6 md:px-10">
+      <section
+        id="hero"
+        className="relative min-h-screen overflow-hidden pt-36 md:pt-32"
+      >
+        <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col justify-center px-6 md:min-h-[calc(100vh-8rem)] md:px-10">
           <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2 md:gap-8">
             {/* Left column, Copy and CTA */}
             <div>
