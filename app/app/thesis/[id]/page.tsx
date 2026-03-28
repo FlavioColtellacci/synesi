@@ -331,7 +331,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
   }
 
   const dailyRefreshLimit = Number.parseInt(
-    process.env.FINANCIAL_REFRESH_DAILY_LIMIT_PER_USER ?? "8",
+    process.env.FINANCIAL_REFRESH_DAILY_LIMIT_PER_USER ?? "3",
     10,
   )
   const startOfUtcDay = new Date()
@@ -446,7 +446,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     ? new Date(financialSnapshot.stale_after).getTime() <= requestTimestamp
     : true
   const usedToday = refreshUsedTodayCount ?? 0
-  const effectiveDailyLimit = Number.isFinite(dailyRefreshLimit) ? dailyRefreshLimit : 8
+  const effectiveDailyLimit = Number.isFinite(dailyRefreshLimit) ? dailyRefreshLimit : 3
   const hasRefreshRemaining = usedToday < effectiveDailyLimit
   const coreCoverageFromPayload = CORE_FINANCIAL_FIELDS.filter((field) => {
     if (field === "nextEarningsDate") return Boolean(financialPayload?.nextEarningsDate)
@@ -820,17 +820,17 @@ export default async function ThesisDetailPage({ params }: PageProps) {
             </article>
           </section>
 
+          <AlertPreferencesSection
+            thesisId={thesis.id}
+            trustedSources={trustedSources}
+            initialRules={alertRules}
+          />
+
           <TrustedSourcesSection
             thesisId={thesis.id}
             thesisTicker={thesis.ticker}
             thesisCompanyName={thesis.company_name}
             initialSources={trustedSources}
-          />
-
-          <AlertPreferencesSection
-            thesisId={thesis.id}
-            trustedSources={trustedSources}
-            initialRules={alertRules}
           />
         </aside>
       </div>

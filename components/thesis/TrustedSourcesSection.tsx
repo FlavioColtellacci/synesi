@@ -211,7 +211,7 @@ export default function TrustedSourcesSection({
   return (
     <section className="mb-6">
       <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
-        TRUSTED SOURCES · STEP 1
+        TRUSTED SOURCES · STEP 2
       </p>
 
       <article className="mb-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">

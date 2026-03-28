@@ -432,7 +432,7 @@ export default function AlertPreferencesSection({
   return (
     <section className="mb-6">
       <p className="mb-4 font-mono text-xs tracking-widest text-[#6B6B7B] uppercase">
-        ALERT PREFERENCES · STEP 2
+        ALERT PREFERENCES · STEP 1
       </p>
       <article className="rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -13,7 +13,7 @@ type ThesisLookupRow = {
 
 function getUserDailyRefreshLimit(): number {
   const parsed = Number.parseInt(process.env.FINANCIAL_REFRESH_DAILY_LIMIT_PER_USER ?? "", 10)
-  if (Number.isNaN(parsed) || parsed <= 0) return 8
+  if (Number.isNaN(parsed) || parsed <= 0) return 3
   return parsed
 }
 
