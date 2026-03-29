@@ -58,7 +58,7 @@ export function humanizeEventTypeSlug(slug: string): string {
 /** Replace leading event_type: from models with a title-case label + em dash (easier to scan). */
 export function normalizeLeadingSnakeEventTypeInLine(line: string): string {
   const t = line.trim()
-  const m = t.match(/^([a-z][a-z0-9_]{2,})\s*[:：]\s*(.*)$/is)
+  const m = t.match(/^([a-z][a-z0-9_]{2,})\s*[:：]\s*([\s\S]*)$/i)
   if (!m) return t
   const body = m[2].trim()
   const label = humanizeEventTypeSlug(m[1])

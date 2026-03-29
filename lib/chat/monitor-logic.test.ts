@@ -5,7 +5,10 @@ import {
   dedupeStringLinesPreserveOrder,
   formatMonitorEventSignalLine,
   getSigmaMonitorDailyRunKey,
+  humanizeEventTypeSlug,
+  normalizeLeadingSnakeEventTypeInLine,
   parseMonitorSummaryFromModel,
+  parseSigmaMonitorSignalForUi,
   reuseExistingMonitorRun,
   sanitizeHighSignalLineForDisplay,
 } from "@/lib/chat/monitor-logic"
@@ -88,6 +91,17 @@ describe("applyMonitorSummaryNoiseRules", () => {
     const out = applyMonitorSummaryNoiseRules(summary, { openAlertCount: 1, needsReviewCount: 0 })
     expect(out.highSignalChanges).toEqual(["This is a real signal line for the user"])
   })
+
+  it("rewrites snake_case event prefixes to title case", () => {
+    const summary: SigmaMonitorSummary = {
+      ...baseFallback,
+      riskLevel: "watch",
+      highSignalChanges: ['trusted_source_challenge: Google — "Alert title" — Ticker MSFT in title'],
+    }
+    const out = applyMonitorSummaryNoiseRules(summary, { openAlertCount: 1, needsReviewCount: 0 })
+    expect(out.highSignalChanges[0]).toMatch(/^Trusted Source Challenge —/)
+    expect(out.highSignalChanges[0]).not.toContain("trusted_source_challenge")
+  })
 })
 
 describe("sanitizeHighSignalLineForDisplay", () => {
@@ -97,6 +111,41 @@ describe("sanitizeHighSignalLineForDisplay", () => {
     expect(sanitizeHighSignalLineForDisplay(raw)).toBe(
       'Google · "Microsoft headline" · Ticker MSFT in title',
     )
+  })
+})
+
+describe("humanizeEventTypeSlug", () => {
+  it("title-cases snake_case event slugs", () => {
+    expect(humanizeEventTypeSlug("trusted_source_challenge")).toBe("Trusted Source Challenge")
+    expect(humanizeEventTypeSlug("price_move")).toBe("Price Move")
+  })
+})
+
+describe("normalizeLeadingSnakeEventTypeInLine", () => {
+  it("prefixes body with a title-case label", () => {
+    expect(normalizeLeadingSnakeEventTypeInLine("trusted_source_challenge: hello")).toBe(
+      "Trusted Source Challenge — hello",
+    )
+  })
+})
+
+describe("parseSigmaMonitorSignalForUi", () => {
+  it("parses snake_case prefix and em-dash separated fields", () => {
+    const p = parseSigmaMonitorSignalForUi(
+      'trusted_source_challenge: Google — "Microsoft headline here" — Ticker MSFT found in title',
+    )
+    expect(p.kindLabel).toBe("Trusted Source Challenge")
+    expect(p.source).toBe("Google")
+    expect(p.title).toBe("Microsoft headline here")
+    expect(p.detail).toBe("Ticker MSFT found in title")
+  })
+
+  it("parses normalized kind prefix lines", () => {
+    const p = parseSigmaMonitorSignalForUi('Trusted Source Challenge — Google — "Hello" — match reason')
+    expect(p.kindLabel).toBe("Trusted Source Challenge")
+    expect(p.source).toBe("Google")
+    expect(p.title).toBe("Hello")
+    expect(p.detail).toBe("match reason")
   })
 })
 
