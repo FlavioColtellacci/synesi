@@ -431,7 +431,7 @@ export async function POST(request: Request) {
 
     const completionBaseRequest = {
       model,
-      max_tokens: 900,
+      max_tokens: 4096,
       system: resolvedSystemPrompt,
       messages: toModelMessages(history, latestMessageForModel),
     }

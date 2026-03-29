@@ -108,7 +108,7 @@ describe("formatMonitorEventSignalLine", () => {
       event_detail: 'Google | "Hi" | match | https://example.com/x',
       created_at: "2026-01-01T00:00:00.000Z",
     })
-    expect(line).toContain("Trusted source")
+    expect(line).toContain("Trusted Source Challenge")
     expect(line).toContain("Google")
     expect(line).not.toMatch(/https?:\/\//)
     expect(line).not.toContain("trusted_source_challenge")

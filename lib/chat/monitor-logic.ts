@@ -46,26 +46,114 @@ export function sanitizeHighSignalLineForDisplay(line: string): string {
   return t.replace(/\s{2,}/g, " ").trim()
 }
 
-export function humanizeMonitorEventType(eventType: string): string {
-  switch (eventType) {
-    case "trusted_source_challenge":
-      return "Trusted source"
-    case "price_move":
-      return "Price move"
-    default:
-      return eventType.replace(/_/g, " ")
+/** e.g. trusted_source_challenge → Trusted Source Challenge */
+export function humanizeEventTypeSlug(slug: string): string {
+  return slug
+    .split("_")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ")
+}
+
+/** Replace leading event_type: from models with a title-case label + em dash (easier to scan). */
+export function normalizeLeadingSnakeEventTypeInLine(line: string): string {
+  const t = line.trim()
+  const m = t.match(/^([a-z][a-z0-9_]{2,})\s*[:：]\s*(.*)$/is)
+  if (!m) return t
+  const body = m[2].trim()
+  const label = humanizeEventTypeSlug(m[1])
+  if (!body) return label
+  return `${label} — ${body}`
+}
+
+export type SigmaMonitorSignalParts = {
+  kindLabel: string | null
+  source?: string
+  title?: string
+  detail?: string
+  fallbackText?: string
+}
+
+/** Split ingest / LLM body: Source — "Title" — reason (separators: — · |). */
+export function splitSigmaSignalBody(body: string): Pick<SigmaMonitorSignalParts, "source" | "title" | "detail"> {
+  let u = body.replace(/\s+/g, " ").trim()
+  if (!u) return {}
+
+  u = u.replace(/\s*[—–]\s*/g, " § ")
+  u = u.replace(/\s*·\s*/g, " § ")
+  u = u.replace(/\s*\|\s*/g, " § ")
+  const parts = u
+    .split(" § ")
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+  if (parts.length === 0) return {}
+  if (parts.length === 1) return { detail: parts[0] }
+
+  if (parts.length === 2) {
+    const a = parts[0]
+    const b = parts[1]
+    if (b.startsWith('"') && b.endsWith('"') && b.length >= 2) {
+      return { source: a, title: b.slice(1, -1) }
+    }
+    return { source: a, detail: b }
   }
+
+  const source = parts[0]
+  let title: string | undefined
+  let titleRaw = parts[1]
+  if (titleRaw.startsWith('"') && titleRaw.endsWith('"') && titleRaw.length >= 2) {
+    title = titleRaw.slice(1, -1)
+  } else {
+    title = titleRaw
+  }
+  const detail = parts.slice(2).join(" · ")
+  return { source, title, detail: detail || undefined }
+}
+
+/**
+ * Parse a stored monitor bullet for structured UI (kind, headline, meta).
+ * Handles snake_case prefixes from the model and normalized "Kind — …" lines.
+ */
+export function parseSigmaMonitorSignalForUi(rawLine: string): SigmaMonitorSignalParts {
+  const cleaned = sanitizeHighSignalLineForDisplay(rawLine.trim())
+  let rest = cleaned
+  let kindLabel: string | null = null
+
+  const snakeMatch = rest.match(/^([a-z][a-z0-9_]{2,})\s*[:：]\s*/i)
+  if (snakeMatch) {
+    kindLabel = humanizeEventTypeSlug(snakeMatch[1])
+    rest = rest.slice(snakeMatch[0].length).trim()
+  } else {
+    const titleKindMatch = rest.match(/^((?:[A-Z][a-z]+)(?:\s+[A-Z][a-z]+)+)\s*[—–]\s+/)
+    if (titleKindMatch) {
+      kindLabel = titleKindMatch[1]
+      rest = rest.slice(titleKindMatch[0].length).trim()
+    }
+  }
+
+  const { source, title, detail } = splitSigmaSignalBody(rest)
+
+  if (!kindLabel && !source && !title && !detail) {
+    return { kindLabel: null, fallbackText: cleaned || undefined }
+  }
+
+  if (kindLabel && !source && !title && !detail) {
+    return { kindLabel, fallbackText: rest || undefined }
+  }
+
+  return { kindLabel, source, title, detail }
 }
 
 /** One readable bullet per open alert for deterministic / fallback summaries. */
 export function formatMonitorEventSignalLine(event: MonitorEventRow): string {
   const detail = (event.event_detail ?? "").replace(/\s+/g, " ").trim()
-  const label = humanizeMonitorEventType(event.event_type)
+  const label = humanizeEventTypeSlug(event.event_type)
   if (!detail) {
-    return normalizeSummaryText(`${label}: details not available`, MAX_MONITOR_SIGNAL_LINE_CHARS)
+    return normalizeSummaryText(`${label} — details not available`, MAX_MONITOR_SIGNAL_LINE_CHARS)
   }
   const body = sanitizeHighSignalLineForDisplay(detail)
-  return normalizeSummaryText(`${label}: ${body}`, MAX_MONITOR_SIGNAL_LINE_CHARS)
+  return normalizeSummaryText(`${label} — ${body}`, MAX_MONITOR_SIGNAL_LINE_CHARS)
 }
 
 function normalizeSummaryText(input: string, maxChars: number): string {
@@ -198,7 +286,7 @@ export function applyMonitorSummaryNoiseRules(
   ctx: MonitorNoiseContext,
 ): SigmaMonitorSummary {
   let highSignalChanges = summary.highSignalChanges
-    .map((s) => sanitizeHighSignalLineForDisplay(s.trim()))
+    .map((s) => normalizeLeadingSnakeEventTypeInLine(sanitizeHighSignalLineForDisplay(s.trim())))
     .filter((s) => s.length >= MIN_SIGNAL_LINE_CHARS)
 
   highSignalChanges = dedupeStringLinesPreserveOrder(highSignalChanges, MAX_SIGNAL_ITEMS)
@@ -353,6 +441,7 @@ Noise rules:
 - If nothing material changed, keep highSignalChanges to 0-2 short lines.
 - Use only provided data. Never invent entities.
 - In highSignalChanges, write plain language only; never paste raw URLs or link strings.
+- Never prefix bullets with snake_case event_type values (e.g. trusted_source_challenge); use Title Case labels like "Trusted Source Challenge — …" if you name the signal type at all.
 
 Fallback baseline if uncertain:
 ${JSON.stringify(fallback)}

@@ -61,6 +61,7 @@ TRUST AND SAFETY CONTRACT
 OUTPUT FORMAT
 - Return JSON only with required keys: answer, sourceTags, confidence, escalation, followUpActions.
 - Optional keys when relevant: actionDrafts, retrievalEvidence.
+- Put confidence, escalation, and sourceTags only in their JSON fields — never append lines like "Confidence:" or "Escalation:" inside the answer string.
 - answer: plain text string with optional line breaks and simple bullets using "- ".
 - For numbered steps, use consecutive lines like "1. ...", "2. ...", "3. ..." with no blank lines between those lines (blank lines between numbered items break list rendering in the UI).
 - In answer, you may use concise section labels ending with ":" (for example "What to review:").

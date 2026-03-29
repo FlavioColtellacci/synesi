@@ -26,6 +26,14 @@ const ACTION_TYPES: ChatActionDraft["actionType"][] = [
 ]
 const RETRIEVAL_SOURCES: ChatRetrievalEvidence["source"][] = ["assumption", "source_match", "status_note"]
 
+/** Upper bound for stored/displayed answer text (runaway or malformed model output). */
+const MAX_ASSISTANT_ANSWER_CHARS = 32_000
+
+function limitAssistantAnswerLength(text: string): string {
+  if (text.length <= MAX_ASSISTANT_ANSWER_CHARS) return text
+  return `${text.slice(0, MAX_ASSISTANT_ANSWER_CHARS - 1)}…`
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
@@ -200,7 +208,7 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
   const parsed = parseStructuredPayload(rawText)
   if (!parsed) return null
 
-  const answer = typeof parsed.answer === "string" ? normalizeAnswerText(parsed.answer) : ""
+  const answer = typeof parsed.answer === "string" ? limitAssistantAnswerLength(normalizeAnswerText(parsed.answer)) : ""
   if (!answer) return null
 
   return {
@@ -217,7 +225,7 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
 export function parseAssistantTextFallback(rawText: string): ChatAssistantResponse | null {
   const parsed = parseStructuredPayload(rawText)
   if (parsed && typeof parsed.answer === "string") {
-    const answer = normalizeAnswerText(parsed.answer).slice(0, 1200)
+    const answer = limitAssistantAnswerLength(normalizeAnswerText(parsed.answer))
     if (!answer) return null
 
     return {
@@ -235,7 +243,7 @@ export function parseAssistantTextFallback(rawText: string): ChatAssistantRespon
 
   if (!cleaned) return null
 
-  const answer = normalizeAnswerText(cleaned).slice(0, 1200)
+  const answer = limitAssistantAnswerLength(normalizeAnswerText(cleaned))
   if (!answer) return null
 
   return {
