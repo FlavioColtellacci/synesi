@@ -9,6 +9,7 @@ import {
 } from "@/components/thesis/ThesisChallengeBanner"
 import { DashboardDeleteThesis } from "@/components/thesis/DashboardDeleteThesis"
 import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
+import { sanitizeHighSignalLineForDisplay } from "@/lib/chat/monitor-logic"
 import { createClient } from "@/lib/supabase/client"
 
 type DashboardThesis = {
@@ -363,13 +364,13 @@ export default function Page() {
         </div>
 
         {(monitorSnapshot?.summary?.highSignalChanges.length ?? 0) > 0 ? (
-          <ul className="mt-3 min-w-0 space-y-1 text-sm text-[#D9D9E2]">
+          <ul className="mt-4 min-w-0 list-none space-y-2.5">
             {monitorSnapshot?.summary?.highSignalChanges.map((item, index) => (
               <li
                 key={`${index}-${item}`}
-                className="break-all leading-relaxed"
+                className="border-l-2 border-[#8BE8D8]/35 py-1 pl-3 font-sans text-sm leading-relaxed text-[#D9D9E2] break-words"
               >
-                - {item}
+                {sanitizeHighSignalLineForDisplay(item)}
               </li>
             ))}
           </ul>

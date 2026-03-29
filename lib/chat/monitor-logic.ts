@@ -20,6 +20,9 @@ export type MonitorEventRow = {
 const MAX_SIGNAL_ITEMS = 4
 const MAX_EVIDENCE_ITEMS = 4
 
+/** Max length for a single monitor bullet after formatting (keeps cards scannable). */
+const MAX_MONITOR_SIGNAL_LINE_CHARS = 220
+
 /** Minimum characters for a high-signal line (filters noise like "ok" or a lone dash). */
 const MIN_SIGNAL_LINE_CHARS = 12
 const MIN_EVIDENCE_LINE_CHARS = 10
@@ -33,6 +36,36 @@ export function getSigmaMonitorDailyRunKey(date: Date = new Date()): string {
 
 export function reuseExistingMonitorRun(existing: unknown, force: boolean): boolean {
   return Boolean(existing) && !force
+}
+
+/** Remove raw URLs and tidy separators so monitor bullets stay readable in the UI. */
+export function sanitizeHighSignalLineForDisplay(line: string): string {
+  let t = line.replace(/https?:\/\/[^\s]+/gi, "").replace(/\s+/g, " ").trim()
+  t = t.replace(/\s*\|\s*$/g, "").replace(/^\s*\|\s*/g, "").trim()
+  t = t.replace(/\s*\|\s*/g, " · ")
+  return t.replace(/\s{2,}/g, " ").trim()
+}
+
+export function humanizeMonitorEventType(eventType: string): string {
+  switch (eventType) {
+    case "trusted_source_challenge":
+      return "Trusted source"
+    case "price_move":
+      return "Price move"
+    default:
+      return eventType.replace(/_/g, " ")
+  }
+}
+
+/** One readable bullet per open alert for deterministic / fallback summaries. */
+export function formatMonitorEventSignalLine(event: MonitorEventRow): string {
+  const detail = (event.event_detail ?? "").replace(/\s+/g, " ").trim()
+  const label = humanizeMonitorEventType(event.event_type)
+  if (!detail) {
+    return normalizeSummaryText(`${label}: details not available`, MAX_MONITOR_SIGNAL_LINE_CHARS)
+  }
+  const body = sanitizeHighSignalLineForDisplay(detail)
+  return normalizeSummaryText(`${label}: ${body}`, MAX_MONITOR_SIGNAL_LINE_CHARS)
 }
 
 function normalizeSummaryText(input: string, maxChars: number): string {
@@ -165,13 +198,13 @@ export function applyMonitorSummaryNoiseRules(
   ctx: MonitorNoiseContext,
 ): SigmaMonitorSummary {
   let highSignalChanges = summary.highSignalChanges
-    .map((s) => s.trim())
+    .map((s) => sanitizeHighSignalLineForDisplay(s.trim()))
     .filter((s) => s.length >= MIN_SIGNAL_LINE_CHARS)
 
   highSignalChanges = dedupeStringLinesPreserveOrder(highSignalChanges, MAX_SIGNAL_ITEMS)
 
   let evidenceSnippets = summary.evidenceSnippets
-    .map((s) => s.trim())
+    .map((s) => sanitizeHighSignalLineForDisplay(s.trim()))
     .filter((s) => s.length >= MIN_EVIDENCE_LINE_CHARS)
 
   evidenceSnippets = dedupeStringLinesPreserveOrder(evidenceSnippets, MAX_EVIDENCE_ITEMS)
@@ -210,7 +243,7 @@ export function buildDeterministicMonitorSummary(
 
   const recentSignals = events
     .slice(0, MAX_SIGNAL_ITEMS)
-    .map((event) => `${event.event_type}: ${(event.event_detail ?? "No detail").replace(/\s+/g, " ").trim()}`)
+    .map((event) => formatMonitorEventSignalLine(event))
 
   if (recentSignals.length === 0 && needsReview.length > 0) {
     recentSignals.push(
@@ -319,6 +352,7 @@ Noise rules:
 - Do not repeat the same idea in multiple bullets.
 - If nothing material changed, keep highSignalChanges to 0-2 short lines.
 - Use only provided data. Never invent entities.
+- In highSignalChanges, write plain language only; never paste raw URLs or link strings.
 
 Fallback baseline if uncertain:
 ${JSON.stringify(fallback)}

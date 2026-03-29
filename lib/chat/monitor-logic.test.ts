@@ -3,9 +3,11 @@ import {
   applyMonitorSummaryNoiseRules,
   buildDeterministicMonitorSummary,
   dedupeStringLinesPreserveOrder,
+  formatMonitorEventSignalLine,
   getSigmaMonitorDailyRunKey,
   parseMonitorSummaryFromModel,
   reuseExistingMonitorRun,
+  sanitizeHighSignalLineForDisplay,
 } from "@/lib/chat/monitor-logic"
 import type { SigmaMonitorSummary } from "@/lib/chat/monitor-types"
 
@@ -85,6 +87,31 @@ describe("applyMonitorSummaryNoiseRules", () => {
     }
     const out = applyMonitorSummaryNoiseRules(summary, { openAlertCount: 1, needsReviewCount: 0 })
     expect(out.highSignalChanges).toEqual(["This is a real signal line for the user"])
+  })
+})
+
+describe("sanitizeHighSignalLineForDisplay", () => {
+  it("strips URLs and converts pipe separators", () => {
+    const raw =
+      'Google | "Microsoft headline" | Ticker MSFT in title | https://news.google.com/rss/articles/long-token-here'
+    expect(sanitizeHighSignalLineForDisplay(raw)).toBe(
+      'Google · "Microsoft headline" · Ticker MSFT in title',
+    )
+  })
+})
+
+describe("formatMonitorEventSignalLine", () => {
+  it("uses a human label instead of raw event_type", () => {
+    const line = formatMonitorEventSignalLine({
+      thesis_id: "t1",
+      event_type: "trusted_source_challenge",
+      event_detail: 'Google | "Hi" | match | https://example.com/x',
+      created_at: "2026-01-01T00:00:00.000Z",
+    })
+    expect(line).toContain("Trusted source")
+    expect(line).toContain("Google")
+    expect(line).not.toMatch(/https?:\/\//)
+    expect(line).not.toContain("trusted_source_challenge")
   })
 })
 
