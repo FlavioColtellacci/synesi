@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
+import { SITE_ORIGIN } from '@/lib/marketing/site-origin'
 import './globals.css'
 
 const inter = Inter({
@@ -19,8 +20,14 @@ export const viewport: Viewport = {
   themeColor: '#0A0A0C',
 }
 
+const defaultDescription =
+  'The narrative keeper for thesis-driven investors and traders, powered by Sigma. Document your thesis, track how conviction evolves, and know when reality challenges your story.'
+
+const ogDescription =
+  'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.'
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://synesi.app'),
+  metadataBase: new URL(SITE_ORIGIN),
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
@@ -33,15 +40,14 @@ export const metadata: Metadata = {
     default: 'SYNESI, Your Conviction, Tracked.',
     template: '%s | SYNESI',
   },
-  description:
-    'The narrative keeper for thesis-driven investors and traders, powered by Sigma. Document your thesis, track how conviction evolves, and know when reality challenges your story.',
+  description: defaultDescription,
   openGraph: {
     type: 'website',
-    url: 'https://synesi.app',
+    url: SITE_ORIGIN,
+    locale: 'en_US',
     siteName: 'SYNESI',
     title: 'SYNESI, Your Conviction, Tracked.',
-    description:
-      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
+    description: ogDescription,
     images: [
       {
         url: '/opengraph-image',
@@ -54,8 +60,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'SYNESI, Your Conviction, Tracked.',
-    description:
-      'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.',
+    description: ogDescription,
     images: ['/opengraph-image'],
   },
 }
