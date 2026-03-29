@@ -105,6 +105,15 @@ export default function ManifestoPage() {
               conviction and alerts. It does not replace your judgment or give
               trade recommendations.
             </p>
+            <p>
+              <Link
+                href="/#sigma-demo"
+                className="text-[#F0F0F0] underline decoration-[#4A4A52] underline-offset-[3px] transition-colors hover:decoration-[#F0F0F0]"
+              >
+                Try a short Sigma demo
+              </Link>{' '}
+              on the homepage—no signup.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -170,7 +179,7 @@ export default function ManifestoPage() {
         <div className="mt-20 pt-12 border-t border-[#2A2A32] flex flex-col sm:flex-row items-start sm:items-center gap-6">
           <Link
             href="/signup"
-            className="font-mono text-sm bg-white text-[#0A0A0C] px-6 py-3 rounded-lg hover:bg-[#E8E8E8] transition-colors"
+            className="inline-flex shrink-0 items-center whitespace-nowrap rounded-lg bg-white px-6 py-3 font-mono text-sm uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
           >
             GET STARTED →
           </Link>

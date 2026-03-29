@@ -22,7 +22,7 @@ export default function MarketingNav() {
 
         <Link
           href="/signup"
-          className="rounded-lg bg-[#FFFFFF] px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:hidden"
+          className="inline-flex items-center whitespace-nowrap rounded-lg bg-[#FFFFFF] px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:hidden"
         >
           GET STARTED →
         </Link>
@@ -109,7 +109,7 @@ export default function MarketingNav() {
           </Link>
           <Link
             href="/signup"
-            className="rounded-lg bg-[#FFFFFF] px-5 py-2.5 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
+            className="inline-flex items-center whitespace-nowrap rounded-lg bg-[#FFFFFF] px-5 py-2.5 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
           >
             GET STARTED →
           </Link>

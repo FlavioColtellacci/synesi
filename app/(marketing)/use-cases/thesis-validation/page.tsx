@@ -1,7 +1,7 @@
-import Link from "next/link"
 import type { Metadata } from "next"
 import MarketingPageNav from "@/components/landing/MarketingPageNav"
 import LandingFooter from "@/components/landing/LandingFooter"
+import UseCasePageCta from "@/components/landing/UseCasePageCta"
 
 export const metadata: Metadata = {
   title: "AI-Powered Investment Thesis Validation",
@@ -73,33 +73,11 @@ export default function ThesisValidationPage() {
           </div>
         </div>
 
-        <div className="mt-16 flex flex-col gap-4 border-t border-[#2A2A32] pt-12 sm:flex-row sm:items-center">
-          <Link
-            href="/signup"
-            className="inline-block rounded-lg bg-[#FFFFFF] px-6 py-3 font-mono text-sm uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
-          >
-            STRESS-TEST YOUR THESIS →
-          </Link>
-          <span className="font-sans text-sm text-[#6B6B7B]">
-            7-day free trial: Sigma and all features included. Then $15/month or
-            $99/year.
-          </span>
-        </div>
-
-        <div className="mt-12 flex flex-wrap gap-4">
-          <Link
-            href="/use-cases/investment-journal"
-            className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-          >
-            Related: Investment Journal →
-          </Link>
-          <Link
-            href="/manifesto"
-            className="font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-          >
-            Read Our Manifesto →
-          </Link>
-        </div>
+        <UseCasePageCta
+          ctaLabel="STRESS-TEST YOUR THESIS →"
+          relatedHref="/use-cases/investment-journal"
+          relatedLabel="Related: Investment Journal →"
+        />
       </div>
       <LandingFooter />
     </main>
