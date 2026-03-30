@@ -298,19 +298,14 @@ export default function TrustedSourcesSection({
         </p>
       </article>
 
-      <article className="mb-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
-        <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
-          Suggested feeds (known working examples)
-        </p>
-        <p className="mt-1 text-xs text-[#6B6B7B]">
-          Use autofill, or add instantly with one click. Sources already saved below are hidden here.
-        </p>
-        {visibleSuggestedFeeds.length === 0 ? (
-          <p className="mt-3 text-sm text-[#6B6B7B]">
-            All suggested feeds are already in your trusted list. Remove one from saved sources if you want to see it
-            here again.
+      {visibleSuggestedFeeds.length > 0 ? (
+        <article className="mb-4 rounded-xl border border-[#2A2A32] bg-[#141418] p-4 md:p-5">
+          <p className="font-mono text-[10px] tracking-widest uppercase text-[#6B6B7B]">
+            Suggested feeds (known working examples)
           </p>
-        ) : (
+          <p className="mt-1 text-xs text-[#6B6B7B]">
+            Use autofill, or add instantly with one click. Sources already saved below are hidden here.
+          </p>
           <div className="mt-3 space-y-2">
             {visibleSuggestedFeeds.map((feed) => (
               <div
@@ -341,8 +336,8 @@ export default function TrustedSourcesSection({
               </div>
             ))}
           </div>
-        )}
-      </article>
+        </article>
+      ) : null}
 
       {error ? <p className="mb-3 font-mono text-xs text-[#FF3B30]">{error}</p> : null}
 
