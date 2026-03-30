@@ -72,6 +72,20 @@ function looksLikeFeedUrl(value: string) {
   )
 }
 
+/** Compare feed URLs across http/https and trailing slashes. */
+function normalizeFeedUrlForComparison(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed) return ""
+  try {
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+    const url = new URL(href)
+    const path = url.pathname.replace(/\/+$/, "") || ""
+    return `${url.hostname.toLowerCase()}${path}${url.search}`
+  } catch {
+    return trimmed.replace(/\/+$/, "")
+  }
+}
+
 export default function TrustedSourcesSection({
   thesisId,
   thesisTicker,
@@ -98,13 +112,19 @@ export default function TrustedSourcesSection({
 
   function hasMatchingSource(nextName: string, nextUrl: string) {
     const normalizedName = nextName.trim().toLowerCase()
-    const normalizedUrl = nextUrl.trim().toLowerCase()
+    const normalizedUrl = normalizeFeedUrlForComparison(nextUrl)
     return sources.some((source) => {
       const sourceName = source.name.trim().toLowerCase()
-      const sourceUrl = (source.url ?? "").trim().toLowerCase()
-      return sourceName === normalizedName || (normalizedUrl.length > 0 && sourceUrl === normalizedUrl)
+      const sourceUrl = normalizeFeedUrlForComparison(source.url ?? "")
+      return (
+        sourceName === normalizedName ||
+        (normalizedUrl.length > 0 && sourceUrl.length > 0 && sourceUrl === normalizedUrl)
+      )
     })
   }
+
+  const visibleSuggestedFeeds = suggestedFeeds.filter((feed) => !hasMatchingSource(feed.name, feed.url))
+  const exampleFeedUrl = visibleSuggestedFeeds[0]?.url ?? suggestedFeeds[0]?.url ?? ""
 
   async function persistSource(input: { name: string; url: string; sourceType: SourceType }) {
     const response = await fetch(`/api/theses/${thesisId}/trusted-sources`, {
@@ -274,7 +294,7 @@ export default function TrustedSourcesSection({
         <p className="mt-2 text-xs text-[#6B6B7B]">
           Alerts only ingest RSS/Atom feed links. Example:
           {" "}
-          <span className="text-[#A0A0AE]">{suggestedFeeds[0]?.url}</span>
+          <span className="text-[#A0A0AE]">{exampleFeedUrl || "—"}</span>
         </p>
       </article>
 
@@ -283,38 +303,45 @@ export default function TrustedSourcesSection({
           Suggested feeds (known working examples)
         </p>
         <p className="mt-1 text-xs text-[#6B6B7B]">
-          Use autofill, or add instantly with one click.
+          Use autofill, or add instantly with one click. Sources already saved below are hidden here.
         </p>
-        <div className="mt-3 space-y-2">
-          {suggestedFeeds.map((feed) => (
-            <div
-              key={feed.label}
-              className="flex flex-col gap-2 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="min-w-0">
-                <p className="text-xs text-[#F0F0F0]">{feed.label}</p>
-                <p className="mt-1 break-all text-[11px] text-[#8AA8FF]">{feed.url}</p>
+        {visibleSuggestedFeeds.length === 0 ? (
+          <p className="mt-3 text-sm text-[#6B6B7B]">
+            All suggested feeds are already in your trusted list. Remove one from saved sources if you want to see it
+            here again.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {visibleSuggestedFeeds.map((feed) => (
+              <div
+                key={feed.label}
+                className="flex flex-col gap-2 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-3 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs text-[#F0F0F0]">{feed.label}</p>
+                  <p className="mt-1 break-all text-[11px] text-[#8AA8FF]">{feed.url}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => applySuggestedFeed(feed)}
+                  className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5"
+                >
+                  USE THIS
+                </button>
+                <button
+                  type="button"
+                  disabled={addingSuggestion === feed.label}
+                  onClick={() => {
+                    void handleAddSuggestedFeed(feed)
+                  }}
+                  className="shrink-0 rounded-lg border border-[#00D1B2]/40 px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
+                >
+                  {addingSuggestion === feed.label ? "ADDING..." : "ADD NOW"}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => applySuggestedFeed(feed)}
-                className="shrink-0 rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#F0F0F0] transition-colors hover:bg-[#F0F0F0]/5"
-              >
-                USE THIS
-              </button>
-              <button
-                type="button"
-                disabled={addingSuggestion === feed.label}
-                onClick={() => {
-                  void handleAddSuggestedFeed(feed)
-                }}
-                className="shrink-0 rounded-lg border border-[#00D1B2]/40 px-3 py-1.5 font-mono text-[10px] tracking-widest text-[#00D1B2] transition-colors hover:bg-[#00D1B2]/10 disabled:opacity-60"
-              >
-                {addingSuggestion === feed.label ? "ADDING..." : "ADD NOW"}
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </article>
 
       {error ? <p className="mb-3 font-mono text-xs text-[#FF3B30]">{error}</p> : null}
