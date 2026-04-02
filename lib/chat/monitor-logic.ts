@@ -1,5 +1,10 @@
 import { sanitizeActionDrafts, type SigmaActionDraft } from "@/lib/chat/actions"
-import type { SigmaMonitorRiskLevel, SigmaMonitorSummary } from "@/lib/chat/monitor-types"
+import type {
+  SigmaMonitorDelta,
+  SigmaMonitorRiskLevel,
+  SigmaMonitorSnapshotMeta,
+  SigmaMonitorSummary,
+} from "@/lib/chat/monitor-types"
 
 export type MonitorThesisRow = {
   id: string
@@ -17,8 +22,125 @@ export type MonitorEventRow = {
   created_at: string
 }
 
+function summarizeStatusLabel(status: string): string {
+  if (status === "broken") return "broken"
+  if (status === "at_risk") return "at risk"
+  if (status === "intact") return "intact"
+  return status.replaceAll("_", " ")
+}
+
+function safeSnapshotMeta(input: SigmaMonitorSummary | null): SigmaMonitorSnapshotMeta | null {
+  const value = input?.snapshotMeta
+  if (!value || typeof value !== "object") return null
+  const thesisStatusById =
+    value.thesisStatusById && typeof value.thesisStatusById === "object" ? value.thesisStatusById : {}
+  const openEventKeys = Array.isArray(value.openEventKeys)
+    ? value.openEventKeys.filter((item): item is string => typeof item === "string")
+    : []
+  return { thesisStatusById, openEventKeys }
+}
+
+export function buildSigmaMonitorSnapshotMeta(
+  theses: MonitorThesisRow[],
+  events: MonitorEventRow[],
+): SigmaMonitorSnapshotMeta {
+  const thesisStatusById = theses.reduce<Record<string, string>>((acc, thesis) => {
+    acc[thesis.id] = thesis.status
+    return acc
+  }, {})
+
+  const openEventKeys = dedupeStringLinesPreserveOrder(
+    events.map((event) => `${event.thesis_id}::${event.event_type}::${(event.event_detail ?? "").trim().toLowerCase()}`),
+    60,
+  )
+
+  return { thesisStatusById, openEventKeys }
+}
+
+export function buildSigmaMonitorDelta(
+  previousSummary: SigmaMonitorSummary | null,
+  currentMeta: SigmaMonitorSnapshotMeta,
+  previousRunKey: string | null,
+): SigmaMonitorDelta {
+  const previousMeta = safeSnapshotMeta(previousSummary)
+  if (!previousMeta) {
+    return {
+      comparedToRunKey: previousRunKey,
+      newAlertCount: 0,
+      resolvedAlertCount: 0,
+      statusChangeCount: 0,
+      changed: false,
+      summaryLine: "No prior baseline available for run-over-run comparison yet.",
+    }
+  }
+
+  const previousAlerts = new Set(previousMeta.openEventKeys)
+  const currentAlerts = new Set(currentMeta.openEventKeys)
+  let newAlertCount = 0
+  let resolvedAlertCount = 0
+  for (const key of currentAlerts) {
+    if (!previousAlerts.has(key)) newAlertCount += 1
+  }
+  for (const key of previousAlerts) {
+    if (!currentAlerts.has(key)) resolvedAlertCount += 1
+  }
+
+  let statusChangeCount = 0
+  for (const [thesisId, nextStatus] of Object.entries(currentMeta.thesisStatusById)) {
+    const prevStatus = previousMeta.thesisStatusById[thesisId]
+    if (!prevStatus || prevStatus === nextStatus) continue
+    statusChangeCount += 1
+  }
+
+  const changed = newAlertCount > 0 || resolvedAlertCount > 0 || statusChangeCount > 0
+  const summaryLine = changed
+    ? `${newAlertCount} new alerts, ${resolvedAlertCount} resolved alerts, ${statusChangeCount} status changes vs prior run.`
+    : "No material run-over-run deltas detected versus the previous monitor run."
+
+  return {
+    comparedToRunKey: previousRunKey,
+    newAlertCount,
+    resolvedAlertCount,
+    statusChangeCount,
+    changed,
+    summaryLine,
+  }
+}
+
+export function buildSigmaMonitorDeltaSignalLines(
+  delta: SigmaMonitorDelta,
+  theses: MonitorThesisRow[],
+  previousSummary: SigmaMonitorSummary | null,
+): string[] {
+  const previousMeta = safeSnapshotMeta(previousSummary)
+  if (!previousMeta) return [delta.summaryLine]
+
+  const statusChanges: string[] = []
+  for (const thesis of theses) {
+    const prevStatus = previousMeta.thesisStatusById[thesis.id]
+    if (!prevStatus || prevStatus === thesis.status) continue
+    statusChanges.push(
+      `${thesis.ticker} status changed ${summarizeStatusLabel(prevStatus)} -> ${summarizeStatusLabel(thesis.status)}`,
+    )
+  }
+
+  const out: string[] = [delta.summaryLine]
+  for (const line of statusChanges.slice(0, MAX_STATUS_CHANGE_ITEMS)) {
+    out.push(line)
+  }
+  if (delta.newAlertCount > 0) {
+    out.push(`New alert pressure increased by ${delta.newAlertCount} items since the prior run.`)
+  }
+  if (delta.resolvedAlertCount > 0) {
+    out.push(`Resolved alert pressure improved by ${delta.resolvedAlertCount} items since the prior run.`)
+  }
+
+  return out.map((line) => normalizeSummaryText(line, MAX_MONITOR_SIGNAL_LINE_CHARS))
+}
+
 const MAX_SIGNAL_ITEMS = 4
 const MAX_EVIDENCE_ITEMS = 4
+const MAX_STATUS_CHANGE_ITEMS = 3
 
 /** Max length for a single monitor bullet after formatting (keeps cards scannable). */
 const MAX_MONITOR_SIGNAL_LINE_CHARS = 220
@@ -101,7 +223,7 @@ export function splitSigmaSignalBody(body: string): Pick<SigmaMonitorSignalParts
 
   const source = parts[0]
   let title: string | undefined
-  let titleRaw = parts[1]
+  const titleRaw = parts[1]
   if (titleRaw.startsWith('"') && titleRaw.endsWith('"') && titleRaw.length >= 2) {
     title = titleRaw.slice(1, -1)
   } else {
@@ -240,6 +362,8 @@ export function parseMonitorSummaryFromModel(rawText: string, fallback: SigmaMon
       highSignalChanges: sanitizeStringList(parsed.highSignalChanges, MAX_SIGNAL_ITEMS, 180),
       recommendedActions: sanitizeActionDrafts(parsed.recommendedActions),
       evidenceSnippets: sanitizeStringList(parsed.evidenceSnippets, MAX_EVIDENCE_ITEMS, 180),
+      delta: fallback.delta,
+      snapshotMeta: fallback.snapshotMeta,
     }
   } catch {
     return fallback
@@ -322,6 +446,9 @@ export function buildDeterministicMonitorSummary(
   theses: MonitorThesisRow[],
   events: MonitorEventRow[],
   evidenceSnippets: string[],
+  delta: SigmaMonitorDelta,
+  snapshotMeta: SigmaMonitorSnapshotMeta,
+  previousSummary: SigmaMonitorSummary | null,
 ): SigmaMonitorSummary {
   const atRisk = theses.filter((item) => item.status === "at_risk")
   const broken = theses.filter((item) => item.status === "broken")
@@ -329,17 +456,20 @@ export function buildDeterministicMonitorSummary(
   const riskLevel: SigmaMonitorRiskLevel =
     broken.length > 0 ? "critical" : atRisk.length > 0 || events.length > 0 ? "watch" : "stable"
 
-  const recentSignals = events
+  const eventSignals = events
     .slice(0, MAX_SIGNAL_ITEMS)
     .map((event) => formatMonitorEventSignalLine(event))
 
-  if (recentSignals.length === 0 && needsReview.length > 0) {
-    recentSignals.push(
+  if (eventSignals.length === 0 && needsReview.length > 0) {
+    eventSignals.push(
       ...needsReview
         .slice(0, MAX_SIGNAL_ITEMS)
         .map((thesis) => `${thesis.ticker} is ${thesis.status.replace("_", " ")} and should be reviewed`),
     )
   }
+
+  const deltaSignals = buildSigmaMonitorDeltaSignalLines(delta, theses, previousSummary)
+  const recentSignals = dedupeStringLinesPreserveOrder([...deltaSignals, ...eventSignals], MAX_SIGNAL_ITEMS)
 
   const recommendedActions: SigmaActionDraft[] = []
   if (needsReview.length > 0) {
@@ -379,7 +509,7 @@ export function buildDeterministicMonitorSummary(
   const summary =
     theses.length === 0
       ? "No convictions are saved yet. Add your first thesis and Sigma Monitor will begin tracking high-signal changes."
-      : `${theses.length} convictions tracked, ${atRisk.length} at risk, ${broken.length} broken, and ${events.length} open alerts.`
+      : `${theses.length} convictions tracked, ${atRisk.length} at risk, ${broken.length} broken, and ${events.length} open alerts. ${delta.summaryLine}`
 
   const raw: SigmaMonitorSummary = {
     headline,
@@ -388,6 +518,8 @@ export function buildDeterministicMonitorSummary(
     highSignalChanges: recentSignals.slice(0, MAX_SIGNAL_ITEMS),
     recommendedActions: recommendedActions.slice(0, 3),
     evidenceSnippets: evidenceSnippets.slice(0, MAX_EVIDENCE_ITEMS),
+    delta,
+    snapshotMeta,
   }
 
   return applyMonitorSummaryNoiseRules(raw, {
@@ -396,7 +528,13 @@ export function buildDeterministicMonitorSummary(
   })
 }
 
-export function buildMonitorPrompt(theses: MonitorThesisRow[], events: MonitorEventRow[], fallback: SigmaMonitorSummary): string {
+export function buildMonitorPrompt(
+  theses: MonitorThesisRow[],
+  events: MonitorEventRow[],
+  fallback: SigmaMonitorSummary,
+  delta: SigmaMonitorDelta,
+  previousSummary: SigmaMonitorSummary | null,
+): string {
   const thesisLines =
     theses.length === 0
       ? "- none"
@@ -418,6 +556,16 @@ export function buildMonitorPrompt(theses: MonitorThesisRow[], events: MonitorEv
               `- thesis=${event.thesis_id} | ${event.event_type} | ${normalizeSummaryText(event.event_detail ?? "No detail", 150)}`,
           )
           .join("\n")
+
+  const previousSignalLines =
+    previousSummary?.highSignalChanges.length
+      ? previousSummary.highSignalChanges.slice(0, 4).map((line) => `- ${line}`).join("\n")
+      : "- none"
+
+  const evidenceLines =
+    fallback.evidenceSnippets.length > 0
+      ? fallback.evidenceSnippets.slice(0, 4).map((line) => `- ${line}`).join("\n")
+      : "- none"
 
   return `You are Sigma Monitor for Synesi.
 Generate a concise monitor digest in strict JSON only.
@@ -442,9 +590,21 @@ Noise rules:
 - Use only provided data. Never invent entities.
 - In highSignalChanges, write plain language only; never paste raw URLs or link strings.
 - Never prefix bullets with snake_case event_type values (e.g. trusted_source_challenge); use Title Case labels like "Trusted Source Challenge — …" if you name the signal type at all.
+- Include run-over-run deltas in at least one highSignalChanges line.
+- Ground claims in evidenceSnippets using the provided evidence context (source/document labels where available).
 
 Fallback baseline if uncertain:
 ${JSON.stringify(fallback)}
+
+Previous run high-signal lines:
+${previousSignalLines}
+
+Delta context:
+- comparedToRunKey=${delta.comparedToRunKey ?? "none"}
+- ${delta.summaryLine}
+
+Evidence context (prefer snippets tied to named sources/docs):
+${evidenceLines}
 
 Convictions:
 ${thesisLines}

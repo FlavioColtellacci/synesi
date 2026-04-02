@@ -6,8 +6,11 @@ import type {
 } from "@/lib/chat/monitor-types"
 import {
   applyMonitorSummaryNoiseRules,
+  buildSigmaMonitorDelta,
+  buildSigmaMonitorSnapshotMeta,
   buildDeterministicMonitorSummary,
   buildMonitorPrompt,
+  dedupeStringLinesPreserveOrder,
   parseMonitorSummaryFromModel,
   reuseExistingMonitorRun,
   type MonitorEventRow,
@@ -31,7 +34,7 @@ function mapRunRowToSnapshot(row: SigmaMonitorRunRow): SigmaMonitorSnapshot {
 }
 
 async function loadMonitorData(supabase: SupabaseClient, userId: string) {
-  const [thesesResult, eventsResult, sourceMatchesResult] = await Promise.all([
+  const [thesesResult, eventsResult, sourceMatchesResult, uploadsResult] = await Promise.all([
     supabase
       .from("theses")
       .select("id,ticker,company_name,status,updated_at,thesis_statement")
@@ -47,24 +50,59 @@ async function loadMonitorData(supabase: SupabaseClient, userId: string) {
       .limit(40),
     supabase
       .from("thesis_source_matches")
-      .select("match_reason,confidence,relevance_score")
+      .select(
+        "match_reason,confidence,relevance_score,source_documents(title,source_name,content_excerpt),thesis_id",
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(30),
+    supabase
+      .from("chat_uploaded_documents")
+      .select("file_name,extracted_text")
+      .eq("user_id", userId)
+      .eq("status", "ready")
+      .order("created_at", { ascending: false })
+      .limit(8),
   ])
 
   const theses = (thesesResult.data ?? []) as MonitorThesisRow[]
   const events = (eventsResult.data ?? []) as MonitorEventRow[]
-  const evidenceSnippets = (sourceMatchesResult.data ?? [])
+  const sourceEvidence = (sourceMatchesResult.data ?? [])
     .map((row) => {
+      const sourceDoc = row.source_documents as
+        | { title?: string | null; source_name?: string | null; content_excerpt?: string | null }
+        | null
       const reason = typeof row.match_reason === "string" ? row.match_reason.trim() : ""
-      if (!reason) return ""
+      const title = sourceDoc?.title?.trim() || "Untitled source"
+      const sourceName = sourceDoc?.source_name?.trim() || "Source"
+      const excerpt =
+        typeof sourceDoc?.content_excerpt === "string"
+          ? sourceDoc.content_excerpt.replace(/\s+/g, " ").trim().slice(0, 120)
+          : ""
       const confidence = typeof row.confidence === "string" ? row.confidence : "unknown"
       const relevance = typeof row.relevance_score === "number" ? row.relevance_score.toFixed(2) : "n/a"
-      return `Source match: ${reason} (confidence=${confidence}, relevance=${relevance})`
+      const reasonPart = reason ? `reason=${reason}` : "reason=not captured"
+      const excerptPart = excerpt ? ` | excerpt=${excerpt}` : ""
+      return `[Doc] ${sourceName} - ${title} | ${reasonPart} | confidence=${confidence}, relevance=${relevance}${excerptPart}`
     })
     .filter((item) => item.length > 0)
-    .slice(0, MAX_EVIDENCE_ITEMS)
+
+  const uploadEvidence = (uploadsResult.data ?? [])
+    .map((row) => {
+      const fileName = typeof row.file_name === "string" ? row.file_name.trim() : "uploaded-document"
+      const excerpt =
+        typeof row.extracted_text === "string"
+          ? row.extracted_text.replace(/\s+/g, " ").trim().slice(0, 140)
+          : ""
+      if (!excerpt) return ""
+      return `[Upload] ${fileName} | excerpt=${excerpt}`
+    })
+    .filter((item) => item.length > 0)
+
+  const evidenceSnippets = dedupeStringLinesPreserveOrder(
+    [...sourceEvidence, ...uploadEvidence],
+    MAX_EVIDENCE_ITEMS,
+  )
 
   return { theses, events, evidenceSnippets }
 }
@@ -85,6 +123,25 @@ async function findRunByKey(
     throw error
   }
 
+  return (data as SigmaMonitorRunRow | null) ?? null
+}
+
+async function findPreviousMonitorRun(
+  supabase: SupabaseClient,
+  userId: string,
+  currentRunKey: string,
+): Promise<SigmaMonitorRunRow | null> {
+  const { data, error } = await supabase
+    .from("sigma_monitor_runs")
+    .select("*")
+    .eq("user_id", userId)
+    .neq("run_key", currentRunKey)
+    .not("summary", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
   return (data as SigmaMonitorRunRow | null) ?? null
 }
 
@@ -162,9 +219,20 @@ export async function runSigmaMonitorForUser(
     if (insertError) throw insertError
   }
 
+  const previousRun = await findPreviousMonitorRun(supabase, userId, runKey)
+  const previousSummary = previousRun?.summary ?? null
   const { theses, events, evidenceSnippets } = await loadMonitorData(supabase, userId)
+  const snapshotMeta = buildSigmaMonitorSnapshotMeta(theses, events)
+  const delta = buildSigmaMonitorDelta(previousSummary, snapshotMeta, previousRun?.run_key ?? null)
   const noiseCtx = monitorNoiseContext(theses, events)
-  const fallbackSummary = buildDeterministicMonitorSummary(theses, events, evidenceSnippets)
+  const fallbackSummary = buildDeterministicMonitorSummary(
+    theses,
+    events,
+    evidenceSnippets,
+    delta,
+    snapshotMeta,
+    previousSummary,
+  )
 
   let finalSummary: SigmaMonitorSummary = fallbackSummary
   let failedMessage: string | null = null
@@ -175,7 +243,7 @@ export async function runSigmaMonitorForUser(
     const completion = await llm.messages.create({
       model,
       max_tokens: 650,
-      system: buildMonitorPrompt(theses, events, fallbackSummary),
+      system: buildMonitorPrompt(theses, events, fallbackSummary, delta, previousSummary),
       messages: [{ role: "user", content: "Generate the monitor digest now." }],
     })
 

@@ -4,6 +4,20 @@ export type SigmaMonitorRiskLevel = "stable" | "watch" | "critical"
 export type SigmaMonitorStatus = "running" | "success" | "failed"
 export type SigmaMonitorTriggerSource = "manual" | "cron"
 
+export type SigmaMonitorSnapshotMeta = {
+  thesisStatusById: Record<string, string>
+  openEventKeys: string[]
+}
+
+export type SigmaMonitorDelta = {
+  comparedToRunKey: string | null
+  newAlertCount: number
+  resolvedAlertCount: number
+  statusChangeCount: number
+  changed: boolean
+  summaryLine: string
+}
+
 export type SigmaMonitorSummary = {
   headline: string
   summary: string
@@ -11,6 +25,8 @@ export type SigmaMonitorSummary = {
   highSignalChanges: string[]
   recommendedActions: SigmaActionDraft[]
   evidenceSnippets: string[]
+  delta?: SigmaMonitorDelta
+  snapshotMeta?: SigmaMonitorSnapshotMeta
 }
 
 export type SigmaMonitorRunRow = {
