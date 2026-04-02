@@ -74,7 +74,7 @@ describe("runBoundedReadOnlyToolLoop", () => {
       })
 
     const result = await runBoundedReadOnlyToolLoop({
-      llm: { messages: { create } },
+      llm: { messages: { create } } as unknown as ReturnType<typeof import("@/lib/llm").createLlm>,
       baseRequest: {
         model: "test-model",
         max_tokens: 500,
@@ -122,7 +122,7 @@ describe("runBoundedReadOnlyToolLoop", () => {
       })
 
     const result = await runBoundedReadOnlyToolLoop({
-      llm: { messages: { create } },
+      llm: { messages: { create } } as unknown as ReturnType<typeof import("@/lib/llm").createLlm>,
       baseRequest: {
         model: "test-model",
         max_tokens: 500,

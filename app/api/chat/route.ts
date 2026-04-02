@@ -598,11 +598,7 @@ export async function invokeReadOnlyTool(args: {
 }
 
 export async function runBoundedReadOnlyToolLoop(args: {
-  llm: {
-    messages: {
-      create: (request: unknown) => Promise<{ content: unknown[] }>
-    }
-  }
+  llm: ReturnType<typeof createLlm>
   baseRequest: {
     model: string
     max_tokens: number
