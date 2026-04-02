@@ -85,6 +85,7 @@ export function AnalysisButton({
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [lastAnalysedAt, setLastAnalysedAt] = useState<string | null>(initialLastAnalysedAt)
   const [useRealTimeData, setUseRealTimeData] = useState(false)
+  const [highDepthMode, setHighDepthMode] = useState(false)
 
   const handleAnalyse = async () => {
     try {
@@ -96,7 +97,7 @@ export function AnalysisButton({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ thesisId, useRealTimeData }),
+        body: JSON.stringify({ thesisId, useRealTimeData, highDepthMode }),
       })
 
       const payload = (await response.json().catch(() => null)) as
@@ -140,8 +141,12 @@ export function AnalysisButton({
         <p className="font-mono text-3xl text-[#F0F0F0] animate-pulse mb-3">Σ</p>
         <p className="text-sm text-[#6B6B7B] max-w-sm mx-auto">
           {useRealTimeData
-            ? "Gathering live context, then analysing your thesis..."
-            : "Analysing your thesis..."}
+            ? highDepthMode
+              ? "Gathering live context, running high-depth adversarial analysis..."
+              : "Gathering live context, then analysing your thesis..."
+            : highDepthMode
+              ? "Running high-depth adversarial analysis..."
+              : "Analysing your thesis..."}
         </p>
       </div>
     )
@@ -219,6 +224,26 @@ export function AnalysisButton({
           </span>
           <span className="mt-1 block text-xs leading-relaxed text-[#6B6B7B]">
             Uses recent public information before this analysis. Slightly slower when enabled.
+          </span>
+        </span>
+      </label>
+      <label
+        htmlFor="thesis-analysis-high-depth"
+        className="flex cursor-pointer gap-3"
+      >
+        <input
+          id="thesis-analysis-high-depth"
+          type="checkbox"
+          checked={highDepthMode}
+          onChange={(e) => setHighDepthMode(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[#2A2A32] bg-[#141418] accent-[#F0F0F0] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F0F0F0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#141418]"
+        />
+        <span className="min-w-0">
+          <span className="font-mono text-xs tracking-widest text-[#F0F0F0]">
+            HIGH-DEPTH ADVERSARIAL MODE
+          </span>
+          <span className="mt-1 block text-xs leading-relaxed text-[#6B6B7B]">
+            Runs a second red-team pass to challenge weak logic before returning the final analysis.
           </span>
         </span>
       </label>

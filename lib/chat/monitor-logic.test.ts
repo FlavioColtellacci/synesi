@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
   applyMonitorSummaryNoiseRules,
+  buildSigmaMonitorDelta,
+  buildSigmaMonitorSnapshotMeta,
   buildDeterministicMonitorSummary,
   dedupeStringLinesPreserveOrder,
   formatMonitorEventSignalLine,
@@ -166,27 +168,73 @@ describe("formatMonitorEventSignalLine", () => {
 
 describe("buildDeterministicMonitorSummary", () => {
   it("handles empty convictions with a clear message", () => {
-    const out = buildDeterministicMonitorSummary([], [], [])
+    const snapshot = buildSigmaMonitorSnapshotMeta([], [])
+    const delta = buildSigmaMonitorDelta(null, snapshot, null)
+    const out = buildDeterministicMonitorSummary([], [], [], delta, snapshot, null)
     expect(out.summary.toLowerCase()).toContain("no convictions")
     expect(out.riskLevel).toBe("stable")
   })
 
   it("marks critical when any thesis is broken", () => {
+    const theses = [
+      {
+        id: "t1",
+        ticker: "ACME",
+        company_name: "Acme",
+        status: "broken",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        thesis_statement: "Test thesis",
+      },
+    ]
+    const snapshot = buildSigmaMonitorSnapshotMeta(theses, [])
+    const delta = buildSigmaMonitorDelta(null, snapshot, null)
     const out = buildDeterministicMonitorSummary(
-      [
-        {
-          id: "t1",
-          ticker: "ACME",
-          company_name: "Acme",
-          status: "broken",
-          updated_at: "2026-01-01T00:00:00.000Z",
-          thesis_statement: "Test thesis",
-        },
-      ],
+      theses,
       [],
       [],
+      delta,
+      snapshot,
+      null,
     )
     expect(out.riskLevel).toBe("critical")
     expect(out.recommendedActions.some((a) => a.actionType === "filter_needs_review")).toBe(true)
+  })
+})
+
+describe("buildSigmaMonitorDelta", () => {
+  it("captures new and resolved alerts plus status changes", () => {
+    const previousSummary: SigmaMonitorSummary = {
+      ...baseFallback,
+      snapshotMeta: {
+        thesisStatusById: { t1: "intact", t2: "at_risk" },
+        openEventKeys: ["t1::trusted_source_challenge::a", "t2::price_move::b"],
+      },
+    }
+    const currentMeta = buildSigmaMonitorSnapshotMeta(
+      [
+        {
+          id: "t1",
+          ticker: "AAA",
+          company_name: "AAA Co",
+          status: "broken",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          thesis_statement: "thesis",
+        },
+      ],
+      [
+        {
+          thesis_id: "t1",
+          event_type: "trusted_source_challenge",
+          event_detail: "a",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    )
+
+    const delta = buildSigmaMonitorDelta(previousSummary, currentMeta, "daily:2026-03-30")
+    expect(delta.changed).toBe(true)
+    expect(delta.newAlertCount).toBe(0)
+    expect(delta.resolvedAlertCount).toBe(1)
+    expect(delta.statusChangeCount).toBe(1)
   })
 })
