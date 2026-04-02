@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails } from "@/lib/chat/guard"
 import { getLatestSigmaMonitorRun } from "@/lib/chat/monitor"
-import { persistChatExchange } from "@/lib/chat/store"
+import { getUserSigmaMemoryProfile, persistChatExchange, syncUserReleaseRing } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
 import { buildRagContextBlock } from "@/lib/chat/rag"
 import { buildUploadedDocumentContextBlock } from "@/lib/chat/uploads"
 import { createSigmaExportsForResponse } from "@/lib/chat/exports"
+import { resolveEvalGateDecision, runChatEvalHarness } from "@/lib/chat/evals"
+import { isRingIncludedInRollout, readRolloutTargetRing, resolveReleaseRing } from "@/lib/chat/release-rings"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -133,6 +135,18 @@ function isPhase4AgentToolsEnabled() {
   return readBooleanFlag(process.env.SIGMA_PHASE4_AGENT_TOOLS_ENABLED, false)
 }
 
+function isPhase6MemoryEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE6_MEMORY_ENABLED, true)
+}
+
+function isPhase6EvalHarnessEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE6_EVAL_HARNESS_ENABLED, true)
+}
+
+function isPhase6EvalGateEnforced() {
+  return readBooleanFlag(process.env.SIGMA_PHASE6_EVAL_GATE_ENFORCED, false)
+}
+
 function resolveSkillRoute(message: string): ChatSkillRoute {
   if (
     /(review (my )?thesis|thesis review|stress test|challenge (my )?thesis|bull case|bear case|variant perception|assumption)/i.test(
@@ -205,6 +219,19 @@ function buildWebLookupUnavailableNowResponse(): ChatAssistantResponse {
     confidence: "medium",
     escalation: "none",
     followUpActions: ["Share the article URLs", "Paste key excerpts here", "Ask me to compare sources once shared"],
+  }
+}
+
+function buildEvalGateFallbackResponse(): ChatAssistantResponse {
+  return {
+    answer:
+      "I could not safely finalize that answer under current quality gates. Please retry with a narrower prompt, and I will provide a fully grounded response.",
+    sourceTags: ["PolicyGuide"],
+    confidence: "low",
+    escalation: "support",
+    followUpActions: ["Retry with a focused question", "Ask for a step-by-step workflow", "Contact support if this repeats"],
+    artifacts: [],
+    requestedExports: [],
   }
 }
 
@@ -751,6 +778,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userReleaseRing = resolveReleaseRing({ userId: user.id, email: user.email })
+    const memoryTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_MEMORY_TARGET_RING, "internal")
+    const evalTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_EVAL_TARGET_RING, "internal")
+    const phase6MemoryEnabled =
+      isPhase6MemoryEnabled() && isRingIncludedInRollout({ userRing: userReleaseRing, targetRing: memoryTargetRing })
+    const phase6EvalHarnessEnabled =
+      isPhase6EvalHarnessEnabled() &&
+      isRingIncludedInRollout({ userRing: userReleaseRing, targetRing: evalTargetRing })
+    const phase6EvalGateEnforced =
+      isPhase6EvalGateEnforced() &&
+      isRingIncludedInRollout({ userRing: userReleaseRing, targetRing: evalTargetRing })
+
+    try {
+      await syncUserReleaseRing(supabase, user.id, userReleaseRing)
+    } catch {
+      // Ring sync should not block chat responses.
+    }
+
     const now = Date.now()
     if (isRateLimited(user.id, now)) {
       return NextResponse.json(
@@ -917,6 +962,14 @@ export async function POST(request: Request) {
 
     const model = getTextModel()
     const llm = createLlm()
+    let sigmaMemoryProfile: Awaited<ReturnType<typeof getUserSigmaMemoryProfile>> | null = null
+    if (phase6MemoryEnabled) {
+      try {
+        sigmaMemoryProfile = await getUserSigmaMemoryProfile(supabase, user.id)
+      } catch {
+        sigmaMemoryProfile = null
+      }
+    }
     const systemPrompt = buildChatSystemPrompt({
       email: user.email ?? null,
       thesisCount: thesisCount ?? 0,
@@ -926,6 +979,15 @@ export async function POST(request: Request) {
       recentConvictions: buildRecentConvictionsLine(positions ?? []),
       recentAlerts: buildRecentAlertsLine(alerts ?? []),
       currentPath: body.context?.currentPath ?? "unknown",
+      memoryProfile: sigmaMemoryProfile
+        ? {
+            enabled: sigmaMemoryProfile.enabled,
+            investmentFocus: sigmaMemoryProfile.profile.investmentFocus,
+            monitoringPreferences: sigmaMemoryProfile.profile.monitoringPreferences,
+            communicationStyle: sigmaMemoryProfile.profile.communicationStyle,
+            notes: sigmaMemoryProfile.profile.notes,
+          }
+        : undefined,
     }, { skillRoute, planThenAnswerEnabled })
 
     const resolvedSystemPrompt = (
@@ -1093,9 +1155,23 @@ export async function POST(request: Request) {
               requestedExports: [],
               artifacts: exportArtifacts,
             }
+            const evalResult = phase6EvalHarnessEnabled
+              ? runChatEvalHarness({
+                  response: finalResponsePayloadWithWebContext,
+                  strictJsonMode,
+                  hadAttachments: attachmentIds.length > 0,
+                })
+              : null
+            const evalGateDecision = resolveEvalGateDecision({
+              gateEnforced: phase6EvalGateEnforced,
+              evalResult,
+            })
+            const gatedFinalResponsePayload: ChatAssistantResponse = evalGateDecision.gated
+              ? buildEvalGateFallbackResponse()
+              : finalResponsePayloadWithWebContext
 
             try {
-              await persistChatExchange(supabase, user.id, latestMessage, finalResponsePayloadWithWebContext)
+              await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload)
             } catch (persistError) {
               console.warn(
                 JSON.stringify({
@@ -1126,6 +1202,14 @@ export async function POST(request: Request) {
                 webContextSource,
                 webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
                 phase4AgentToolsEnabled,
+                phase6MemoryEnabled,
+                phase6EvalHarnessEnabled,
+                phase6EvalGateEnforced,
+                userReleaseRing,
+                memoryOptIn: sigmaMemoryProfile?.enabled === true,
+                evalPass: evalResult?.pass ?? null,
+                evalGateDecision: evalGateDecision.reason,
+                evalFailures: evalResult?.failures ?? [],
                 toolLoopUsed: false,
                 toolLoopSteps: 0,
                 toolLoopCalls: 0,
@@ -1134,7 +1218,7 @@ export async function POST(request: Request) {
               }),
             )
 
-            return NextResponse.json(finalResponsePayloadWithWebContext)
+            return NextResponse.json(gatedFinalResponsePayload)
           }
 
           completion = await llm.messages.create({
@@ -1207,9 +1291,23 @@ export async function POST(request: Request) {
       requestedExports: [],
       artifacts: exportArtifacts,
     }
+    const evalResult = phase6EvalHarnessEnabled
+      ? runChatEvalHarness({
+          response: finalResponsePayloadWithWebContext,
+          strictJsonMode,
+          hadAttachments: attachmentIds.length > 0,
+        })
+      : null
+    const evalGateDecision = resolveEvalGateDecision({
+      gateEnforced: phase6EvalGateEnforced,
+      evalResult,
+    })
+    const gatedFinalResponsePayload: ChatAssistantResponse = evalGateDecision.gated
+      ? buildEvalGateFallbackResponse()
+      : finalResponsePayloadWithWebContext
 
     try {
-      await persistChatExchange(supabase, user.id, latestMessage, finalResponsePayloadWithWebContext)
+      await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload)
     } catch (persistError) {
       console.warn(
         JSON.stringify({
@@ -1240,6 +1338,14 @@ export async function POST(request: Request) {
         webContextSource,
         webLookupTemporarilyUnavailable,
         phase4AgentToolsEnabled,
+        phase6MemoryEnabled,
+        phase6EvalHarnessEnabled,
+        phase6EvalGateEnforced,
+        userReleaseRing,
+        memoryOptIn: sigmaMemoryProfile?.enabled === true,
+        evalPass: evalResult?.pass ?? null,
+        evalGateDecision: evalGateDecision.reason,
+        evalFailures: evalResult?.failures ?? [],
         toolLoopUsed: toolLoopStats.used,
         toolLoopSteps: toolLoopStats.steps,
         toolLoopCalls: toolLoopStats.toolCalls,
@@ -1248,7 +1354,7 @@ export async function POST(request: Request) {
       }),
     )
 
-    return NextResponse.json(finalResponsePayloadWithWebContext)
+    return NextResponse.json(gatedFinalResponsePayload)
   } catch (error) {
     console.error(
       JSON.stringify({
