@@ -436,7 +436,7 @@ function parseToolUseBlocks(content: unknown): ToolUseBlock[] {
   return blocks
 }
 
-async function invokeReadOnlyTool(args: {
+export async function invokeReadOnlyTool(args: {
   supabase: Awaited<ReturnType<typeof createClient>>
   userId: string
   attachmentIds: string[]
@@ -597,8 +597,12 @@ async function invokeReadOnlyTool(args: {
   }
 }
 
-async function runBoundedReadOnlyToolLoop(args: {
-  llm: ReturnType<typeof createLlm>
+export async function runBoundedReadOnlyToolLoop(args: {
+  llm: {
+    messages: {
+      create: (request: unknown) => Promise<{ content: unknown[] }>
+    }
+  }
   baseRequest: {
     model: string
     max_tokens: number
