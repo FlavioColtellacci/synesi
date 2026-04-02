@@ -404,7 +404,7 @@ const READ_ONLY_AGENT_TOOLS = [
 
 function asObject(input: unknown): Record<string, unknown> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return {}
-  return input
+  return input as Record<string, unknown>
 }
 
 function readNumber(input: unknown, fallback: number, min: number, max: number) {
