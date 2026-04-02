@@ -409,6 +409,66 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_uploaded_documents: {
+        Row: {
+          id: string
+          user_id: string
+          bucket: string
+          storage_path: string
+          file_name: string
+          file_extension: string
+          mime_type: string
+          size_bytes: number
+          sha256: string
+          status: "ready" | "failed"
+          malware_scan_status: "clean" | "blocked" | "skipped"
+          extracted_text: string | null
+          extracted_chars: number
+          extraction_error: string | null
+          metadata: Record<string, unknown> | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          bucket: string
+          storage_path: string
+          file_name: string
+          file_extension: string
+          mime_type: string
+          size_bytes: number
+          sha256: string
+          status: "ready" | "failed"
+          malware_scan_status: "clean" | "blocked" | "skipped"
+          extracted_text?: string | null
+          extracted_chars?: number
+          extraction_error?: string | null
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          bucket?: string
+          storage_path?: string
+          file_name?: string
+          file_extension?: string
+          mime_type?: string
+          size_bytes?: number
+          sha256?: string
+          status?: "ready" | "failed"
+          malware_scan_status?: "clean" | "blocked" | "skipped"
+          extracted_text?: string | null
+          extracted_chars?: number
+          extraction_error?: string | null
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -436,3 +496,4 @@ export type AlertRuleSource = Database['public']['Tables']['alert_rule_sources']
 export type FinancialSnapshot = Database['public']['Tables']['financial_snapshots']['Row']
 export type SourceDocument = Database['public']['Tables']['source_documents']['Row']
 export type ThesisSourceMatch = Database['public']['Tables']['thesis_source_matches']['Row']
+export type ChatUploadedDocument = Database['public']['Tables']['chat_uploaded_documents']['Row']

@@ -18,7 +18,7 @@ export type ChatActionDraft = {
 }
 
 export type ChatRetrievalEvidence = {
-  source: "assumption" | "source_match" | "status_note"
+  source: "assumption" | "source_match" | "status_note" | "uploaded_document"
   snippet: string
 }
 
@@ -40,4 +40,8 @@ export type ChatMessageRole = "user" | "assistant"
 export type ChatRequestMessage = {
   role: ChatMessageRole
   content: string
+}
+
+export type ChatAttachmentInput = {
+  id: string
 }

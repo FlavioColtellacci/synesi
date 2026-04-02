@@ -24,7 +24,12 @@ const ACTION_TYPES: ChatActionDraft["actionType"][] = [
   "open_alerts_panel",
   "draft_alert_rule_update",
 ]
-const RETRIEVAL_SOURCES: ChatRetrievalEvidence["source"][] = ["assumption", "source_match", "status_note"]
+const RETRIEVAL_SOURCES: ChatRetrievalEvidence["source"][] = [
+  "assumption",
+  "source_match",
+  "status_note",
+  "uploaded_document",
+]
 
 /** Upper bound for stored/displayed answer text (runaway or malformed model output). */
 const MAX_ASSISTANT_ANSWER_CHARS = 32_000

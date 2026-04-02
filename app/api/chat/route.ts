@@ -6,6 +6,7 @@ import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
 import { buildRagContextBlock } from "@/lib/chat/rag"
+import { buildUploadedDocumentContextBlock } from "@/lib/chat/uploads"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -14,6 +15,7 @@ import { createClient } from "@/lib/supabase/server"
 type ChatRequestBody = {
   message?: string
   messages?: ChatRequestMessage[]
+  attachmentIds?: string[]
   context?: {
     currentPath?: string
   }
@@ -42,6 +44,7 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX_REQUESTS = 18
 const USER_CONTEXT_CACHE_TTL_MS = 60 * 1000
 const PLAN_MAX_STEPS = 5
+const MAX_ATTACHMENT_IDS = 4
 
 const userRateLimit = new Map<string, number[]>()
 const userContextCache = new Map<
@@ -208,6 +211,16 @@ function buildResponseFromRawText(args: {
   return enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
 }
 
+function mergeRetrievalEvidence(args: {
+  ragSnippets: string[]
+  uploadedDocSnippets: string[]
+  existing?: ChatAssistantResponse["retrievalEvidence"]
+}): ChatAssistantResponse["retrievalEvidence"] {
+  const fromRag = args.ragSnippets.map((snippet) => ({ source: "source_match" as const, snippet }))
+  const fromUploads = args.uploadedDocSnippets.map((snippet) => ({ source: "uploaded_document" as const, snippet }))
+  return [...fromRag, ...fromUploads, ...(args.existing ?? [])].slice(0, 5)
+}
+
 function buildRecentConvictionsLine(positions: PositionSnapshot[]) {
   if (positions.length === 0) return "none"
   return positions
@@ -323,6 +336,10 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ChatRequestBody
     const latestMessage = body.message?.trim()
     const history = normalizeHistory(body.messages ?? []).slice(-MAX_HISTORY_MESSAGES)
+    const attachmentIds = Array.isArray(body.attachmentIds)
+      ? [...new Set(body.attachmentIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0))]
+          .slice(0, MAX_ATTACHMENT_IDS)
+      : []
 
     if (!latestMessage) {
       return NextResponse.json({ error: "Missing message" }, { status: 400 })
@@ -486,6 +503,10 @@ export async function POST(request: Request) {
     if (ragContext.block) {
       liveContextSections.push(ragContext.block)
     }
+    const uploadedDocumentContext = await buildUploadedDocumentContextBlock(supabase, user.id, attachmentIds)
+    if (uploadedDocumentContext.block) {
+      liveContextSections.push(uploadedDocumentContext.block)
+    }
 
     if (sharedUrl) {
       const webContext = await fetchSafeWebContext(sharedUrl)
@@ -646,13 +667,11 @@ export async function POST(request: Request) {
               : responsePayloadWithBrave
             const responsePayloadWithWebContext: ChatAssistantResponse = {
               ...normalizedResponsePayloadWithBrave,
-              retrievalEvidence:
-                ragContext.clientEvidenceSnippets.length > 0
-                  ? ragContext.clientEvidenceSnippets.map((snippet) => ({
-                      source: "source_match" as const,
-                      snippet,
-                    }))
-                  : normalizedResponsePayloadWithBrave.retrievalEvidence,
+              retrievalEvidence: mergeRetrievalEvidence({
+                ragSnippets: ragContext.clientEvidenceSnippets,
+                uploadedDocSnippets: uploadedDocumentContext.evidenceSnippets,
+                existing: normalizedResponsePayloadWithBrave.retrievalEvidence,
+              }),
               webContextVerified: usedSafeWebContext,
               webContextSource,
               webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
@@ -726,10 +745,11 @@ export async function POST(request: Request) {
       : responsePayload
     const responsePayloadWithWebContext: ChatAssistantResponse = {
       ...normalizedResponsePayload,
-      retrievalEvidence:
-        ragContext.clientEvidenceSnippets.length > 0
-          ? ragContext.clientEvidenceSnippets.map((snippet) => ({ source: "source_match" as const, snippet }))
-          : normalizedResponsePayload.retrievalEvidence,
+      retrievalEvidence: mergeRetrievalEvidence({
+        ragSnippets: ragContext.clientEvidenceSnippets,
+        uploadedDocSnippets: uploadedDocumentContext.evidenceSnippets,
+        existing: normalizedResponsePayload.retrievalEvidence,
+      }),
       webContextVerified: usedSafeWebContext,
       webContextSource,
       webLookupTemporarilyUnavailable,

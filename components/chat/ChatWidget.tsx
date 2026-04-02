@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  type ChangeEvent,
+  type DragEvent,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -29,6 +31,19 @@ type ChatMessage = {
   webContextVerified?: boolean
   webContextSource?: ChatAssistantResponse["webContextSource"]
   webLookupTemporarilyUnavailable?: boolean
+  attachments?: {
+    id: string
+    fileName: string
+  }[]
+}
+
+type PendingAttachment = {
+  id: string
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  status: "uploading" | "ready" | "failed"
+  extractionError?: string
 }
 
 type ResizeDirection = "top" | "left" | "top-left"
@@ -47,6 +62,12 @@ function readClientBooleanFlag(value: string | undefined, defaultValue: boolean)
   if (["1", "true", "on", "yes"].includes(normalized)) return true
   if (["0", "false", "off", "no"].includes(normalized)) return false
   return defaultValue
+}
+
+function formatBytes(sizeBytes: number) {
+  if (sizeBytes < 1024) return `${sizeBytes} B`
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const SIGMA_PHASE1_SKILLS_ROUTER_ENABLED = readClientBooleanFlag(
@@ -90,12 +111,15 @@ export default function ChatWidget() {
   const [isConfirmingAction, setIsConfirmingAction] = useState<string | null>(null)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [inputHintOverflowPx, setInputHintOverflowPx] = useState(0)
   const [panelSize, setPanelSize] = useState({
     width: DEFAULT_PANEL_WIDTH,
     height: DEFAULT_PANEL_HEIGHT,
   })
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const inputHintViewportRef = useRef<HTMLSpanElement | null>(null)
   const inputHintTextRef = useRef<HTMLSpanElement | null>(null)
   const resizeStateRef = useRef<{
@@ -292,14 +316,107 @@ export default function ChatWidget() {
       direction === "top" ? "ns-resize" : direction === "left" ? "ew-resize" : "nwse-resize"
   }
 
+  async function uploadSingleFile(file: File) {
+    const tempId = `temp-${crypto.randomUUID()}`
+    const tempAttachment: PendingAttachment = {
+      id: tempId,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+      status: "uploading",
+    }
+    setAttachments((current) => [...current, tempAttachment])
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const response = await fetch("/api/chat/uploads", {
+        method: "POST",
+        body: formData,
+      })
+      const payload = (await response.json()) as {
+        error?: string
+        document?: {
+          id: string
+          fileName: string
+          mimeType: string
+          sizeBytes: number
+          status: "ready" | "failed"
+          extractionError?: string | null
+        }
+      }
+
+      if (!response.ok || !payload.document) {
+        throw new Error(payload.error ?? "Upload failed.")
+      }
+
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === tempId
+            ? {
+                id: payload.document!.id,
+                fileName: payload.document!.fileName,
+                mimeType: payload.document!.mimeType,
+                sizeBytes: payload.document!.sizeBytes,
+                status: payload.document!.status,
+                extractionError: payload.document!.extractionError ?? undefined,
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === tempId
+            ? {
+                ...item,
+                status: "failed",
+                extractionError: error instanceof Error ? error.message : "Upload failed.",
+              }
+            : item,
+        ),
+      )
+    }
+  }
+
+  async function handleFilesSelection(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return
+    const files = Array.from(fileList).slice(0, 4)
+    for (const file of files) {
+      await uploadSingleFile(file)
+    }
+  }
+
+  async function removeAttachment(attachment: PendingAttachment) {
+    setAttachments((current) => current.filter((item) => item.id !== attachment.id))
+    if (!attachment.id.startsWith("temp-")) {
+      try {
+        await fetch(`/api/chat/uploads?id=${encodeURIComponent(attachment.id)}`, { method: "DELETE" })
+      } catch {
+        // Keep UI responsive even if deletion fails.
+      }
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsDraggingFiles(false)
+    void handleFilesSelection(event.dataTransfer.files)
+  }
+
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
     if (!message || isSending) return
+    const readyAttachments = attachments.filter((attachment) => attachment.status === "ready")
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       content: message,
+      attachments: readyAttachments.map((attachment) => ({
+        id: attachment.id,
+        fileName: attachment.fileName,
+      })),
     }
 
     setMessages((current) => {
@@ -326,6 +443,7 @@ export default function ChatWidget() {
         body: JSON.stringify({
           message,
           messages: chatHistory,
+          attachmentIds: readyAttachments.map((attachment) => attachment.id),
           context: { currentPath: pathname },
         }),
       })
@@ -371,6 +489,7 @@ export default function ChatWidget() {
         confidence: assistantMessage.confidence ?? "low",
         escalation: assistantMessage.escalation ?? "none",
       })
+      setAttachments([])
     } catch {
       setMessages((current) => [
         ...current,
@@ -403,6 +522,7 @@ export default function ChatWidget() {
     } finally {
       setMessages([])
       setInput("")
+      setAttachments([])
       setUnreadAssistantReplies(0)
       setHasHydratedHistory(true)
       setIsClearingHistory(false)
@@ -659,6 +779,18 @@ export default function ChatWidget() {
                     ) : (
                       renderUserContent(message.content)
                     )}
+                    {message.role === "user" && (message.attachments?.length ?? 0) > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {message.attachments?.map((attachment) => (
+                          <span
+                            key={attachment.id}
+                            className="rounded-full border border-[#3A3A46] bg-[#17171F] px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-[#A8A8B8]"
+                          >
+                            {attachment.fileName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
 
                     {message.role === "assistant" && message.webContextSource === "safe_link" ? (
                       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-200">
@@ -754,11 +886,57 @@ export default function ChatWidget() {
               event.preventDefault()
               void sendMessage(input)
             }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              setIsDraggingFiles(true)
+            }}
+            onDragLeave={() => setIsDraggingFiles(false)}
+            onDrop={handleDrop}
           >
             <label htmlFor="synesi-chat-input" className="sr-only">
               Ask the Synesi assistant
             </label>
+            {attachments.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {attachments.map((attachment) => (
+                  <button
+                    key={attachment.id}
+                    type="button"
+                    onClick={() => {
+                      void removeAttachment(attachment)
+                    }}
+                    className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors ${
+                      attachment.status === "ready"
+                        ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200"
+                        : attachment.status === "failed"
+                          ? "border-rose-300/30 bg-rose-400/10 text-rose-200"
+                          : "border-[#3A3A46] bg-[#17171F] text-[#A8A8B8]"
+                    }`}
+                    title={attachment.extractionError ?? "Remove document"}
+                  >
+                    {attachment.fileName} · {formatBytes(attachment.sizeBytes)} · {attachment.status}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex items-center gap-2 rounded-full border border-[#2A2A32]/85 bg-[#0B0B0F] px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.csv,.xlsx"
+                className="hidden"
+                onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                  void handleFilesSelection(event.target.files)
+                  event.target.value = ""
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-full border border-[#2A2A32]/85 px-2.5 py-1 font-mono text-[10px] tracking-widest text-[#9A9AAA] transition-colors hover:text-[#F0F0F0]"
+              >
+                ATTACH
+              </button>
               <label className="relative block w-full">
                 <input
                   id="synesi-chat-input"
@@ -798,7 +976,7 @@ export default function ChatWidget() {
               </label>
               <button
                 type="submit"
-                disabled={isSending || input.trim().length === 0}
+                disabled={isSending || input.trim().length === 0 || attachments.some((item) => item.status === "uploading")}
                 aria-busy={isSending}
                 className="inline-flex min-w-[4.25rem] items-center justify-center rounded-full bg-[#F0F0F0] px-4 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -806,6 +984,10 @@ export default function ChatWidget() {
               </button>
             </div>
             <p className="mt-2 text-[11px] text-[#6B6B7B]">
+              {isDraggingFiles ? "Drop files to upload. " : ""}
+              Supported: PDF, DOCX, CSV, XLSX.
+            </p>
+            <p className="mt-1 text-[11px] text-[#6B6B7B]">
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>
           </form>
