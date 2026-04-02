@@ -163,7 +163,7 @@ function extractFirstJsonObject(input: string): string | null {
   return null
 }
 
-function parseStructuredPayload(rawText: string): Record<string, unknown> | null {
+export function parseStructuredPayload(rawText: string): Record<string, unknown> | null {
   const cleaned = stripCodeFences(rawText)
   if (!cleaned) return null
 
