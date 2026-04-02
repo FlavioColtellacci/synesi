@@ -3,6 +3,8 @@ import type {
   ChatAssistantResponse,
   ChatConfidence,
   ChatEscalation,
+  ChatExportFormat,
+  ChatRequestedExport,
   ChatRetrievalEvidence,
   ChatRequestMessage,
   ChatSourceTag,
@@ -24,6 +26,7 @@ const ACTION_TYPES: ChatActionDraft["actionType"][] = [
   "open_alerts_panel",
   "draft_alert_rule_update",
 ]
+const EXPORT_FORMATS: ChatExportFormat[] = ["csv", "docx", "pdf", "xlsx"]
 const RETRIEVAL_SOURCES: ChatRetrievalEvidence["source"][] = [
   "assumption",
   "source_match",
@@ -108,6 +111,25 @@ function sanitizeRetrievalEvidence(input: unknown): ChatRetrievalEvidence[] {
   }
 
   return evidences
+}
+
+function sanitizeRequestedExports(input: unknown): ChatRequestedExport[] {
+  if (!Array.isArray(input)) return []
+  const requestedExports: ChatRequestedExport[] = []
+
+  for (const item of input) {
+    if (!isRecord(item)) continue
+    const format = EXPORT_FORMATS.includes(item.format as ChatExportFormat) ? (item.format as ChatExportFormat) : null
+    if (!format) continue
+    const label = typeof item.label === "string" ? item.label.trim().slice(0, 64) : ""
+    requestedExports.push({
+      format,
+      label: label || `Sigma ${format.toUpperCase()} export`,
+    })
+    if (requestedExports.length >= 3) break
+  }
+
+  return requestedExports
 }
 
 function stripCodeFences(input: string): string {
@@ -224,6 +246,7 @@ export function parseAssistantResponse(rawText: string): ChatAssistantResponse |
     followUpActions: sanitizeActions(parsed.followUpActions),
     actionDrafts: sanitizeActionDrafts(parsed.actionDrafts),
     retrievalEvidence: sanitizeRetrievalEvidence(parsed.retrievalEvidence),
+    requestedExports: sanitizeRequestedExports(parsed.requestedExports),
   }
 }
 
@@ -241,6 +264,7 @@ export function parseAssistantTextFallback(rawText: string): ChatAssistantRespon
       followUpActions: sanitizeActions(parsed.followUpActions),
       actionDrafts: sanitizeActionDrafts(parsed.actionDrafts),
       retrievalEvidence: sanitizeRetrievalEvidence(parsed.retrievalEvidence),
+      requestedExports: sanitizeRequestedExports(parsed.requestedExports),
     }
   }
 

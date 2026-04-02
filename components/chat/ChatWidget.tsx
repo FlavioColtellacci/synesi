@@ -31,6 +31,7 @@ type ChatMessage = {
   webContextVerified?: boolean
   webContextSource?: ChatAssistantResponse["webContextSource"]
   webLookupTemporarilyUnavailable?: boolean
+  artifacts?: ChatAssistantResponse["artifacts"]
   attachments?: {
     id: string
     fileName: string
@@ -478,6 +479,16 @@ export default function ChatWidget() {
             : undefined,
         webLookupTemporarilyUnavailable:
           "webLookupTemporarilyUnavailable" in payload ? payload.webLookupTemporarilyUnavailable === true : false,
+        artifacts:
+          "artifacts" in payload && Array.isArray(payload.artifacts)
+            ? payload.artifacts.slice(0, 3).filter((artifact) => {
+                if (!artifact || typeof artifact !== "object") return false
+                if (!("id" in artifact) || typeof artifact.id !== "string") return false
+                if (!("label" in artifact) || typeof artifact.label !== "string") return false
+                if (!("signedUrl" in artifact) || typeof artifact.signedUrl !== "string") return false
+                return true
+              })
+            : [],
       }
 
       setMessages((current) => [...current, assistantMessage])
@@ -816,6 +827,25 @@ export default function ChatWidget() {
                       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-amber-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
                         Web lookup temporarily unavailable
+                      </div>
+                    ) : null}
+                    {message.role === "assistant" && (message.artifacts?.length ?? 0) > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-[#8B8B9A]">Downloads</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {message.artifacts?.map((artifact) => (
+                            <a
+                              key={artifact.id}
+                              href={artifact.signedUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-full border border-cyan-300/35 bg-cyan-400/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-cyan-200 transition-colors hover:border-cyan-200/60"
+                              title={`${artifact.format.toUpperCase()} · ${formatBytes(artifact.sizeBytes)}`}
+                            >
+                              {artifact.label} ({artifact.format.toUpperCase()})
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                     {message.role === "assistant" && (message.actionDrafts?.length ?? 0) > 0 ? (

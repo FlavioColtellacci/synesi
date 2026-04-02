@@ -22,6 +22,9 @@ type StoredChatMessage = {
   actionDrafts?: ChatAssistantResponse["actionDrafts"]
   retrievalEvidence?: ChatAssistantResponse["retrievalEvidence"]
   webContextVerified?: boolean
+  webContextSource?: ChatAssistantResponse["webContextSource"]
+  webLookupTemporarilyUnavailable?: boolean
+  artifacts?: ChatAssistantResponse["artifacts"]
 }
 
 function assistantMetadataFromResponse(response: ChatAssistantResponse): Record<string, unknown> {
@@ -33,6 +36,9 @@ function assistantMetadataFromResponse(response: ChatAssistantResponse): Record<
     actionDrafts: response.actionDrafts ?? [],
     retrievalEvidence: response.retrievalEvidence ?? [],
     webContextVerified: response.webContextVerified ?? false,
+    webContextSource: response.webContextSource ?? null,
+    webLookupTemporarilyUnavailable: response.webLookupTemporarilyUnavailable ?? false,
+    artifacts: response.artifacts ?? [],
   }
 }
 
@@ -54,6 +60,12 @@ function mapStoredMessage(row: PersistedRow): StoredChatMessage {
       ? (metadata.retrievalEvidence as ChatAssistantResponse["retrievalEvidence"])
       : [],
     webContextVerified: metadata.webContextVerified === true,
+    webContextSource:
+      metadata.webContextSource === "safe_link" || metadata.webContextSource === "brave_search"
+        ? (metadata.webContextSource as ChatAssistantResponse["webContextSource"])
+        : undefined,
+    webLookupTemporarilyUnavailable: metadata.webLookupTemporarilyUnavailable === true,
+    artifacts: Array.isArray(metadata.artifacts) ? (metadata.artifacts as ChatAssistantResponse["artifacts"]) : [],
   }
 }
 

@@ -7,6 +7,7 @@ import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
 import { buildRagContextBlock } from "@/lib/chat/rag"
 import { buildUploadedDocumentContextBlock } from "@/lib/chat/uploads"
+import { createSigmaExportsForResponse } from "@/lib/chat/exports"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -676,9 +677,27 @@ export async function POST(request: Request) {
               webContextSource,
               webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
             }
+            let exportArtifacts: ChatAssistantResponse["artifacts"] = []
+            try {
+              exportArtifacts = await createSigmaExportsForResponse({
+                supabase,
+                userId: user.id,
+                requestId,
+                response: responsePayloadWithWebContext,
+                positions: positions ?? [],
+                alerts: alerts ?? [],
+              })
+            } catch {
+              exportArtifacts = []
+            }
+            const finalResponsePayloadWithWebContext: ChatAssistantResponse = {
+              ...responsePayloadWithWebContext,
+              requestedExports: [],
+              artifacts: exportArtifacts,
+            }
 
             try {
-              await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+              await persistChatExchange(supabase, user.id, latestMessage, finalResponsePayloadWithWebContext)
             } catch (persistError) {
               console.warn(
                 JSON.stringify({
@@ -700,6 +719,7 @@ export async function POST(request: Request) {
                 sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
                 confidence: normalizedResponsePayloadWithBrave.confidence,
                 escalation: normalizedResponsePayloadWithBrave.escalation,
+                artifactsCount: exportArtifacts.length,
                 skillRoute,
                 planThenAnswerEnabled,
                 strictJsonMode,
@@ -710,7 +730,7 @@ export async function POST(request: Request) {
               }),
             )
 
-            return NextResponse.json(responsePayloadWithWebContext)
+            return NextResponse.json(finalResponsePayloadWithWebContext)
           }
 
           completion = await llm.messages.create({
@@ -754,9 +774,27 @@ export async function POST(request: Request) {
       webContextSource,
       webLookupTemporarilyUnavailable,
     }
+    let exportArtifacts: ChatAssistantResponse["artifacts"] = []
+    try {
+      exportArtifacts = await createSigmaExportsForResponse({
+        supabase,
+        userId: user.id,
+        requestId,
+        response: responsePayloadWithWebContext,
+        positions: positions ?? [],
+        alerts: alerts ?? [],
+      })
+    } catch {
+      exportArtifacts = []
+    }
+    const finalResponsePayloadWithWebContext: ChatAssistantResponse = {
+      ...responsePayloadWithWebContext,
+      requestedExports: [],
+      artifacts: exportArtifacts,
+    }
 
     try {
-      await persistChatExchange(supabase, user.id, latestMessage, responsePayloadWithWebContext)
+      await persistChatExchange(supabase, user.id, latestMessage, finalResponsePayloadWithWebContext)
     } catch (persistError) {
       console.warn(
         JSON.stringify({
@@ -778,6 +816,7 @@ export async function POST(request: Request) {
         sourceTags: normalizedResponsePayload.sourceTags,
         confidence: normalizedResponsePayload.confidence,
         escalation: normalizedResponsePayload.escalation,
+        artifactsCount: exportArtifacts.length,
         skillRoute,
         planThenAnswerEnabled,
         strictJsonMode,
@@ -788,7 +827,7 @@ export async function POST(request: Request) {
       }),
     )
 
-    return NextResponse.json(responsePayloadWithWebContext)
+    return NextResponse.json(finalResponsePayloadWithWebContext)
   } catch (error) {
     console.error(
       JSON.stringify({

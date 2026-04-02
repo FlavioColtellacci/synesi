@@ -42,6 +42,8 @@ export function enforceResponseGuardrails(response: ChatAssistantResponse): Chat
     followUpActions: response.followUpActions.slice(0, 3),
     actionDrafts: (response.actionDrafts ?? []).slice(0, 3),
     retrievalEvidence: (response.retrievalEvidence ?? []).slice(0, 5),
+    requestedExports: (response.requestedExports ?? []).slice(0, 3),
+    artifacts: (response.artifacts ?? []).slice(0, 3),
   }
 }
 
