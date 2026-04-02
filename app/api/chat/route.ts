@@ -3,8 +3,8 @@ import { enforceResponseGuardrails } from "@/lib/chat/guard"
 import { getLatestSigmaMonitorRun } from "@/lib/chat/monitor"
 import { persistChatExchange } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
-import { buildChatSystemPrompt } from "@/lib/chat/policy"
-import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback } from "@/lib/chat/parse"
+import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
+import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
 import { buildRagContextBlock } from "@/lib/chat/rag"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
@@ -41,6 +41,7 @@ const MAX_HISTORY_MESSAGES = 8
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX_REQUESTS = 18
 const USER_CONTEXT_CACHE_TTL_MS = 60 * 1000
+const PLAN_MAX_STEPS = 5
 
 const userRateLimit = new Map<string, number[]>()
 const userContextCache = new Map<
@@ -100,6 +101,80 @@ function isMonitorSummaryQuestion(message: string) {
   return /(sigma monitor|monitor summary|what changed since last run|latest monitor)/i.test(message)
 }
 
+function readBooleanFlag(value: string | undefined, defaultValue: boolean) {
+  if (!value) return defaultValue
+  const normalized = value.trim().toLowerCase()
+  if (["1", "true", "on", "yes"].includes(normalized)) return true
+  if (["0", "false", "off", "no"].includes(normalized)) return false
+  return defaultValue
+}
+
+function isSkillRoutingEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_SKILLS_ROUTER_ENABLED, true)
+}
+
+function isPlanThenAnswerEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED, false)
+}
+
+function isStrictJsonModeEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_STRICT_JSON_ENABLED, true)
+}
+
+function resolveSkillRoute(message: string): ChatSkillRoute {
+  if (
+    /(review (my )?thesis|thesis review|stress test|challenge (my )?thesis|bull case|bear case|variant perception|assumption)/i.test(
+      message,
+    )
+  ) {
+    return "thesis_review"
+  }
+  if (/(triage|prioriti[sz]e|which|what).*(alert|needs review)|open alerts|alert queue|alert backlog/i.test(message)) {
+    return "alert_triage"
+  }
+  if (/(sigma monitor|monitor summary|what changed since last run|latest monitor|explain monitor)/i.test(message)) {
+    return "monitor_explain"
+  }
+  return "general"
+}
+
+function shouldUsePlanThenAnswer(message: string) {
+  const trimmed = message.trim()
+  if (trimmed.length >= 260) return true
+  if (trimmed.split("\n").length >= 4) return true
+  const questionMarks = (trimmed.match(/\?/g) ?? []).length
+  if (questionMarks >= 2) return true
+  return /(compare|versus|vs\.|trade[- ]?off|step[- ]?by[- ]?step|plan|strategy|analyze|analysis|synthesize|prioritize)/i.test(
+    trimmed,
+  )
+}
+
+type ChatPlan = {
+  steps: string[]
+  cautions: string[]
+}
+
+function parsePlanPayload(rawText: string): ChatPlan | null {
+  const payload = parseStructuredPayload(rawText)
+  if (!payload) return null
+
+  const steps = Array.isArray(payload.steps)
+    ? payload.steps.filter((step): step is string => typeof step === "string").map((step) => step.trim()).filter(Boolean)
+    : []
+  const cautions = Array.isArray(payload.cautions)
+    ? payload.cautions
+        .filter((caution): caution is string => typeof caution === "string")
+        .map((caution) => caution.trim())
+        .filter(Boolean)
+    : []
+
+  if (steps.length === 0) return null
+  return {
+    steps: steps.slice(0, PLAN_MAX_STEPS),
+    cautions: cautions.slice(0, 3),
+  }
+}
+
 function hasWebCapabilityDenial(answer: string) {
   const normalized = answer.toLowerCase()
   return (
@@ -119,6 +194,18 @@ function buildWebLookupUnavailableNowResponse(): ChatAssistantResponse {
     escalation: "none",
     followUpActions: ["Share the article URLs", "Paste key excerpts here", "Ask me to compare sources once shared"],
   }
+}
+
+function buildResponseFromRawText(args: {
+  rawText: string
+  messageForFallback: string
+  positions: PositionSnapshot[]
+  strictJsonMode: boolean
+}): ChatAssistantResponse {
+  const parsed = parseAssistantResponse(args.rawText)
+  const textFallback = args.strictJsonMode ? null : parseAssistantTextFallback(args.rawText)
+  const fallback = buildPositionsFallback(args.messageForFallback, args.positions)
+  return enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
 }
 
 function buildRecentConvictionsLine(positions: PositionSnapshot[]) {
@@ -389,6 +476,11 @@ export async function POST(request: Request) {
     let usedSafeWebContext = false
     let webContextSource: ChatAssistantResponse["webContextSource"] | undefined
     const shouldUseModelWebLookup = !sharedUrl && isInternetLookupQuestion(latestMessage)
+    const skillRoutingEnabled = isSkillRoutingEnabled()
+    const planThenAnswerEnabled = isPlanThenAnswerEnabled()
+    const strictJsonMode = isStrictJsonModeEnabled()
+    const skillRoute = skillRoutingEnabled ? resolveSkillRoute(latestMessage) : "general"
+    const shouldPlanFirst = planThenAnswerEnabled && shouldUsePlanThenAnswer(latestMessage)
 
     const ragContext = await buildRagContextBlock(supabase, user.id, latestMessage)
     if (ragContext.block) {
@@ -421,7 +513,7 @@ export async function POST(request: Request) {
       recentConvictions: buildRecentConvictionsLine(positions ?? []),
       recentAlerts: buildRecentAlertsLine(alerts ?? []),
       currentPath: body.context?.currentPath ?? "unknown",
-    })
+    }, { skillRoute, planThenAnswerEnabled })
 
     const resolvedSystemPrompt = (
       liveContextSections.length > 0
@@ -429,11 +521,51 @@ export async function POST(request: Request) {
         : systemPrompt
     ).toString()
 
-    const completionBaseRequest = {
+    let completionBaseRequest = {
       model,
       max_tokens: 4096,
       system: resolvedSystemPrompt,
       messages: toModelMessages(history, latestMessageForModel),
+    }
+
+    if (shouldPlanFirst) {
+      try {
+        const planCompletion = await llm.messages.create({
+          ...completionBaseRequest,
+          max_tokens: 600,
+          system: `${completionBaseRequest.system}\n\nINTERNAL PLANNING INSTRUCTION\nReturn JSON only with keys: steps (array of short strings) and cautions (array of short strings). Do not include answer text.`,
+          messages: toModelMessages(
+            history,
+            `${latestMessageForModel}\n\nCreate a concise internal plan that will help produce a better final answer. Keep steps practical and grounded in available Synesi context.`,
+          ),
+        })
+        const planRawText = planCompletion.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("")
+          .trim()
+        const parsedPlan = parsePlanPayload(planRawText)
+
+        if (parsedPlan) {
+          const cautionBlock =
+            parsedPlan.cautions.length > 0 ? `Cautions:\n${parsedPlan.cautions.map((item) => `- ${item}`).join("\n")}` : ""
+          latestMessageForModel = [
+            latestMessageForModel,
+            "INTERNAL PLAN CONTEXT (already prepared by backend):",
+            parsedPlan.steps.map((step, index) => `${index + 1}. ${step}`).join("\n"),
+            cautionBlock,
+            "Use this plan to improve reasoning quality, but do not expose this planning artifact in the final answer.",
+          ]
+            .filter(Boolean)
+            .join("\n\n")
+          completionBaseRequest = {
+            ...completionBaseRequest,
+            messages: toModelMessages(history, latestMessageForModel),
+          }
+        }
+      } catch {
+        // Planning is best-effort and must never block baseline answering.
+      }
     }
 
     function buildBraveContextBlock(research: { content: string; citations: string[] }) {
@@ -502,13 +634,12 @@ export async function POST(request: Request) {
               .join("")
               .trim()
 
-            const parsedWithBrave = parseAssistantResponse(rawTextWithBrave)
-            const textFallbackWithBrave = parseAssistantTextFallback(rawTextWithBrave)
-            const fallbackWithBrave: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
-
-            const responsePayloadWithBrave = enforceResponseGuardrails(
-              parsedWithBrave ?? textFallbackWithBrave ?? fallbackWithBrave,
-            )
+            const responsePayloadWithBrave = buildResponseFromRawText({
+              rawText: rawTextWithBrave,
+              messageForFallback: latestMessageForModel,
+              positions: positions ?? [],
+              strictJsonMode,
+            })
             const webLookupTemporarilyUnavailableWithBrave = hasWebCapabilityDenial(responsePayloadWithBrave.answer)
             const normalizedResponsePayloadWithBrave = webLookupTemporarilyUnavailableWithBrave
               ? buildWebLookupUnavailableNowResponse()
@@ -550,6 +681,10 @@ export async function POST(request: Request) {
                 sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
                 confidence: normalizedResponsePayloadWithBrave.confidence,
                 escalation: normalizedResponsePayloadWithBrave.escalation,
+                skillRoute,
+                planThenAnswerEnabled,
+                strictJsonMode,
+                plannedFirst: shouldPlanFirst,
                 usedSafeWebContext,
                 webContextSource,
                 webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
@@ -578,11 +713,12 @@ export async function POST(request: Request) {
       .join("")
       .trim()
 
-    const parsed = parseAssistantResponse(rawText)
-    const textFallback = parseAssistantTextFallback(rawText)
-    const fallback: ChatAssistantResponse = buildPositionsFallback(latestMessageForModel, positions ?? [])
-
-    const responsePayload = enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
+    const responsePayload = buildResponseFromRawText({
+      rawText,
+      messageForFallback: latestMessageForModel,
+      positions: positions ?? [],
+      strictJsonMode,
+    })
     const webLookupTemporarilyUnavailable =
       shouldUseModelWebLookup && hasWebCapabilityDenial(responsePayload.answer)
     const normalizedResponsePayload = webLookupTemporarilyUnavailable
@@ -622,6 +758,10 @@ export async function POST(request: Request) {
         sourceTags: normalizedResponsePayload.sourceTags,
         confidence: normalizedResponsePayload.confidence,
         escalation: normalizedResponsePayload.escalation,
+        skillRoute,
+        planThenAnswerEnabled,
+        strictJsonMode,
+        plannedFirst: shouldPlanFirst,
         usedSafeWebContext,
         webContextSource,
         webLookupTemporarilyUnavailable,

@@ -41,7 +41,25 @@ const MAX_PANEL_WIDTH = 760
 const VIEWPORT_WIDTH_RATIO = 0.92
 const TOP_BOTTOM_OFFSET_PX = 120
 
-const QUICK_ACTIONS = [
+function readClientBooleanFlag(value: string | undefined, defaultValue: boolean) {
+  if (!value) return defaultValue
+  const normalized = value.trim().toLowerCase()
+  if (["1", "true", "on", "yes"].includes(normalized)) return true
+  if (["0", "false", "off", "no"].includes(normalized)) return false
+  return defaultValue
+}
+
+const SIGMA_PHASE1_SKILLS_ROUTER_ENABLED = readClientBooleanFlag(
+  process.env.NEXT_PUBLIC_SIGMA_PHASE1_SKILLS_ROUTER_ENABLED,
+  false,
+)
+const SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED = readClientBooleanFlag(
+  process.env.NEXT_PUBLIC_SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED,
+  false,
+)
+const PHASE1_ROUTING_VISIBLE = SIGMA_PHASE1_SKILLS_ROUTER_ENABLED || SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED
+
+const QUICK_ACTIONS_BASE = [
   "Show my latest Sigma monitor summary",
   "How do I create a thesis?",
   "Set up personalized alerts",
@@ -109,6 +127,17 @@ export default function ChatWidget() {
     latestAssistantMessage?.webContextVerified === true || latestAssistantMessage?.webContextSource === "brave_search"
   const showStarterExamples =
     !hasUserMessages && (!isHydratingHistory || messages.length === 0)
+  const quickActions = useMemo(() => {
+    const actions = [...QUICK_ACTIONS_BASE]
+    if (SIGMA_PHASE1_SKILLS_ROUTER_ENABLED) {
+      actions.push("Review my thesis assumptions and key risks")
+      actions.push("Triage my open alerts by urgency")
+    }
+    if (SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED) {
+      actions.push("Give me a step-by-step plan to review my top conviction this week")
+    }
+    return actions.slice(0, 8)
+  }, [])
 
   useEffect(() => {
     const element = messageContainerRef.current
@@ -516,6 +545,11 @@ export default function ChatWidget() {
               <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
             </div>
             <div className="flex items-center gap-2">
+              {PHASE1_ROUTING_VISIBLE ? (
+                <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
+                  Skills beta
+                </span>
+              ) : null}
               <span
                 title={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
                 aria-label={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
@@ -588,7 +622,7 @@ export default function ChatWidget() {
                     <p className="text-lg text-[#F0F0F0]">How can I help today?</p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {QUICK_ACTIONS.map((action) => (
+                    {quickActions.map((action) => (
                       <button
                         key={action}
                         type="button"

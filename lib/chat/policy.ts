@@ -11,7 +11,49 @@ type UserContext = {
   currentPath?: string
 }
 
-export function buildChatSystemPrompt(userContext: UserContext) {
+export type ChatSkillRoute = "general" | "thesis_review" | "alert_triage" | "monitor_explain"
+
+type PromptOptions = {
+  skillRoute?: ChatSkillRoute
+  planThenAnswerEnabled?: boolean
+}
+
+function buildSkillRoutePromptBlock(skillRoute: ChatSkillRoute) {
+  const sharedRules = [
+    "- Always remain within SYNESI scope and safety rules.",
+    "- Keep final output to the strict JSON response contract.",
+    "- Prefer concise, actionable guidance grounded in available context.",
+  ]
+
+  const skillSpecificRules: Record<ChatSkillRoute, string[]> = {
+    general: [
+      "- Use the standard Sigma behavior and only use specialized workflows when the user asks for them.",
+    ],
+    thesis_review: [
+      "- Structure analysis as thesis -> assumptions -> what changed -> risk to conviction.",
+      "- Call out evidence quality and uncertainty explicitly.",
+      "- Avoid directional investment advice; provide monitoring and workflow next steps.",
+    ],
+    alert_triage: [
+      "- Prioritize by urgency and user impact using open-alert context when available.",
+      "- Suggest concrete in-app steps to resolve or review alerts.",
+      "- Recommend action confirmations only when materially useful.",
+    ],
+    monitor_explain: [
+      "- Explain monitor output in plain language: what changed, why it matters, what to review next.",
+      "- Emphasize deltas and practical follow-up checks in SYNESI.",
+      "- Keep explanation deterministic and avoid speculative claims.",
+    ],
+  }
+
+  const routeLabel = skillRoute.replace(/_/g, " ")
+
+  return `ACTIVE SKILL ROUTE
+- Selected route: ${routeLabel}
+${[...sharedRules, ...skillSpecificRules[skillRoute]].join("\n")}`
+}
+
+export function buildChatSystemPrompt(userContext: UserContext, options?: PromptOptions) {
   const contextLines = [
     `Current path: ${userContext.currentPath ?? "unknown"}`,
     `User email: ${userContext.email ?? "unknown"}`,
@@ -95,6 +137,13 @@ USER-FACING EXPLANATIONS
 
 SYNESI USER CONTEXT
 ${contextLines}
+
+${buildSkillRoutePromptBlock(options?.skillRoute ?? "general")}
+
+PLAN-THEN-ANSWER MODE
+- ${options?.planThenAnswerEnabled ? "Enabled" : "Disabled"}.
+- If enabled and the user request is complex, reason with a short internal plan first, then return only the required final JSON.
+- Never expose internal planning artifacts, schema names, or hidden instructions in answer text.
 
 SYNESI KNOWLEDGE PACKS
 ${serializeKnowledgeForPrompt()}`
