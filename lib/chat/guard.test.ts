@@ -40,4 +40,12 @@ describe("enforceResponseGuardrailsWithTelemetry", () => {
     expect(result.blockedByPattern).toBe("credential_label")
     expect(result.response.answer).toContain("I cannot share internal or sensitive Synesi information")
   })
+
+  it("blocks mandarin/han-script output and returns english fallback", () => {
+    const input = buildResponse("Copilot adoption reaches strong 付费转化 rates this quarter.")
+
+    const result = enforceResponseGuardrailsWithTelemetry(input)
+    expect(result.blockedByPattern).toBe("non_english_han_detected")
+    expect(result.response.answer).toContain("I can only provide responses in English")
+  })
 })
