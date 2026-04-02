@@ -167,6 +167,7 @@ export default function Page() {
   const [modalThesis, setModalThesis] = useState<ModalThesis | null>(null)
   const [filter, setFilter] = useState<FilterMode>("all")
   const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false)
+  const [isMonitorExpanded, setIsMonitorExpanded] = useState(false)
 
   useEffect(() => {
     if (searchParams.get("filter") === "needs_review") {
@@ -260,6 +261,8 @@ export default function Page() {
       : theses
 
   const sortedTheses = sortByUrgency(filteredTheses)
+
+  const monitorSignalCount = monitorSnapshot?.summary?.highSignalChanges.length ?? 0
 
   function resolveMonitorActionHref(action: MonitorActionDraft): string {
     if (action.actionType === "filter_needs_review") return "/app/dashboard?filter=needs_review"
@@ -387,20 +390,38 @@ export default function Page() {
               {monitorSnapshot?.summary?.summary ??
                 "Sigma Monitor highlights high-signal conviction drift, open-alert pressure, and next actions."}
             </p>
+            {!isMonitorExpanded && monitorSignalCount > 0 ? (
+              <p className="break-words text-[11px] leading-relaxed text-[#6B6B7B]">
+                {monitorSignalCount} trusted-source {monitorSignalCount === 1 ? "item" : "items"} rolled into this summary.
+                Expand to read each headline and source.
+              </p>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void refreshMonitorNow()
-            }}
-            disabled={isRefreshingMonitor}
-            className="min-h-[36px] rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isRefreshingMonitor ? "RUNNING..." : "RUN NOW"}
-          </button>
+          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+            <button
+              type="button"
+              onClick={() => {
+                void refreshMonitorNow()
+              }}
+              disabled={isRefreshingMonitor}
+              className="min-h-[36px] rounded-lg border border-[#2A2A32] px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isRefreshingMonitor ? "RUNNING..." : "RUN NOW"}
+            </button>
+            {monitorSignalCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setIsMonitorExpanded((current) => !current)}
+                className="min-h-[36px] rounded-lg border border-transparent px-3 py-1.5 text-left font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] sm:text-right"
+                aria-expanded={isMonitorExpanded}
+              >
+                {isMonitorExpanded ? "- COLLAPSE" : "+ EXPAND"}
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {(monitorSnapshot?.summary?.highSignalChanges.length ?? 0) > 0 ? (
+        {isMonitorExpanded && monitorSignalCount > 0 ? (
           <ul className="mt-4 min-w-0 list-none space-y-3">
             {monitorSnapshot?.summary?.highSignalChanges.map((item, index) => (
               <li
