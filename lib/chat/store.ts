@@ -3,6 +3,17 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 type PersistedRole = "user" | "assistant"
 
+export type SigmaMemoryProfile = {
+  enabled: boolean
+  profile: {
+    investmentFocus?: string
+    monitoringPreferences?: string
+    communicationStyle?: string
+    notes?: string
+  }
+  updatedAt?: string
+}
+
 type PersistedRow = {
   id: string
   role: PersistedRole
@@ -25,6 +36,37 @@ type StoredChatMessage = {
   webContextSource?: ChatAssistantResponse["webContextSource"]
   webLookupTemporarilyUnavailable?: boolean
   artifacts?: ChatAssistantResponse["artifacts"]
+}
+
+const DEFAULT_SIGMA_MEMORY_PROFILE: SigmaMemoryProfile = {
+  enabled: false,
+  profile: {},
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function sanitizeMemoryText(value: unknown, maxChars: number) {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim().replace(/\s+/g, " ")
+  if (!trimmed) return undefined
+  return trimmed.slice(0, maxChars)
+}
+
+function sanitizeMemoryProfile(input: unknown): SigmaMemoryProfile {
+  if (!isRecord(input)) return DEFAULT_SIGMA_MEMORY_PROFILE
+  const profile = isRecord(input.profile) ? input.profile : {}
+  return {
+    enabled: input.enabled === true,
+    profile: {
+      investmentFocus: sanitizeMemoryText(profile.investmentFocus, 180),
+      monitoringPreferences: sanitizeMemoryText(profile.monitoringPreferences, 220),
+      communicationStyle: sanitizeMemoryText(profile.communicationStyle, 120),
+      notes: sanitizeMemoryText(profile.notes, 320),
+    },
+    updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : undefined,
+  }
 }
 
 function assistantMetadataFromResponse(response: ChatAssistantResponse): Record<string, unknown> {
@@ -155,5 +197,77 @@ export async function clearUserChatHistory(supabase: SupabaseClient, userId: str
   if (!thread?.id) return
 
   const { error } = await supabase.from("chat_messages").delete().eq("thread_id", thread.id)
+  if (error) throw error
+}
+
+export async function getUserSigmaMemoryProfile(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<SigmaMemoryProfile> {
+  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const { data, error } = await supabase
+    .from("chat_threads")
+    .select("memory_enabled,memory_profile,memory_profile_updated_at")
+    .eq("id", threadId)
+    .single()
+
+  if (error) throw error
+
+  return sanitizeMemoryProfile({
+    enabled: data.memory_enabled === true,
+    profile: data.memory_profile ?? {},
+    updatedAt: data.memory_profile_updated_at ?? undefined,
+  })
+}
+
+export async function updateUserSigmaMemoryProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  input: SigmaMemoryProfile,
+): Promise<SigmaMemoryProfile> {
+  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const sanitized = sanitizeMemoryProfile(input)
+  const nowIso = new Date().toISOString()
+
+  const { error } = await supabase
+    .from("chat_threads")
+    .update({
+      memory_enabled: sanitized.enabled,
+      memory_profile: sanitized.profile,
+      memory_profile_updated_at: nowIso,
+    })
+    .eq("id", threadId)
+
+  if (error) throw error
+
+  return {
+    ...sanitized,
+    updatedAt: nowIso,
+  }
+}
+
+export async function resetUserSigmaMemoryProfile(supabase: SupabaseClient, userId: string): Promise<SigmaMemoryProfile> {
+  const threadId = await getOrCreateChatThreadId(supabase, userId)
+
+  const { error } = await supabase
+    .from("chat_threads")
+    .update({
+      memory_enabled: false,
+      memory_profile: {},
+      memory_profile_updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId)
+
+  if (error) throw error
+  return { ...DEFAULT_SIGMA_MEMORY_PROFILE, updatedAt: new Date().toISOString() }
+}
+
+export async function syncUserReleaseRing(
+  supabase: SupabaseClient,
+  userId: string,
+  ring: "internal" | "beta" | "full",
+) {
+  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const { error } = await supabase.from("chat_threads").update({ release_ring: ring }).eq("id", threadId)
   if (error) throw error
 }

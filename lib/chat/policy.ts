@@ -9,6 +9,13 @@ type UserContext = {
   recentConvictions?: string
   recentAlerts?: string
   currentPath?: string
+  memoryProfile?: {
+    enabled: boolean
+    investmentFocus?: string
+    monitoringPreferences?: string
+    communicationStyle?: string
+    notes?: string
+  }
 }
 
 export type ChatSkillRoute = "general" | "thesis_review" | "alert_triage" | "monitor_explain"
@@ -64,6 +71,18 @@ export function buildChatSystemPrompt(userContext: UserContext, options?: Prompt
     `Recent convictions snapshot: ${userContext.recentConvictions ?? "none"}`,
     `Recent open alerts snapshot: ${userContext.recentAlerts ?? "none"}`,
   ].join("\n")
+  const memoryProfile = userContext.memoryProfile
+  const memoryLines =
+    memoryProfile?.enabled === true
+      ? [
+          "SIGMA MEMORY PROFILE",
+          `- Investment focus: ${memoryProfile.investmentFocus ?? "not set"}`,
+          `- Monitoring preferences: ${memoryProfile.monitoringPreferences ?? "not set"}`,
+          `- Communication style: ${memoryProfile.communicationStyle ?? "not set"}`,
+          `- Notes: ${memoryProfile.notes ?? "not set"}`,
+          "- Apply this memory only as a lightweight personalization hint, never as hard facts.",
+        ].join("\n")
+      : "SIGMA MEMORY PROFILE\n- Disabled (user has not opted in)."
 
   return `You are the in-app SYNESI assistant, named Sigma.
 
@@ -142,6 +161,8 @@ USER-FACING EXPLANATIONS
 
 SYNESI USER CONTEXT
 ${contextLines}
+
+${memoryLines}
 
 ${buildSkillRoutePromptBlock(options?.skillRoute ?? "general")}
 

@@ -49,6 +49,17 @@ type PendingAttachment = {
 
 type ResizeDirection = "top" | "left" | "top-left"
 
+type SigmaMemoryProfile = {
+  enabled: boolean
+  profile: {
+    investmentFocus?: string
+    monitoringPreferences?: string
+    communicationStyle?: string
+    notes?: string
+  }
+  updatedAt?: string
+}
+
 const DEFAULT_PANEL_WIDTH = 380
 const DEFAULT_PANEL_HEIGHT = 620
 const MIN_PANEL_WIDTH = 340
@@ -69,6 +80,13 @@ function formatBytes(sizeBytes: number) {
   if (sizeBytes < 1024) return `${sizeBytes} B`
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatTimestamp(input: string | undefined) {
+  if (!input) return "Never"
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) return "Unknown"
+  return date.toLocaleString()
 }
 
 const SIGMA_PHASE1_SKILLS_ROUTER_ENABLED = readClientBooleanFlag(
@@ -100,6 +118,11 @@ const INITIAL_MESSAGE: ChatMessage = {
   followUpActions: ["Review open alerts", "Set up personalized alerts", "Check convictions status"],
 }
 
+const DEFAULT_MEMORY_PROFILE: SigmaMemoryProfile = {
+  enabled: false,
+  profile: {},
+}
+
 export default function ChatWidget() {
   const pathname = usePathname()
   const router = useRouter()
@@ -109,6 +132,11 @@ export default function ChatWidget() {
   const [isSending, setIsSending] = useState(false)
   const [isHydratingHistory, setIsHydratingHistory] = useState(false)
   const [isClearingHistory, setIsClearingHistory] = useState(false)
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false)
+  const [isMemoryLoading, setIsMemoryLoading] = useState(false)
+  const [isMemorySaving, setIsMemorySaving] = useState(false)
+  const [hasHydratedMemory, setHasHydratedMemory] = useState(false)
+  const [memoryProfile, setMemoryProfile] = useState<SigmaMemoryProfile>(DEFAULT_MEMORY_PROFILE)
   const [isConfirmingAction, setIsConfirmingAction] = useState<string | null>(null)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -241,6 +269,16 @@ export default function ChatWidget() {
       cancelled = true
     }
   }, [isOpen, hasHydratedHistory])
+
+  useEffect(() => {
+    if (!isOpen || hasHydratedMemory) return
+    void loadMemoryProfile().finally(() => setHasHydratedMemory(true))
+  }, [isOpen, hasHydratedMemory])
+
+  useEffect(() => {
+    if (!isOpen || !isMemoryPanelOpen) return
+    void loadMemoryProfile()
+  }, [isOpen, isMemoryPanelOpen])
 
   useEffect(() => {
     function clamp(value: number, min: number, max: number) {
@@ -403,6 +441,67 @@ export default function ChatWidget() {
     event.preventDefault()
     setIsDraggingFiles(false)
     void handleFilesSelection(event.dataTransfer.files)
+  }
+
+  async function loadMemoryProfile() {
+    setIsMemoryLoading(true)
+    try {
+      const response = await fetch("/api/chat/memory", { method: "GET" })
+      const payload = (await response.json()) as { memory?: SigmaMemoryProfile }
+      if (!response.ok || !payload.memory) throw new Error("Failed to load memory profile")
+      setMemoryProfile({
+        enabled: payload.memory.enabled === true,
+        profile: {
+          investmentFocus: payload.memory.profile?.investmentFocus ?? "",
+          monitoringPreferences: payload.memory.profile?.monitoringPreferences ?? "",
+          communicationStyle: payload.memory.profile?.communicationStyle ?? "",
+          notes: payload.memory.profile?.notes ?? "",
+        },
+        updatedAt: payload.memory.updatedAt,
+      })
+    } catch {
+      setMemoryProfile(DEFAULT_MEMORY_PROFILE)
+    } finally {
+      setIsMemoryLoading(false)
+    }
+  }
+
+  async function saveMemoryProfile() {
+    if (isMemorySaving) return
+    setIsMemorySaving(true)
+    try {
+      const response = await fetch("/api/chat/memory", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(memoryProfile),
+      })
+      const payload = (await response.json()) as { memory?: SigmaMemoryProfile }
+      if (response.ok && payload.memory) {
+        setMemoryProfile(payload.memory)
+      }
+    } catch {
+      // Keep local state if save fails.
+    } finally {
+      setIsMemorySaving(false)
+    }
+  }
+
+  async function resetMemoryProfile() {
+    if (isMemorySaving) return
+    setIsMemorySaving(true)
+    try {
+      const response = await fetch("/api/chat/memory", { method: "DELETE" })
+      const payload = (await response.json()) as { memory?: SigmaMemoryProfile }
+      if (response.ok && payload.memory) {
+        setMemoryProfile(payload.memory)
+      } else {
+        setMemoryProfile(DEFAULT_MEMORY_PROFILE)
+      }
+    } catch {
+      setMemoryProfile(DEFAULT_MEMORY_PROFILE)
+    } finally {
+      setIsMemorySaving(false)
+    }
   }
 
   async function sendMessage(rawMessage: string) {
@@ -720,6 +819,28 @@ export default function ChatWidget() {
               ) : null}
               <button
                 type="button"
+                onClick={() => {
+                  setIsMemoryPanelOpen((current) => !current)
+                }}
+                className={`rounded-md border px-2 py-1 font-mono text-[10px] tracking-widest transition-colors ${
+                  isMemoryPanelOpen
+                    ? "border-[#00D1B2]/45 text-[#8BE8D8]"
+                    : "border-[#2A2A32]/80 text-[#6B6B7B] hover:text-[#F0F0F0]"
+                }`}
+              >
+                MEMORY
+              </button>
+              <span
+                className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${
+                  memoryProfile.enabled
+                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
+                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A]"
+                }`}
+              >
+                Memory: {memoryProfile.enabled ? "On" : "Off"}
+              </span>
+              <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
               >
@@ -727,6 +848,105 @@ export default function ChatWidget() {
               </button>
             </div>
           </header>
+
+          {isMemoryPanelOpen ? (
+            <section className="border-b border-[#2A2A32]/70 bg-[#101018] px-3 py-3">
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-[10px] uppercase tracking-widest text-[#9A9AAA]">Sigma memory profile</p>
+                <label className="inline-flex items-center gap-2 text-[11px] text-[#B6B6C6]">
+                  <input
+                    type="checkbox"
+                    checked={memoryProfile.enabled}
+                    onChange={(event) =>
+                      setMemoryProfile((current) => ({
+                        ...current,
+                        enabled: event.target.checked,
+                      }))
+                    }
+                  />
+                  Opt in
+                </label>
+              </div>
+              <p className="mt-1 text-[10px] text-[#6B6B7B]">Last updated: {formatTimestamp(memoryProfile.updatedAt)}</p>
+              {isMemoryLoading ? (
+                <p className="mt-2 text-[11px] text-[#6B6B7B]">Loading memory profile…</p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <input
+                    value={memoryProfile.profile.investmentFocus ?? ""}
+                    onChange={(event) =>
+                      setMemoryProfile((current) => ({
+                        ...current,
+                        profile: { ...current.profile, investmentFocus: event.target.value },
+                      }))
+                    }
+                    maxLength={180}
+                    placeholder="Investment focus (optional)"
+                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
+                  />
+                  <input
+                    value={memoryProfile.profile.monitoringPreferences ?? ""}
+                    onChange={(event) =>
+                      setMemoryProfile((current) => ({
+                        ...current,
+                        profile: { ...current.profile, monitoringPreferences: event.target.value },
+                      }))
+                    }
+                    maxLength={220}
+                    placeholder="Monitoring preferences (optional)"
+                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
+                  />
+                  <input
+                    value={memoryProfile.profile.communicationStyle ?? ""}
+                    onChange={(event) =>
+                      setMemoryProfile((current) => ({
+                        ...current,
+                        profile: { ...current.profile, communicationStyle: event.target.value },
+                      }))
+                    }
+                    maxLength={120}
+                    placeholder="Preferred communication style (optional)"
+                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
+                  />
+                  <textarea
+                    value={memoryProfile.profile.notes ?? ""}
+                    onChange={(event) =>
+                      setMemoryProfile((current) => ({
+                        ...current,
+                        profile: { ...current.profile, notes: event.target.value },
+                      }))
+                    }
+                    maxLength={320}
+                    rows={2}
+                    placeholder="Notes to remember (optional)"
+                    className="w-full resize-none rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void saveMemoryProfile()
+                      }}
+                      disabled={isMemorySaving}
+                      className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 disabled:opacity-50"
+                    >
+                      {isMemorySaving ? "SAVING..." : "SAVE"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void resetMemoryProfile()
+                      }}
+                      disabled={isMemorySaving}
+                      className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#8B8B9A] transition-colors hover:text-[#F0F0F0] disabled:opacity-50"
+                    >
+                      RESET
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <div
             ref={messageContainerRef}
