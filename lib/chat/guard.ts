@@ -49,6 +49,15 @@ const BLOCK_RESPONSE: ChatAssistantResponse = {
   ],
 }
 
+const NON_ENGLISH_RESPONSE: ChatAssistantResponse = {
+  answer:
+    "I can only provide responses in English for this workspace. I can restate the same guidance in clear English now.",
+  sourceTags: ["PolicyGuide"],
+  confidence: "high",
+  escalation: "none",
+  followUpActions: ["Retry the same question", "Ask for a concise English summary", "Ask for step-by-step guidance in English"],
+}
+
 export type GuardrailResult = {
   response: ChatAssistantResponse
   blockedByPattern: string | null
@@ -68,6 +77,13 @@ export function enforceResponseGuardrailsWithTelemetry(response: ChatAssistantRe
     return {
       response: BLOCK_RESPONSE,
       blockedByPattern: leaked.reason,
+    }
+  }
+
+  if (/[\p{Script=Han}]/u.test(answer)) {
+    return {
+      response: NON_ENGLISH_RESPONSE,
+      blockedByPattern: "non_english_han_detected",
     }
   }
 
