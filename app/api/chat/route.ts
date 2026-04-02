@@ -21,6 +21,7 @@ type ChatRequestBody = {
   attachmentIds?: string[]
   context?: {
     currentPath?: string
+    webSearchEnabled?: boolean
   }
 }
 
@@ -928,7 +929,8 @@ export async function POST(request: Request) {
     const liveContextSections: string[] = []
     let usedSafeWebContext = false
     let webContextSource: ChatAssistantResponse["webContextSource"] | undefined
-    const shouldUseModelWebLookup = !sharedUrl && isInternetLookupQuestion(latestMessage)
+    const webSearchEnabled = body.context?.webSearchEnabled === true
+    const shouldUseModelWebLookup = webSearchEnabled && !sharedUrl && isInternetLookupQuestion(latestMessage)
     const skillRoutingEnabled = isSkillRoutingEnabled()
     const planThenAnswerEnabled = isPlanThenAnswerEnabled()
     const strictJsonMode = isStrictJsonModeEnabled()

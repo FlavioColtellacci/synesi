@@ -60,11 +60,11 @@ type SigmaMemoryProfile = {
   updatedAt?: string
 }
 
-const DEFAULT_PANEL_WIDTH = 380
-const DEFAULT_PANEL_HEIGHT = 620
-const MIN_PANEL_WIDTH = 340
-const MIN_PANEL_HEIGHT = 420
-const MAX_PANEL_WIDTH = 760
+const DEFAULT_PANEL_WIDTH = 480
+const DEFAULT_PANEL_HEIGHT = 720
+const MIN_PANEL_WIDTH = 380
+const MIN_PANEL_HEIGHT = 520
+const MAX_PANEL_WIDTH = 920
 const VIEWPORT_WIDTH_RATIO = 0.92
 const TOP_BOTTOM_OFFSET_PX = 120
 
@@ -80,13 +80,6 @@ function formatBytes(sizeBytes: number) {
   if (sizeBytes < 1024) return `${sizeBytes} B`
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatTimestamp(input: string | undefined) {
-  if (!input) return "Never"
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) return "Unknown"
-  return date.toLocaleString()
 }
 
 const SIGMA_PHASE1_SKILLS_ROUTER_ENABLED = readClientBooleanFlag(
@@ -132,11 +125,11 @@ export default function ChatWidget() {
   const [isSending, setIsSending] = useState(false)
   const [isHydratingHistory, setIsHydratingHistory] = useState(false)
   const [isClearingHistory, setIsClearingHistory] = useState(false)
-  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false)
   const [isMemoryLoading, setIsMemoryLoading] = useState(false)
   const [isMemorySaving, setIsMemorySaving] = useState(false)
   const [hasHydratedMemory, setHasHydratedMemory] = useState(false)
   const [memoryProfile, setMemoryProfile] = useState<SigmaMemoryProfile>(DEFAULT_MEMORY_PROFILE)
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false)
   const [isConfirmingAction, setIsConfirmingAction] = useState<string | null>(null)
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -172,12 +165,6 @@ export default function ChatWidget() {
     () => messages.some((message) => message.role === "user"),
     [messages],
   )
-  const latestAssistantMessage = useMemo(
-    () => [...messages].reverse().find((message) => message.role === "assistant"),
-    [messages],
-  )
-  const hasVerifiedWebContext =
-    latestAssistantMessage?.webContextVerified === true || latestAssistantMessage?.webContextSource === "brave_search"
   const showStarterExamples =
     !hasUserMessages && (!isHydratingHistory || messages.length === 0)
   const quickActions = useMemo(() => {
@@ -274,11 +261,6 @@ export default function ChatWidget() {
     if (!isOpen || hasHydratedMemory) return
     void loadMemoryProfile().finally(() => setHasHydratedMemory(true))
   }, [isOpen, hasHydratedMemory])
-
-  useEffect(() => {
-    if (!isOpen || !isMemoryPanelOpen) return
-    void loadMemoryProfile()
-  }, [isOpen, isMemoryPanelOpen])
 
   useEffect(() => {
     function clamp(value: number, min: number, max: number) {
@@ -466,39 +448,26 @@ export default function ChatWidget() {
     }
   }
 
-  async function saveMemoryProfile() {
+  async function toggleMemoryEnabled(nextEnabled: boolean) {
     if (isMemorySaving) return
     setIsMemorySaving(true)
     try {
       const response = await fetch("/api/chat/memory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(memoryProfile),
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          profile: memoryProfile.profile,
+        }),
       })
       const payload = (await response.json()) as { memory?: SigmaMemoryProfile }
       if (response.ok && payload.memory) {
         setMemoryProfile(payload.memory)
-      }
-    } catch {
-      // Keep local state if save fails.
-    } finally {
-      setIsMemorySaving(false)
-    }
-  }
-
-  async function resetMemoryProfile() {
-    if (isMemorySaving) return
-    setIsMemorySaving(true)
-    try {
-      const response = await fetch("/api/chat/memory", { method: "DELETE" })
-      const payload = (await response.json()) as { memory?: SigmaMemoryProfile }
-      if (response.ok && payload.memory) {
-        setMemoryProfile(payload.memory)
       } else {
-        setMemoryProfile(DEFAULT_MEMORY_PROFILE)
+        setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
       }
     } catch {
-      setMemoryProfile(DEFAULT_MEMORY_PROFILE)
+      setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
     } finally {
       setIsMemorySaving(false)
     }
@@ -544,7 +513,10 @@ export default function ChatWidget() {
           message,
           messages: chatHistory,
           attachmentIds: readyAttachments.map((attachment) => attachment.id),
-          context: { currentPath: pathname },
+          context: {
+            currentPath: pathname,
+            webSearchEnabled: isWebSearchEnabled,
+          },
         }),
       })
 
@@ -742,7 +714,7 @@ export default function ChatWidget() {
                     "--sigma-chat-height": `${panelSize.height}px`,
                   } as CSSProperties
                 }
-                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[420px] sm:min-w-[340px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),760px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-7.5rem)] sm:max-w-[min(calc(100vw-1.5rem),920px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
               >
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
@@ -780,31 +752,6 @@ export default function ChatWidget() {
                   Skills beta
                 </span>
               ) : null}
-              <span
-                title={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
-                aria-label={hasVerifiedWebContext ? "Web access active" : "Web access idle"}
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
-                  hasVerifiedWebContext
-                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
-                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#6B6B7B]"
-                }`}
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
-                  <path
-                    d="M2.9 8H13.1M8 2.5C9.4 4 10.2 5.9 10.2 8C10.2 10.1 9.4 12 8 13.5M8 2.5C6.6 4 5.8 5.9 5.8 8C5.8 10.1 6.6 12 8 13.5"
-                    stroke="currentColor"
-                    strokeWidth="1.1"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
               {hasUserMessages ? (
                 <button
                   type="button"
@@ -820,25 +767,20 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsMemoryPanelOpen((current) => !current)
+                  const nextEnabled = !memoryProfile.enabled
+                  setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
+                  void toggleMemoryEnabled(nextEnabled)
                 }}
-                className={`rounded-md border px-2 py-1 font-mono text-[10px] tracking-widest transition-colors ${
-                  isMemoryPanelOpen
-                    ? "border-[#00D1B2]/45 text-[#8BE8D8]"
-                    : "border-[#2A2A32]/80 text-[#6B6B7B] hover:text-[#F0F0F0]"
-                }`}
-              >
-                MEMORY
-              </button>
-              <span
+                disabled={isMemoryLoading || isMemorySaving}
+                aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
                 className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${
                   memoryProfile.enabled
                     ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
                     : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A]"
                 }`}
               >
-                Memory: {memoryProfile.enabled ? "On" : "Off"}
-              </span>
+                {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
+              </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
@@ -848,105 +790,6 @@ export default function ChatWidget() {
               </button>
             </div>
           </header>
-
-          {isMemoryPanelOpen ? (
-            <section className="border-b border-[#2A2A32]/70 bg-[#101018] px-3 py-3">
-              <div className="flex items-center justify-between">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-[#9A9AAA]">Sigma memory profile</p>
-                <label className="inline-flex items-center gap-2 text-[11px] text-[#B6B6C6]">
-                  <input
-                    type="checkbox"
-                    checked={memoryProfile.enabled}
-                    onChange={(event) =>
-                      setMemoryProfile((current) => ({
-                        ...current,
-                        enabled: event.target.checked,
-                      }))
-                    }
-                  />
-                  Opt in
-                </label>
-              </div>
-              <p className="mt-1 text-[10px] text-[#6B6B7B]">Last updated: {formatTimestamp(memoryProfile.updatedAt)}</p>
-              {isMemoryLoading ? (
-                <p className="mt-2 text-[11px] text-[#6B6B7B]">Loading memory profile…</p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  <input
-                    value={memoryProfile.profile.investmentFocus ?? ""}
-                    onChange={(event) =>
-                      setMemoryProfile((current) => ({
-                        ...current,
-                        profile: { ...current.profile, investmentFocus: event.target.value },
-                      }))
-                    }
-                    maxLength={180}
-                    placeholder="Investment focus (optional)"
-                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
-                  />
-                  <input
-                    value={memoryProfile.profile.monitoringPreferences ?? ""}
-                    onChange={(event) =>
-                      setMemoryProfile((current) => ({
-                        ...current,
-                        profile: { ...current.profile, monitoringPreferences: event.target.value },
-                      }))
-                    }
-                    maxLength={220}
-                    placeholder="Monitoring preferences (optional)"
-                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
-                  />
-                  <input
-                    value={memoryProfile.profile.communicationStyle ?? ""}
-                    onChange={(event) =>
-                      setMemoryProfile((current) => ({
-                        ...current,
-                        profile: { ...current.profile, communicationStyle: event.target.value },
-                      }))
-                    }
-                    maxLength={120}
-                    placeholder="Preferred communication style (optional)"
-                    className="w-full rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
-                  />
-                  <textarea
-                    value={memoryProfile.profile.notes ?? ""}
-                    onChange={(event) =>
-                      setMemoryProfile((current) => ({
-                        ...current,
-                        profile: { ...current.profile, notes: event.target.value },
-                      }))
-                    }
-                    maxLength={320}
-                    rows={2}
-                    placeholder="Notes to remember (optional)"
-                    className="w-full resize-none rounded-md border border-[#2A2A32] bg-[#0D0D11] px-2 py-1.5 text-xs text-[#ECECF2] outline-none"
-                  />
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void saveMemoryProfile()
-                      }}
-                      disabled={isMemorySaving}
-                      className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 disabled:opacity-50"
-                    >
-                      {isMemorySaving ? "SAVING..." : "SAVE"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void resetMemoryProfile()
-                      }}
-                      disabled={isMemorySaving}
-                      className="rounded-md border border-[#2A2A32] px-2 py-1 font-mono text-[10px] tracking-widest text-[#8B8B9A] transition-colors hover:text-[#F0F0F0] disabled:opacity-50"
-                    >
-                      RESET
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
-          ) : null}
 
           <div
             ref={messageContainerRef}
@@ -1183,9 +1026,40 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-full border border-[#2A2A32]/85 px-2.5 py-1 font-mono text-[10px] tracking-widest text-[#9A9AAA] transition-colors hover:text-[#F0F0F0]"
+                aria-label="Attach documents"
+                title="Attach document"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#2A2A32]/85 text-[#9A9AAA] transition-colors hover:text-[#F0F0F0]"
               >
-                ATTACH
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M7.6 10.9 11.8 6.7a2.4 2.4 0 1 1 3.4 3.4l-5.7 5.7a3.4 3.4 0 1 1-4.8-4.8l6-6"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsWebSearchEnabled((current) => !current)}
+                aria-label={`Web search ${isWebSearchEnabled ? "on" : "off"}`}
+                title={isWebSearchEnabled ? "Brave search enabled for web-intent prompts" : "Enable Brave search for web-intent prompts"}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                  isWebSearchEnabled
+                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
+                    : "border-[#2A2A32]/85 text-[#7D7D8D] hover:text-[#F0F0F0]"
+                }`}
+              >
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path
+                    d="M2.9 8H13.1M8 2.5C9.4 4 10.2 5.9 10.2 8C10.2 10.1 9.4 12 8 13.5M8 2.5C6.6 4 5.8 5.9 5.8 8C5.8 10.1 6.6 12 8 13.5"
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
               <label className="relative block w-full">
                 <input
