@@ -773,10 +773,11 @@ export default function ChatWidget() {
                 }}
                 disabled={isMemoryLoading || isMemorySaving}
                 aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${
+                title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
                   memoryProfile.enabled
-                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
-                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A]"
+                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
+                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
                 }`}
               >
                 {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
