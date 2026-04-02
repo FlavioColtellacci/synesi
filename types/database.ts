@@ -469,6 +469,48 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_exports: {
+        Row: {
+          id: string
+          user_id: string
+          bucket: string
+          storage_path: string
+          file_name: string
+          format: "csv" | "docx" | "pdf" | "xlsx"
+          mime_type: string
+          size_bytes: number
+          source_request_id: string | null
+          signed_url_expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          bucket: string
+          storage_path: string
+          file_name: string
+          format: "csv" | "docx" | "pdf" | "xlsx"
+          mime_type: string
+          size_bytes: number
+          source_request_id?: string | null
+          signed_url_expires_at: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          bucket?: string
+          storage_path?: string
+          file_name?: string
+          format?: "csv" | "docx" | "pdf" | "xlsx"
+          mime_type?: string
+          size_bytes?: number
+          source_request_id?: string | null
+          signed_url_expires_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -497,3 +539,4 @@ export type FinancialSnapshot = Database['public']['Tables']['financial_snapshot
 export type SourceDocument = Database['public']['Tables']['source_documents']['Row']
 export type ThesisSourceMatch = Database['public']['Tables']['thesis_source_matches']['Row']
 export type ChatUploadedDocument = Database['public']['Tables']['chat_uploaded_documents']['Row']
+export type ChatExport = Database['public']['Tables']['chat_exports']['Row']

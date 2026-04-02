@@ -17,6 +17,23 @@ export type ChatActionDraft = {
   thesisId?: string
 }
 
+export type ChatExportFormat = "csv" | "docx" | "pdf" | "xlsx"
+
+export type ChatRequestedExport = {
+  format: ChatExportFormat
+  label: string
+}
+
+export type ChatExportArtifact = {
+  id: string
+  label: string
+  format: ChatExportFormat
+  mimeType: string
+  sizeBytes: number
+  signedUrl: string
+  signedUrlExpiresAt: string
+}
+
 export type ChatRetrievalEvidence = {
   source: "assumption" | "source_match" | "status_note" | "uploaded_document"
   snippet: string
@@ -30,6 +47,8 @@ export type ChatAssistantResponse = {
   followUpActions: string[]
   actionDrafts?: ChatActionDraft[]
   retrievalEvidence?: ChatRetrievalEvidence[]
+  requestedExports?: ChatRequestedExport[]
+  artifacts?: ChatExportArtifact[]
   webContextVerified?: boolean
   webContextSource?: "safe_link" | "brave_search"
   webLookupTemporarilyUnavailable?: boolean

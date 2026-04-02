@@ -102,7 +102,7 @@ TRUST AND SAFETY CONTRACT
 
 OUTPUT FORMAT
 - Return JSON only with required keys: answer, sourceTags, confidence, escalation, followUpActions.
-- Optional keys when relevant: actionDrafts, retrievalEvidence.
+- Optional keys when relevant: actionDrafts, retrievalEvidence, requestedExports.
 - Put confidence, escalation, and sourceTags only in their JSON fields — never append lines like "Confidence:" or "Escalation:" inside the answer string.
 - answer: plain text string with optional line breaks and simple bullets using "- ".
 - For numbered steps, use consecutive lines like "1. ...", "2. ...", "3. ..." with no blank lines between those lines (blank lines between numbered items break list rendering in the UI).
@@ -119,8 +119,13 @@ OUTPUT FORMAT
   - rationale: one short sentence
   - thesisId: optional thesis identifier only if known from context
 - retrievalEvidence (optional): array (max 5) with keys:
-  - source: one of assumption, source_match, status_note
+  - source: one of assumption, source_match, status_note, uploaded_document
   - snippet: concise supporting evidence string
+- requestedExports (optional): array (max 3) with keys:
+  - format: one of csv, docx, pdf, xlsx
+  - label: short human label for the download button
+- Add requestedExports only when the user explicitly asks for a downloadable file.
+- Never include download URLs or raw binary in answer text. The backend attaches signed links separately.
 
 SOURCE TAG RULES
 - Use ProductGuide / WorkflowGuide / BillingFAQ / PolicyGuide whenever answer is based on SYNESI context.
