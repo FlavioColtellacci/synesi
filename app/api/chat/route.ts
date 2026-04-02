@@ -46,6 +46,10 @@ const RATE_LIMIT_MAX_REQUESTS = 18
 const USER_CONTEXT_CACHE_TTL_MS = 60 * 1000
 const PLAN_MAX_STEPS = 5
 const MAX_ATTACHMENT_IDS = 4
+const TOOL_LOOP_MAX_STEPS = 4
+const TOOL_LOOP_MAX_CALLS = 8
+const TOOL_LOOP_MAX_FAILURES = 3
+const TOOL_LOOP_TIMEOUT_MS = 9_000
 
 const userRateLimit = new Map<string, number[]>()
 const userContextCache = new Map<
@@ -123,6 +127,10 @@ function isPlanThenAnswerEnabled() {
 
 function isStrictJsonModeEnabled() {
   return readBooleanFlag(process.env.SIGMA_PHASE1_STRICT_JSON_ENABLED, true)
+}
+
+function isPhase4AgentToolsEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE4_AGENT_TOOLS_ENABLED, false)
 }
 
 function resolveSkillRoute(message: string): ChatSkillRoute {
@@ -329,6 +337,388 @@ function mapMonitorSnapshotToChatResponse(snapshot: NonNullable<Awaited<ReturnTy
   }
 }
 
+type ToolUseBlock = {
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+type AgentToolLoopStats = {
+  used: boolean
+  steps: number
+  toolCalls: number
+  failures: number
+  breakerTripped: boolean
+}
+
+const READ_ONLY_AGENT_TOOLS = [
+  {
+    name: "list_open_alerts",
+    description: "List the user's recent unresolved alerts.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", minimum: 1, maximum: 20 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_thesis_snapshot",
+    description: "Get thesis snapshot by thesisId or ticker.",
+    input_schema: {
+      type: "object",
+      properties: {
+        thesisId: { type: "string" },
+        ticker: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_latest_monitor_snapshot",
+    description: "Get the latest Sigma Monitor snapshot summary.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_uploaded_document_excerpts",
+    description: "Get excerpts from user uploaded documents.",
+    input_schema: {
+      type: "object",
+      properties: {
+        documentIds: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 4,
+        },
+        limit: { type: "number", minimum: 1, maximum: 4 },
+      },
+      additionalProperties: false,
+    },
+  },
+] as const
+
+function asObject(input: unknown): Record<string, unknown> {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
+
+function readNumber(input: unknown, fallback: number, min: number, max: number) {
+  if (typeof input !== "number" || !Number.isFinite(input)) return fallback
+  return Math.max(min, Math.min(max, Math.floor(input)))
+}
+
+function readString(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return ""
+  return input.trim().slice(0, maxLength)
+}
+
+function parseToolUseBlocks(content: unknown): ToolUseBlock[] {
+  if (!Array.isArray(content)) return []
+  const blocks: ToolUseBlock[] = []
+  for (const item of content) {
+    const record = asObject(item)
+    const type = readString(record.type, 40)
+    if (type !== "tool_use") continue
+    const id = readString(record.id, 120)
+    const name = readString(record.name, 80)
+    if (!id || !name) continue
+    blocks.push({
+      id,
+      name,
+      input: asObject(record.input),
+    })
+  }
+  return blocks
+}
+
+export async function invokeReadOnlyTool(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  userId: string
+  attachmentIds: string[]
+  tool: ToolUseBlock
+}) {
+  const { supabase, userId, attachmentIds, tool } = args
+  const startedAt = Date.now()
+
+  try {
+    if (tool.name === "list_open_alerts") {
+      const limit = readNumber(tool.input.limit, 6, 1, 20)
+      const { data: latestAlerts } = await supabase
+        .from("events")
+        .select("thesis_id,event_type,event_detail,created_at")
+        .eq("user_id", userId)
+        .eq("is_reviewed", false)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+
+      const thesisIds = Array.from(new Set((latestAlerts ?? []).map((event) => event.thesis_id).filter(Boolean)))
+      let thesisById = new Map<string, string>()
+      if (thesisIds.length > 0) {
+        const { data: theses } = await supabase
+          .from("theses")
+          .select("id,ticker")
+          .eq("user_id", userId)
+          .in("id", thesisIds)
+        thesisById = new Map((theses ?? []).map((thesis) => [thesis.id, thesis.ticker]))
+      }
+
+      const alerts = (latestAlerts ?? []).map((event) => ({
+        thesisId: event.thesis_id,
+        ticker: thesisById.get(event.thesis_id) ?? "unknown",
+        eventType: event.event_type,
+        eventDetail: truncateEventDetail(event.event_detail),
+        createdAt: event.created_at,
+      }))
+
+      return {
+        ok: true,
+        latencyMs: Date.now() - startedAt,
+        result: { count: alerts.length, alerts },
+      }
+    }
+
+    if (tool.name === "get_thesis_snapshot") {
+      const thesisId = readString(tool.input.thesisId, 120)
+      const ticker = readString(tool.input.ticker, 24).toUpperCase()
+
+      let query = supabase
+        .from("theses")
+        .select("id,ticker,company_name,status,thesis_statement,updated_at")
+        .eq("user_id", userId)
+      if (thesisId) {
+        query = query.eq("id", thesisId)
+      } else if (ticker) {
+        query = query.ilike("ticker", ticker)
+      } else {
+        return {
+          ok: false,
+          latencyMs: Date.now() - startedAt,
+          result: { error: "Provide thesisId or ticker." },
+        }
+      }
+
+      const { data: thesis } = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle()
+      if (!thesis) {
+        return {
+          ok: false,
+          latencyMs: Date.now() - startedAt,
+          result: { error: "No thesis found." },
+        }
+      }
+
+      return {
+        ok: true,
+        latencyMs: Date.now() - startedAt,
+        result: {
+          thesis: {
+            id: thesis.id,
+            ticker: thesis.ticker,
+            companyName: thesis.company_name,
+            status: thesis.status,
+            thesisStatement: (thesis.thesis_statement ?? "").slice(0, 700),
+            updatedAt: thesis.updated_at,
+          },
+        },
+      }
+    }
+
+    if (tool.name === "get_latest_monitor_snapshot") {
+      const snapshot = await getLatestSigmaMonitorRun(supabase, userId)
+      if (!snapshot) {
+        return {
+          ok: true,
+          latencyMs: Date.now() - startedAt,
+          result: { available: false },
+        }
+      }
+      return {
+        ok: true,
+        latencyMs: Date.now() - startedAt,
+        result: {
+          available: true,
+          snapshot: {
+            id: snapshot.id,
+            status: snapshot.status,
+            createdAt: snapshot.createdAt,
+            completedAt: snapshot.completedAt,
+            summary: snapshot.summary,
+          },
+        },
+      }
+    }
+
+    if (tool.name === "get_uploaded_document_excerpts") {
+      const requestedIds = Array.isArray(tool.input.documentIds)
+        ? tool.input.documentIds
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : []
+      const limit = readNumber(tool.input.limit, 3, 1, 4)
+      const ids = (requestedIds.length > 0 ? requestedIds : attachmentIds).slice(0, 4)
+      const query = supabase
+        .from("chat_uploaded_documents")
+        .select("id,file_name,extracted_text,status,created_at")
+        .eq("user_id", userId)
+        .eq("status", "ready")
+        .order("created_at", { ascending: false })
+        .limit(limit)
+      const { data } = ids.length > 0 ? await query.in("id", ids) : await query
+
+      const documents = (data ?? []).map((doc) => ({
+        id: doc.id,
+        fileName: doc.file_name,
+        excerpt: (doc.extracted_text ?? "").slice(0, 700),
+        createdAt: doc.created_at,
+      }))
+      return {
+        ok: true,
+        latencyMs: Date.now() - startedAt,
+        result: { count: documents.length, documents },
+      }
+    }
+
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      result: { error: `Unknown tool '${tool.name}'.` },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      result: { error: error instanceof Error ? error.message : "Tool execution failed." },
+    }
+  }
+}
+
+export async function runBoundedReadOnlyToolLoop(args: {
+  llm: ReturnType<typeof createLlm>
+  baseRequest: {
+    model: string
+    max_tokens: number
+    system: string
+    messages: { role: "user" | "assistant"; content: string }[]
+  }
+  supabase: Awaited<ReturnType<typeof createClient>>
+  userId: string
+  requestId: string
+  attachmentIds: string[]
+}) {
+  const startedAt = Date.now()
+  const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [...args.baseRequest.messages]
+  let failures = 0
+  let toolCalls = 0
+  let steps = 0
+  let breakerTripped = false
+
+  while (steps < TOOL_LOOP_MAX_STEPS && toolCalls < TOOL_LOOP_MAX_CALLS && Date.now() - startedAt < TOOL_LOOP_TIMEOUT_MS) {
+    const completion = await args.llm.messages.create(
+      {
+        model: args.baseRequest.model,
+        max_tokens: args.baseRequest.max_tokens,
+        system: args.baseRequest.system,
+        tools: READ_ONLY_AGENT_TOOLS,
+        messages: messages as never,
+      } as never,
+    )
+    steps += 1
+
+    const toolUses = parseToolUseBlocks(completion.content)
+    if (toolUses.length === 0) {
+      return {
+        completion,
+        stats: {
+          used: toolCalls > 0,
+          steps,
+          toolCalls,
+          failures,
+          breakerTripped,
+        } satisfies AgentToolLoopStats,
+      }
+    }
+
+    const toolResultBlocks: Array<Record<string, unknown>> = []
+    for (const toolUse of toolUses) {
+      if (toolCalls >= TOOL_LOOP_MAX_CALLS) {
+        breakerTripped = true
+        break
+      }
+
+      const result = await invokeReadOnlyTool({
+        supabase: args.supabase,
+        userId: args.userId,
+        attachmentIds: args.attachmentIds,
+        tool: toolUse,
+      })
+      toolCalls += 1
+      if (!result.ok) failures += 1
+
+      console.info(
+        JSON.stringify({
+          event: "chat_tool_audit",
+          requestId: args.requestId,
+          userId: args.userId,
+          step: steps,
+          toolName: toolUse.name,
+          success: result.ok,
+          latencyMs: result.latencyMs,
+          failures,
+        }),
+      )
+
+      toolResultBlocks.push({
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        is_error: !result.ok,
+        content: JSON.stringify(result.result),
+      })
+
+      if (failures >= TOOL_LOOP_MAX_FAILURES) {
+        breakerTripped = true
+        break
+      }
+    }
+
+    messages.push({ role: "assistant", content: completion.content })
+    messages.push({ role: "user", content: toolResultBlocks })
+
+    if (breakerTripped) break
+  }
+
+  const fallbackCompletion = await args.llm.messages.create(
+    {
+      model: args.baseRequest.model,
+      max_tokens: args.baseRequest.max_tokens,
+      system: args.baseRequest.system,
+      messages: [
+        ...messages,
+        {
+          role: "user",
+          content:
+            "Tool execution reached a safety limit for this request. Continue without further tools and provide the best answer from available context.",
+        },
+      ] as never,
+    } as never,
+  )
+
+  return {
+    completion: fallbackCompletion,
+    stats: {
+      used: toolCalls > 0,
+      steps,
+      toolCalls,
+      failures,
+      breakerTripped,
+    } satisfies AgentToolLoopStats,
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
   const startedAt = Date.now()
@@ -497,6 +887,7 @@ export async function POST(request: Request) {
     const skillRoutingEnabled = isSkillRoutingEnabled()
     const planThenAnswerEnabled = isPlanThenAnswerEnabled()
     const strictJsonMode = isStrictJsonModeEnabled()
+    const phase4AgentToolsEnabled = isPhase4AgentToolsEnabled()
     const skillRoute = skillRoutingEnabled ? resolveSkillRoute(latestMessage) : "general"
     const shouldPlanFirst = planThenAnswerEnabled && shouldUsePlanThenAnswer(latestMessage)
 
@@ -548,6 +939,13 @@ export async function POST(request: Request) {
       max_tokens: 4096,
       system: resolvedSystemPrompt,
       messages: toModelMessages(history, latestMessageForModel),
+    }
+    let toolLoopStats: AgentToolLoopStats = {
+      used: false,
+      steps: 0,
+      toolCalls: 0,
+      failures: 0,
+      breakerTripped: false,
     }
 
     if (shouldPlanFirst) {
@@ -727,6 +1125,12 @@ export async function POST(request: Request) {
                 usedSafeWebContext,
                 webContextSource,
                 webLookupTemporarilyUnavailable: webLookupTemporarilyUnavailableWithBrave,
+                phase4AgentToolsEnabled,
+                toolLoopUsed: false,
+                toolLoopSteps: 0,
+                toolLoopCalls: 0,
+                toolLoopFailures: 0,
+                toolLoopBreakerTripped: false,
               }),
             )
 
@@ -742,6 +1146,17 @@ export async function POST(request: Request) {
           })
         }
       }
+    } else if (phase4AgentToolsEnabled) {
+      const loopResult = await runBoundedReadOnlyToolLoop({
+        llm,
+        baseRequest: completionBaseRequest,
+        supabase,
+        userId: user.id,
+        requestId,
+        attachmentIds,
+      })
+      completion = loopResult.completion
+      toolLoopStats = loopResult.stats
     } else {
       completion = await llm.messages.create(completionBaseRequest)
     }
@@ -824,6 +1239,12 @@ export async function POST(request: Request) {
         usedSafeWebContext,
         webContextSource,
         webLookupTemporarilyUnavailable,
+        phase4AgentToolsEnabled,
+        toolLoopUsed: toolLoopStats.used,
+        toolLoopSteps: toolLoopStats.steps,
+        toolLoopCalls: toolLoopStats.toolCalls,
+        toolLoopFailures: toolLoopStats.failures,
+        toolLoopBreakerTripped: toolLoopStats.breakerTripped,
       }),
     )
 
