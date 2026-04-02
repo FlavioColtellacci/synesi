@@ -16,6 +16,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import { renderAssistantContent, renderUserContent } from "@/components/chat/message-rendering"
 import { SigmaThinkingIndicator } from "@/components/chat/SigmaThinkingIndicator"
+import { isWebLookupIntent } from "@/lib/chat/web-intent"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 
 type ChatMessage = {
@@ -178,6 +179,7 @@ export default function ChatWidget() {
     }
     return actions.slice(0, 8)
   }, [])
+  const webIntentPreview = useMemo(() => isWebLookupIntent(input), [input])
 
   useEffect(() => {
     const element = messageContainerRef.current
@@ -1050,7 +1052,11 @@ export default function ChatWidget() {
                 type="button"
                 onClick={() => setIsWebSearchEnabled((current) => !current)}
                 aria-label={`Web search ${isWebSearchEnabled ? "on" : "off"}`}
-                title={isWebSearchEnabled ? "Brave search enabled for web-intent prompts" : "Enable Brave search for web-intent prompts"}
+                title={
+                  isWebSearchEnabled
+                    ? "Web lookup is ON. Sigma runs it for messages classified as web lookup requests."
+                    : "Enable web lookup for messages like latest news, headlines, or explicit web search requests."
+                }
                 className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
                   isWebSearchEnabled
                     ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
@@ -1117,6 +1123,15 @@ export default function ChatWidget() {
               {isDraggingFiles ? "Drop files to upload. " : ""}
               Supported: PDF, DOCX, CSV, XLSX.
             </p>
+            {isWebSearchEnabled ? (
+              <p className="mt-1 text-[11px] text-[#6B6B7B]">
+                {input.trim().length === 0
+                  ? "Web lookup is ON. Ask for latest news or explicitly request a web search to trigger it."
+                  : webIntentPreview
+                    ? "Web lookup will be attempted for this message."
+                    : "Web lookup is ON, but this message is not classified as a web lookup request."}
+              </p>
+            ) : null}
             <p className="mt-1 text-[11px] text-[#6B6B7B]">
               Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
             </p>

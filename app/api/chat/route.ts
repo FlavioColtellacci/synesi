@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { enforceResponseGuardrails } from "@/lib/chat/guard"
+import { enforceResponseGuardrails, enforceResponseGuardrailsWithTelemetry } from "@/lib/chat/guard"
 import { getLatestSigmaMonitorRun } from "@/lib/chat/monitor"
 import { getUserSigmaMemoryProfile, persistChatExchange, syncUserReleaseRing } from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
@@ -10,6 +10,7 @@ import { buildUploadedDocumentContextBlock } from "@/lib/chat/uploads"
 import { createSigmaExportsForResponse } from "@/lib/chat/exports"
 import { resolveEvalGateDecision, runChatEvalHarness } from "@/lib/chat/evals"
 import { isRingIncludedInRollout, readRolloutTargetRing, resolveReleaseRing } from "@/lib/chat/release-rings"
+import { isWebLookupIntent } from "@/lib/chat/web-intent"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -102,12 +103,6 @@ function isPositionsQuestion(message: string) {
   return /(position|positions|conviction|convictions|portfolio|how are my|how's my)/i.test(message)
 }
 
-function isInternetLookupQuestion(message: string) {
-  return /((look(\s+those)?\s+(up|online))|lookup|search (the )?(web|internet|online)|web search|internet|online|latest news|recent news|headlines?|news (on|about)|read (the )?articles?|fetch (the )?(news|headlines|articles?)|what happened (today|this week|this month))/i.test(
-    message,
-  )
-}
-
 function isMonitorSummaryQuestion(message: string) {
   return /(sigma monitor|monitor summary|what changed since last run|latest monitor)/i.test(message)
 }
@@ -146,6 +141,22 @@ function isPhase6EvalHarnessEnabled() {
 
 function isPhase6EvalGateEnforced() {
   return readBooleanFlag(process.env.SIGMA_PHASE6_EVAL_GATE_ENFORCED, false)
+}
+
+function isPhase1ParseTextRecoveryEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_PARSE_TEXT_RECOVERY_ENABLED, true)
+}
+
+function isPhase1GuardTelemetryEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_GUARD_TELEMETRY_ENABLED, true)
+}
+
+function isPhase1WebIntentGateEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_WEB_INTENT_GATE_ENABLED, true)
+}
+
+function isPhase1ObservabilityFieldsEnabled() {
+  return readBooleanFlag(process.env.SIGMA_PHASE1_OBSERVABILITY_FIELDS_ENABLED, true)
 }
 
 function resolveSkillRoute(message: string): ChatSkillRoute {
@@ -240,12 +251,52 @@ function buildResponseFromRawText(args: {
   rawText: string
   messageForFallback: string
   positions: PositionSnapshot[]
-  strictJsonMode: boolean
-}): ChatAssistantResponse {
+  parseTextRecoveryEnabled: boolean
+  guardTelemetryEnabled: boolean
+}): {
+  response: ChatAssistantResponse
+  parseModeUsed: "json" | "text_recovery" | "hard_fallback"
+  blockedByPattern: string | null
+} {
+  const applyGuardrails = (response: ChatAssistantResponse) => {
+    if (args.guardTelemetryEnabled) {
+      return enforceResponseGuardrailsWithTelemetry(response)
+    }
+    return {
+      response: enforceResponseGuardrails(response),
+      blockedByPattern: null,
+    }
+  }
+
   const parsed = parseAssistantResponse(args.rawText)
-  const textFallback = args.strictJsonMode ? null : parseAssistantTextFallback(args.rawText)
+  if (parsed) {
+    const guardResult = applyGuardrails(parsed)
+    return {
+      response: guardResult.response,
+      parseModeUsed: "json",
+      blockedByPattern: guardResult.blockedByPattern,
+    }
+  }
+
+  if (args.parseTextRecoveryEnabled) {
+    const textFallback = parseAssistantTextFallback(args.rawText)
+    if (textFallback) {
+      const guardResult = applyGuardrails(textFallback)
+      return {
+        response: guardResult.response,
+        parseModeUsed: "text_recovery",
+        blockedByPattern: guardResult.blockedByPattern,
+      }
+    }
+  }
+
   const fallback = buildPositionsFallback(args.messageForFallback, args.positions)
-  return enforceResponseGuardrails(parsed ?? textFallback ?? fallback)
+  const guardResult = applyGuardrails(fallback)
+  return {
+    response: guardResult.response,
+    parseModeUsed: "hard_fallback",
+    blockedByPattern: guardResult.blockedByPattern,
+  }
 }
 
 function mergeRetrievalEvidence(args: {
@@ -930,7 +981,23 @@ export async function POST(request: Request) {
     let usedSafeWebContext = false
     let webContextSource: ChatAssistantResponse["webContextSource"] | undefined
     const webSearchEnabled = body.context?.webSearchEnabled === true
-    const shouldUseModelWebLookup = webSearchEnabled && !sharedUrl && isInternetLookupQuestion(latestMessage)
+    const phase1ParseTextRecoveryEnabled = isPhase1ParseTextRecoveryEnabled()
+    const phase1GuardTelemetryEnabled = isPhase1GuardTelemetryEnabled()
+    const phase1WebIntentGateEnabled = isPhase1WebIntentGateEnabled()
+    const phase1ObservabilityFieldsEnabled = isPhase1ObservabilityFieldsEnabled()
+    const webIntentMatched = phase1WebIntentGateEnabled ? isWebLookupIntent(latestMessage) : webSearchEnabled
+    const shouldUseModelWebLookup = webSearchEnabled && !sharedUrl && webIntentMatched
+    const webLookupAttempted = shouldUseModelWebLookup
+    const webLookupReasonSkipped: "toggle_off" | "url_provided" | "intent_not_matched" | "intent_gate_disabled" | null =
+      webLookupAttempted
+      ? null
+      : !webSearchEnabled
+        ? "toggle_off"
+        : sharedUrl
+          ? "url_provided"
+          : !phase1WebIntentGateEnabled
+            ? "intent_gate_disabled"
+          : "intent_not_matched"
     const skillRoutingEnabled = isSkillRoutingEnabled()
     const planThenAnswerEnabled = isPlanThenAnswerEnabled()
     const strictJsonMode = isStrictJsonModeEnabled()
@@ -1118,12 +1185,14 @@ export async function POST(request: Request) {
               .join("")
               .trim()
 
-            const responsePayloadWithBrave = buildResponseFromRawText({
+            const parsedWithBrave = buildResponseFromRawText({
               rawText: rawTextWithBrave,
               messageForFallback: latestMessageForModel,
               positions: positions ?? [],
-              strictJsonMode,
+              parseTextRecoveryEnabled: phase1ParseTextRecoveryEnabled,
+              guardTelemetryEnabled: phase1GuardTelemetryEnabled,
             })
+            const responsePayloadWithBrave = parsedWithBrave.response
             const webLookupTemporarilyUnavailableWithBrave = hasWebCapabilityDenial(responsePayloadWithBrave.answer)
             const normalizedResponsePayloadWithBrave = webLookupTemporarilyUnavailableWithBrave
               ? buildWebLookupUnavailableNowResponse()
@@ -1217,6 +1286,17 @@ export async function POST(request: Request) {
                 toolLoopCalls: 0,
                 toolLoopFailures: 0,
                 toolLoopBreakerTripped: false,
+                ...(phase1ObservabilityFieldsEnabled
+                  ? {
+                      parseModeUsed: parsedWithBrave.parseModeUsed,
+                      blockedByPattern: parsedWithBrave.blockedByPattern,
+                      webLookupAttempted,
+                      webLookupReasonSkipped,
+                      phase1ParseTextRecoveryEnabled,
+                      phase1GuardTelemetryEnabled,
+                      phase1WebIntentGateEnabled,
+                    }
+                  : {}),
               }),
             )
 
@@ -1253,12 +1333,14 @@ export async function POST(request: Request) {
       .join("")
       .trim()
 
-    const responsePayload = buildResponseFromRawText({
+    const parsedResponse = buildResponseFromRawText({
       rawText,
       messageForFallback: latestMessageForModel,
       positions: positions ?? [],
-      strictJsonMode,
+      parseTextRecoveryEnabled: phase1ParseTextRecoveryEnabled,
+      guardTelemetryEnabled: phase1GuardTelemetryEnabled,
     })
+    const responsePayload = parsedResponse.response
     const webLookupTemporarilyUnavailable =
       shouldUseModelWebLookup && hasWebCapabilityDenial(responsePayload.answer)
     const normalizedResponsePayload = webLookupTemporarilyUnavailable
@@ -1353,6 +1435,17 @@ export async function POST(request: Request) {
         toolLoopCalls: toolLoopStats.toolCalls,
         toolLoopFailures: toolLoopStats.failures,
         toolLoopBreakerTripped: toolLoopStats.breakerTripped,
+        ...(phase1ObservabilityFieldsEnabled
+          ? {
+              parseModeUsed: parsedResponse.parseModeUsed,
+              blockedByPattern: parsedResponse.blockedByPattern,
+              webLookupAttempted,
+              webLookupReasonSkipped,
+              phase1ParseTextRecoveryEnabled,
+              phase1GuardTelemetryEnabled,
+              phase1WebIntentGateEnabled,
+            }
+          : {}),
       }),
     )
 
