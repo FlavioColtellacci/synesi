@@ -64,9 +64,9 @@ const DEFAULT_PANEL_WIDTH = 480
 const DEFAULT_PANEL_HEIGHT = 720
 const MIN_PANEL_WIDTH = 380
 const MIN_PANEL_HEIGHT = 520
-const MAX_PANEL_WIDTH = 1320
-const VIEWPORT_WIDTH_RATIO = 0.985
-const TOP_BOTTOM_OFFSET_PX = 40
+const MAX_PANEL_WIDTH = 1120
+const VIEWPORT_WIDTH_RATIO = 0.94
+const TOP_BOTTOM_OFFSET_PX = 140
 
 function readClientBooleanFlag(value: string | undefined, defaultValue: boolean) {
   if (!value) return defaultValue
@@ -714,7 +714,7 @@ export default function ChatWidget() {
                     "--sigma-chat-height": `${panelSize.height}px`,
                   } as CSSProperties
                 }
-                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-2.5rem)] sm:max-w-[min(calc(100vw-1rem),1320px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-8.5rem)] sm:max-w-[min(calc(100vw-1.5rem),1120px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
               >
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
@@ -773,10 +773,11 @@ export default function ChatWidget() {
                 }}
                 disabled={isMemoryLoading || isMemorySaving}
                 aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${
+                title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
                   memoryProfile.enabled
-                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
-                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A]"
+                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
+                    : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
                 }`}
               >
                 {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
