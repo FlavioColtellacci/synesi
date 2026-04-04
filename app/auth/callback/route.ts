@@ -6,11 +6,45 @@ import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 import { createAdminClient } from '@/lib/supabase/server'
 import { sendTrialStartedEmail } from '@/lib/email/trial'
 
+function redirectOAuthFailureToLogin(request: Request, requestUrl: URL) {
+  const oauthError = requestUrl.searchParams.get('error')
+  const rawDesc = requestUrl.searchParams.get('error_description')
+  const login = new URL('/login', request.url)
+
+  let message =
+    'Sign-in could not be completed. Try again or use email and password.'
+
+  if (oauthError === 'access_denied') {
+    message = 'Sign-in was cancelled.'
+  } else if (rawDesc) {
+    try {
+      const text = decodeURIComponent(rawDesc.replace(/\+/g, ' ')).trim()
+      if (
+        text.length > 0 &&
+        text.length <= 180 &&
+        !/[<>]/.test(text) &&
+        !/[\u0000-\u001f]/.test(text)
+      ) {
+        message = text.slice(0, 120)
+      }
+    } catch {
+      // keep default message
+    }
+  }
+
+  login.searchParams.set('auth_error', message)
+  return NextResponse.redirect(login)
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const oauthError = requestUrl.searchParams.get('error')
 
   if (!code) {
+    if (oauthError) {
+      return redirectOAuthFailureToLogin(request, requestUrl)
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
