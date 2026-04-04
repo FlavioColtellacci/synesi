@@ -3,6 +3,7 @@ export type FunnelEvent =
   | "pricing_view"
   | "pricing_trial_expired_view"
   | "signup_start"
+  | "oauth_signup_start"
   | "trial_message_view"
   | "trial_upgrade_click"
   | "checkout_start"

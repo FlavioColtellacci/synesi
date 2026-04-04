@@ -1,21 +1,53 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { FormEvent, useMemo, useState } from 'react'
+import { Suspense, FormEvent, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+function LoginFormFallback() {
+  return (
+    <section
+      className="w-full max-w-md rounded-xl border border-synesi-border bg-synesi-surface p-8 shadow-[0_14px_36px_rgba(0,0,0,0.35)]"
+      aria-busy="true"
+    >
+      <p className="text-center font-[var(--font-sans)] text-sm text-synesi-muted">
+        Loading…
+      </p>
+    </section>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [oauthBusy, setOauthBusy] = useState(false)
+
+  const formDisabled = isLoading || oauthBusy
+  const callbackAuthError = searchParams.get('auth_error')
+  const displayError = error || callbackAuthError || ''
+
+  function clearAuthErrorQuery() {
+    if (searchParams.get('auth_error')) {
+      router.replace('/login', { scroll: false })
+    }
+  }
+
+  function handleOAuthError(message: string) {
+    clearAuthErrorQuery()
+    setError(message)
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    clearAuthErrorQuery()
     setIsLoading(true)
 
     const normalizedEmail = email.trim().toLowerCase()
@@ -64,9 +96,15 @@ export default function LoginPage() {
       <h1 className="text-center font-[var(--font-mono)] text-xl tracking-widest text-synesi-text">
         SIGN IN
       </h1>
-      <p className="mb-8 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
+      <p className="mb-6 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
         Welcome back.
       </p>
+
+      <OAuthProviderButtons
+        disabled={isLoading}
+        onBusyChange={setOauthBusy}
+        onError={handleOAuthError}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -77,7 +115,8 @@ export default function LoginPage() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Email"
-          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white"
+          disabled={formDisabled}
+          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <input
@@ -88,12 +127,13 @@ export default function LoginPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Password"
-          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white"
+          disabled={formDisabled}
+          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={formDisabled}
           className="w-full rounded-lg bg-synesi-accent p-3 font-[var(--font-sans)] text-sm font-medium text-black transition hover:bg-synesi-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading ? 'SIGNING IN...' : 'SIGN IN'}
@@ -103,7 +143,9 @@ export default function LoginPage() {
         </p>
       </form>
 
-      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+      {displayError ? (
+        <p className="mt-4 text-sm text-red-400">{displayError}</p>
+      ) : null}
 
       <p className="mt-4 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
         Don&apos;t have an account?{' '}
@@ -112,5 +154,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </section>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
   )
 }

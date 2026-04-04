@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
 import { createClient } from '@/lib/supabase/client'
 import { trackFunnelEvent } from '@/lib/analytics'
 
@@ -18,6 +19,13 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [oauthBusy, setOauthBusy] = useState(false)
+
+  const formDisabled = isLoading || oauthBusy
+
+  const trackOAuthSignupStart = useCallback(() => {
+    trackFunnelEvent('oauth_signup_start')
+  }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -61,9 +69,16 @@ export default function SignupPage() {
       <h1 className="text-center font-[var(--font-mono)] text-xl tracking-widest text-synesi-text">
         CREATE ACCOUNT
       </h1>
-      <p className="mb-8 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
+      <p className="mb-6 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
         Start tracking your conviction.
       </p>
+
+      <OAuthProviderButtons
+        disabled={isLoading}
+        onBusyChange={setOauthBusy}
+        onError={setError}
+        onOAuthAttempt={trackOAuthSignupStart}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -74,7 +89,8 @@ export default function SignupPage() {
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Full name"
-          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white"
+          disabled={formDisabled}
+          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <input
@@ -85,7 +101,8 @@ export default function SignupPage() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Email"
-          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white"
+          disabled={formDisabled}
+          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <input
@@ -97,12 +114,13 @@ export default function SignupPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Password"
-          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white"
+          disabled={formDisabled}
+          className="w-full rounded-lg border border-synesi-border bg-synesi-bg p-3 font-[var(--font-sans)] text-sm text-synesi-text placeholder:text-synesi-muted outline-none focus:outline-2 focus:outline-white disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={formDisabled}
           className="w-full rounded-lg bg-synesi-accent p-3 font-[var(--font-sans)] text-sm font-medium text-black transition hover:bg-synesi-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading ? 'CREATING ACCOUNT...' : 'GET STARTED →'}
