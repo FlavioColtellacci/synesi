@@ -140,8 +140,9 @@ export default function SigmaGuidePage() {
             unavailable, paste a public HTTPS link or excerpt so Sigma can still work from what you provide.
           </li>
           <li>
-            <span className="text-[#F0F0F0]">Attachments.</span> PDF, DOCX, CSV, and XLSX from the paperclip control.
-            Ask clear questions about the file so Sigma knows what to extract or summarize.
+            <span className="text-[#F0F0F0]">Attachments.</span> PDF, DOCX, CSV, XLSX, PNG, and JPEG from the
+            paperclip control. Raster images are stored for your thread but only get a short text note for the model;
+            describe what is in the picture if you need analysis.
           </li>
         </ul>
 

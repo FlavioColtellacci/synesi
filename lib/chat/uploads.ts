@@ -50,6 +50,9 @@ const EXTENSION_TO_MIME: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/zip",
   ],
+  png: ["image/png"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
 }
 
 export function getUploadBucketName() {
@@ -101,6 +104,25 @@ function hasZipMagic(bytes: Uint8Array) {
   return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
 }
 
+function hasPngMagic(bytes: Uint8Array) {
+  if (bytes.length < 8) return false
+  return (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  )
+}
+
+function hasJpegMagic(bytes: Uint8Array) {
+  if (bytes.length < 3) return false
+  return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+}
+
 function isLikelyText(bytes: Uint8Array) {
   const length = Math.min(bytes.length, 2048)
   if (length === 0) return true
@@ -123,6 +145,12 @@ export function validateMagicBytes(extension: string, bytes: Uint8Array): string
   }
   if (extension === "csv" && !isLikelyText(bytes)) {
     return "CSV upload appears to be binary data."
+  }
+  if (extension === "png" && !hasPngMagic(bytes)) {
+    return "File signature does not match a PNG image."
+  }
+  if ((extension === "jpg" || extension === "jpeg") && !hasJpegMagic(bytes)) {
+    return "File signature does not match a JPEG image."
   }
   return null
 }
@@ -181,6 +209,9 @@ export async function extractDocumentText(fileExtension: string, buffer: Buffer)
       text = decodeCsvText(buffer)
     } else if (fileExtension === "xlsx") {
       text = await extractSpreadsheetText(buffer)
+    } else if (fileExtension === "png" || fileExtension === "jpg" || fileExtension === "jpeg") {
+      text =
+        "Raster image attachment. No text was extracted from pixels in this flow; describe what you need from the image or share a PDF or spreadsheet if you want full text extraction."
     } else {
       return {
         status: "failed",

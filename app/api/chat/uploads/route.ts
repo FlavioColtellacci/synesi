@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
     const extension = getExtensionFromFileName(file.name)
     if (!isAllowedUploadExtension(extension)) {
-      return badRequest("Unsupported file type. Allowed: PDF, DOCX, CSV, XLSX.")
+      return badRequest("Unsupported file type. Allowed: PDF, DOCX, CSV, XLSX, PNG, JPEG.")
     }
     if (!isAllowedMimeForExtension(extension, file.type)) {
       return badRequest("File MIME type does not match extension.")

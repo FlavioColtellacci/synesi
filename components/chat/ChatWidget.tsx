@@ -13,7 +13,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import { renderAssistantContent, renderUserContent } from "@/components/chat/message-rendering"
@@ -1110,7 +1109,7 @@ export default function ChatWidget() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.csv,.xlsx"
+                accept=".pdf,.docx,.csv,.xlsx,.png,.jpg,.jpeg,image/png,image/jpeg"
                 className="hidden"
                 onChange={(event: ChangeEvent<HTMLInputElement>) => {
                   void handleFilesSelection(event.target.files)
@@ -1120,8 +1119,8 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach documents"
-                title="Attach document"
+                aria-label="Attach files"
+                title="Attach files"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#2A2A32]/85 text-[#9A9AAA] transition-colors hover:text-[#F0F0F0]"
               >
                 <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1205,10 +1204,9 @@ export default function ChatWidget() {
                 {isSending ? <SigmaThinkingIndicator compact /> : "SEND"}
               </button>
             </div>
-            <p className="mt-2 text-[11px] text-[#6B6B7B]">
-              {isDraggingFiles ? "Drop files to upload. " : ""}
-              Supported: PDF, DOCX, CSV, XLSX.
-            </p>
+            {isDraggingFiles ? (
+              <p className="mt-2 text-[11px] text-[#6B6B7B]">Drop files to upload.</p>
+            ) : null}
             {isWebSearchEnabled ? (
               <p className="mt-1 text-[11px] text-[#6B6B7B]">
                 {input.trim().length === 0
@@ -1218,15 +1216,6 @@ export default function ChatWidget() {
                     : "Web lookup is ON, but this message is not classified as a web lookup request."}
               </p>
             ) : null}
-            <p className="mt-1 text-[11px] text-[#6B6B7B]">
-              Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.{" "}
-              <Link
-                href="/app/sigma-guide"
-                className="text-[#8BE8D8] underline decoration-[#8BE8D8]/40 underline-offset-2 transition-colors hover:text-[#F0F0F0]"
-              >
-                Sigma guide
-              </Link>
-            </p>
           </form>
               </motion.section>,
             ]
