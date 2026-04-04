@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
+import { ShellTransition } from '@/components/layout/ShellTransition'
 import { SITE_ORIGIN } from '@/lib/marketing/site-origin'
 import './globals.css'
 
@@ -76,7 +77,7 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} [scrollbar-gutter:stable]`}
     >
       <body className="bg-synesi-bg text-synesi-text antialiased">
-        {children}
+        <ShellTransition>{children}</ShellTransition>
         <Analytics />
       </body>
     </html>
