@@ -3,6 +3,7 @@ import Link from 'next/link'
 import NavLinks from '@/components/layout/NavLinks'
 import SignOutButton from '@/components/layout/SignOutButton'
 import ChatWidget from '@/components/chat/ChatWidget'
+import { AppMainTransition } from '@/components/layout/AppMainTransition'
 import TrialStatusBanner from '@/components/billing/TrialStatusBanner'
 import { createClient } from '@/lib/supabase/server'
 import { getTrialState } from '@/lib/billing/trial-state'
@@ -63,7 +64,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
 
       <main className="min-h-screen bg-[#0A0A0C] pt-24 md:pt-16">
         {!hasActiveSubscription && isTrialUser ? <TrialStatusBanner trialState={trialState} /> : null}
-        {children}
+        <AppMainTransition>{children}</AppMainTransition>
       </main>
       <ChatWidget />
     </>
