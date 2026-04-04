@@ -738,8 +738,9 @@ export default function ChatWidget() {
             onPointerDown={(event) => handleResizeStart("left", event)}
             className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
           />
-          <header className="relative flex items-center justify-end border-b border-[#2A2A32]/70 px-4 py-2.5">
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5">
+          <header className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-[#2A2A32]/70 px-3 py-2.5 sm:gap-3 sm:px-4">
+            <div className="min-w-0" aria-hidden="true" />
+            <div className="pointer-events-none flex shrink-0 items-center justify-center gap-2 sm:gap-2.5">
               <span
                 aria-hidden="true"
                 className="font-mono text-base text-[#F0F0F0]"
@@ -747,9 +748,9 @@ export default function ChatWidget() {
               >
                 Σ
               </span>
-              <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
+              <p className="whitespace-nowrap font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
               {PHASE1_ROUTING_VISIBLE ? (
                 <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
                   Skills beta
