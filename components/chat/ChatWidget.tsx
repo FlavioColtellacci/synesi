@@ -67,7 +67,7 @@ const DEFAULT_PANEL_WIDTH = 480
 const DEFAULT_PANEL_HEIGHT = 720
 const MIN_PANEL_WIDTH = 380
 const MIN_PANEL_HEIGHT = 520
-/** Below this floating-panel width, stack header (matches cramped mobile sheet). */
+/** Below this floating-panel width, use compact header grid (matches cramped mobile sheet). */
 const SIGMA_CHAT_COMPACT_HEADER_MAX_WIDTH = 520
 const MAX_PANEL_WIDTH = 1120
 const VIEWPORT_WIDTH_RATIO = 0.94
@@ -755,49 +755,13 @@ export default function ChatWidget() {
           <header
             className={
               compactSigmaHeader
-                ? "flex flex-col gap-2 border-b border-[#2A2A32]/70 px-3 py-2.5 sm:px-4"
+                ? "border-b border-[#2A2A32]/70 px-3 py-2.5 sm:px-4"
                 : "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-[#2A2A32]/70 px-3 py-2.5 sm:gap-3 sm:px-4"
             }
           >
             {compactSigmaHeader ? (
-              <>
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="shrink-0 font-mono text-base text-[#F0F0F0]"
-                      style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
-                    >
-                      Σ
-                    </span>
-                    <p className="truncate font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="shrink-0 rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                  >
-                    CLOSE
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1.5 sm:justify-end">
-                  {PHASE1_ROUTING_VISIBLE ? (
-                    <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
-                      Skills beta
-                    </span>
-                  ) : null}
-                  {hasUserMessages ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void clearConversation()
-                      }}
-                      disabled={isClearingHistory}
-                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isClearingHistory ? "CLEARING" : "CLEAR"}
-                    </button>
-                  ) : null}
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
+                <div className="flex min-w-0 items-center justify-start">
                   <button
                     type="button"
                     onClick={() => {
@@ -817,10 +781,65 @@ export default function ChatWidget() {
                     {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
                   </button>
                 </div>
-              </>
+                <div className="pointer-events-none flex min-w-0 items-center justify-center gap-2 sm:gap-2.5">
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 font-mono text-base text-[#F0F0F0]"
+                    style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+                  >
+                    Σ
+                  </span>
+                  <p className="truncate text-center font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
+                  {PHASE1_ROUTING_VISIBLE ? (
+                    <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
+                      Skills beta
+                    </span>
+                  ) : null}
+                  {hasUserMessages ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void clearConversation()
+                      }}
+                      disabled={isClearingHistory}
+                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isClearingHistory ? "CLEARING" : "CLEAR"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="shrink-0 rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
-                <div className="min-w-0" aria-hidden="true" />
+                <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextEnabled = !memoryProfile.enabled
+                      setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
+                      void toggleMemoryEnabled(nextEnabled)
+                    }}
+                    disabled={isMemoryLoading || isMemorySaving}
+                    aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
+                    title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                    className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
+                      memoryProfile.enabled
+                        ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
+                        : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
+                    }`}
+                  >
+                    {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
+                  </button>
+                </div>
                 <div className="pointer-events-none flex shrink-0 items-center justify-center gap-2 sm:gap-2.5">
                   <span
                     aria-hidden="true"
@@ -849,24 +868,6 @@ export default function ChatWidget() {
                       {isClearingHistory ? "CLEARING" : "CLEAR"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextEnabled = !memoryProfile.enabled
-                      setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
-                      void toggleMemoryEnabled(nextEnabled)
-                    }}
-                    disabled={isMemoryLoading || isMemorySaving}
-                    aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                    title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
-                    className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
-                      memoryProfile.enabled
-                        ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
-                        : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
-                    }`}
-                  >
-                    {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
-                  </button>
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
