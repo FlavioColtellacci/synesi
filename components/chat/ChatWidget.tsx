@@ -12,6 +12,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react"
 import { AnimatePresence, motion } from "framer-motion"
+import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
 import { renderAssistantContent, renderUserContent } from "@/components/chat/message-rendering"
@@ -1133,7 +1134,13 @@ export default function ChatWidget() {
               </p>
             ) : null}
             <p className="mt-1 text-[11px] text-[#6B6B7B]">
-              Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.
+              Synesi answers are a thinking aid, not financial advice, and never expose sensitive internal details.{" "}
+              <Link
+                href="/app/sigma-guide"
+                className="text-[#8BE8D8] underline decoration-[#8BE8D8]/40 underline-offset-2 transition-colors hover:text-[#F0F0F0]"
+              >
+                Sigma guide
+              </Link>
             </p>
           </form>
               </motion.section>,

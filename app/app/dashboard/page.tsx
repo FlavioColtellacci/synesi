@@ -305,9 +305,17 @@ export default function Page() {
     <main className="mx-auto min-h-screen max-w-4xl bg-[#0A0A0C] px-4 py-6 md:px-6 md:py-10">
       {/* ── Header ── */}
       <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="font-mono text-2xl uppercase tracking-widest text-[#F0F0F0]">
-          My Convictions
-        </h1>
+        <div className="flex min-w-0 flex-col gap-2">
+          <h1 className="font-mono text-2xl uppercase tracking-widest text-[#F0F0F0]">
+            My Convictions
+          </h1>
+          <Link
+            href="/app/sigma-guide"
+            className="w-fit font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] transition-colors hover:text-[#8BE8D8]"
+          >
+            How to prompt Sigma
+          </Link>
+        </div>
         <Link
           href="/app/new"
           className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#F0F0F0] px-5 py-2 font-mono text-sm tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8] md:w-auto"
