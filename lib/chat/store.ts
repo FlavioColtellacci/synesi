@@ -22,7 +22,7 @@ type PersistedRow = {
   created_at: string
 }
 
-type StoredChatMessage = {
+export type StoredChatMessage = {
   id: string
   role: PersistedRole
   content: string
@@ -111,15 +111,68 @@ function mapStoredMessage(row: PersistedRow): StoredChatMessage {
   }
 }
 
-async function getOrCreateChatThreadId(supabase: SupabaseClient, userId: string) {
-  const { data: existingThread, error: existingError } = await supabase
+/**
+ * Primary thread = the user's oldest chat_threads row (created_at ASC).
+ * Used for Sigma memory profile, release_ring sync, and the FAB when no threadId is passed.
+ * Newer Sigma workspace threads are secondary until promoted (not implemented here).
+ */
+export async function verifyThreadBelongsToUser(
+  supabase: SupabaseClient,
+  userId: string,
+  threadId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from("chat_threads")
     .select("id")
+    .eq("id", threadId)
     .eq("user_id", userId)
     .maybeSingle()
 
-  if (existingError) throw existingError
-  if (existingThread?.id) return existingThread.id as string
+  if (error) throw error
+  return Boolean(data?.id)
+}
+
+const CHAT_THREAD_UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
+
+export type ResolveOptionalThreadIdResult =
+  | { ok: true; threadId: string | undefined }
+  | { ok: false; status: 400 | 403; error: string }
+
+/** Empty / missing → primary thread; non-empty → validate UUID and ownership. */
+export async function resolveOptionalThreadIdForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  raw: unknown,
+): Promise<ResolveOptionalThreadIdResult> {
+  const trimmed = typeof raw === "string" ? raw.trim() : ""
+  if (trimmed === "") return { ok: true, threadId: undefined }
+  if (!CHAT_THREAD_UUID_RE.test(trimmed)) {
+    return { ok: false, status: 400, error: "Invalid threadId" }
+  }
+  const allowed = await verifyThreadBelongsToUser(supabase, userId, trimmed)
+  if (!allowed) {
+    return { ok: false, status: 403, error: "Chat thread not found or access denied" }
+  }
+  return { ok: true, threadId: trimmed }
+}
+
+async function getOldestThreadIdForUser(supabase: SupabaseClient, userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("chat_threads")
+    .select("id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data?.id ? (data.id as string) : null
+}
+
+/** Oldest thread for the user, creating one if none exist (write paths / FAB default). */
+export async function getPrimaryThreadIdForUser(supabase: SupabaseClient, userId: string): Promise<string> {
+  const existingId = await getOldestThreadIdForUser(supabase, userId)
+  if (existingId) return existingId
 
   const { data: createdThread, error: createError } = await supabase
     .from("chat_threads")
@@ -136,19 +189,29 @@ export async function persistChatExchange(
   userId: string,
   userMessage: string,
   assistantResponse: ChatAssistantResponse,
+  threadId?: string,
 ) {
-  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  let resolvedThreadId: string
+  if (threadId !== undefined && threadId !== "") {
+    const allowed = await verifyThreadBelongsToUser(supabase, userId, threadId)
+    if (!allowed) {
+      throw new Error("Chat thread not found or access denied")
+    }
+    resolvedThreadId = threadId
+  } else {
+    resolvedThreadId = await getPrimaryThreadIdForUser(supabase, userId)
+  }
 
   const { error: insertError } = await supabase.from("chat_messages").insert([
     {
-      thread_id: threadId,
+      thread_id: resolvedThreadId,
       user_id: userId,
       role: "user",
       content: userMessage,
       metadata: {},
     },
     {
-      thread_id: threadId,
+      thread_id: resolvedThreadId,
       user_id: userId,
       role: "assistant",
       content: assistantResponse.answer,
@@ -159,24 +222,21 @@ export async function persistChatExchange(
   if (insertError) throw insertError
 }
 
-export async function loadUserChatHistory(
+export async function loadChatHistoryForThread(
   supabase: SupabaseClient,
   userId: string,
+  threadId: string,
   limit = 60,
 ): Promise<StoredChatMessage[]> {
-  const { data: thread, error: threadError } = await supabase
-    .from("chat_threads")
-    .select("id")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (threadError) throw threadError
-  if (!thread?.id) return []
+  const allowed = await verifyThreadBelongsToUser(supabase, userId, threadId)
+  if (!allowed) {
+    throw new Error("Chat thread not found or access denied")
+  }
 
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id,role,content,metadata,created_at")
-    .eq("thread_id", thread.id)
+    .eq("thread_id", threadId)
     .order("created_at", { ascending: false })
     .limit(limit)
 
@@ -186,25 +246,40 @@ export async function loadUserChatHistory(
   return rows.map(mapStoredMessage)
 }
 
-export async function clearUserChatHistory(supabase: SupabaseClient, userId: string) {
-  const { data: thread, error: threadError } = await supabase
-    .from("chat_threads")
-    .select("id")
-    .eq("user_id", userId)
-    .maybeSingle()
+/** Loads history for the primary (oldest) thread only; does not create a thread. */
+export async function loadUserChatHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 60,
+): Promise<StoredChatMessage[]> {
+  const threadId = await getOldestThreadIdForUser(supabase, userId)
+  if (!threadId) return []
+  return loadChatHistoryForThread(supabase, userId, threadId, limit)
+}
 
-  if (threadError) throw threadError
-  if (!thread?.id) return
+export async function clearChatHistoryForThread(supabase: SupabaseClient, userId: string, threadId: string) {
+  const allowed = await verifyThreadBelongsToUser(supabase, userId, threadId)
+  if (!allowed) {
+    throw new Error("Chat thread not found or access denied")
+  }
 
-  const { error } = await supabase.from("chat_messages").delete().eq("thread_id", thread.id)
+  const { error } = await supabase.from("chat_messages").delete().eq("thread_id", threadId)
   if (error) throw error
 }
 
+/** Clears messages on the primary (oldest) thread only; does not create a thread. */
+export async function clearUserChatHistory(supabase: SupabaseClient, userId: string) {
+  const threadId = await getOldestThreadIdForUser(supabase, userId)
+  if (!threadId) return
+  await clearChatHistoryForThread(supabase, userId, threadId)
+}
+
+/** Memory profile is stored on the primary (oldest) thread only; Sigma full-page secondary threads do not carry it. */
 export async function getUserSigmaMemoryProfile(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<SigmaMemoryProfile> {
-  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const threadId = await getPrimaryThreadIdForUser(supabase, userId)
   const { data, error } = await supabase
     .from("chat_threads")
     .select("memory_enabled,memory_profile,memory_profile_updated_at")
@@ -225,7 +300,7 @@ export async function updateUserSigmaMemoryProfile(
   userId: string,
   input: SigmaMemoryProfile,
 ): Promise<SigmaMemoryProfile> {
-  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const threadId = await getPrimaryThreadIdForUser(supabase, userId)
   const sanitized = sanitizeMemoryProfile(input)
   const nowIso = new Date().toISOString()
 
@@ -247,7 +322,7 @@ export async function updateUserSigmaMemoryProfile(
 }
 
 export async function resetUserSigmaMemoryProfile(supabase: SupabaseClient, userId: string): Promise<SigmaMemoryProfile> {
-  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const threadId = await getPrimaryThreadIdForUser(supabase, userId)
 
   const { error } = await supabase
     .from("chat_threads")
@@ -267,7 +342,7 @@ export async function syncUserReleaseRing(
   userId: string,
   ring: "internal" | "beta" | "full",
 ) {
-  const threadId = await getOrCreateChatThreadId(supabase, userId)
+  const threadId = await getPrimaryThreadIdForUser(supabase, userId)
   const { error } = await supabase.from("chat_threads").update({ release_ring: ring }).eq("id", threadId)
   if (error) throw error
 }

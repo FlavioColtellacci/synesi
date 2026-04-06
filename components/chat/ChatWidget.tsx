@@ -120,10 +120,36 @@ const DEFAULT_MEMORY_PROFILE: SigmaMemoryProfile = {
   profile: {},
 }
 
-export default function ChatWidget() {
+export type ChatWidgetProps = {
+  /** FAB: floating button + sheet/panel. Full page: inline conversation (Sigma workspace). */
+  variant?: "fab" | "fullpage"
+  /**
+   * When set, history and sends target this thread. Omit to use the server-resolved primary (oldest) thread.
+   * FAB should omit this so the widget stays on primary; full-page Sigma passes the active route thread.
+   */
+  threadId?: string
+}
+
+function buildChatHistoryUrl(resolvedThreadId?: string) {
+  const trimmed = resolvedThreadId?.trim()
+  if (!trimmed) return "/api/chat/history"
+  return `/api/chat/history?threadId=${encodeURIComponent(trimmed)}`
+}
+
+function pickPrimaryThreadIdFromList(threads: { id: string; created_at?: string }[]): string | null {
+  if (threads.length === 0) return null
+  const dated = threads.filter((t) => typeof t.created_at === "string")
+  if (dated.length === 0) return threads[0]?.id ?? null
+  return dated.reduce((oldest, t) =>
+    new Date(t.created_at!) < new Date(oldest.created_at!) ? t : oldest,
+  ).id
+}
+
+export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProps = {}) {
+  const isFullpage = variant === "fullpage"
   const pathname = usePathname()
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(isFullpage)
   const [unreadAssistantReplies, setUnreadAssistantReplies] = useState(0)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
@@ -132,6 +158,8 @@ export default function ChatWidget() {
   const [isMemoryLoading, setIsMemoryLoading] = useState(false)
   const [isMemorySaving, setIsMemorySaving] = useState(false)
   const [hasHydratedMemory, setHasHydratedMemory] = useState(false)
+  const [primaryThreadId, setPrimaryThreadId] = useState<string | null>(null)
+  const [primaryLookupDone, setPrimaryLookupDone] = useState(false)
   const [memoryProfile, setMemoryProfile] = useState<SigmaMemoryProfile>(DEFAULT_MEMORY_PROFILE)
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false)
   const [isConfirmingAction, setIsConfirmingAction] = useState<string | null>(null)
@@ -156,10 +184,74 @@ export default function ChatWidget() {
     startHeight: number
   } | null>(null)
   const isOpenRef = useRef(false)
+  const prevThreadIdForResetRef = useRef<string | undefined>(undefined)
+
+  /** Sigma memory profile is stored per user on the primary thread only; hide toggles on secondary full-page threads. */
+  const showMemoryControls =
+    !isFullpage ||
+    !threadId ||
+    (primaryLookupDone && threadId === primaryThreadId)
 
   useLayoutEffect(() => {
     isOpenRef.current = isOpen
   }, [isOpen])
+
+  useEffect(() => {
+    if (isFullpage) {
+      setIsOpen(true)
+    }
+  }, [isFullpage])
+
+  useEffect(() => {
+    if (!isFullpage) {
+      setPrimaryLookupDone(true)
+      setPrimaryThreadId(null)
+      prevThreadIdForResetRef.current = threadId
+      return
+    }
+    if (!threadId) {
+      setPrimaryLookupDone(true)
+      setPrimaryThreadId(null)
+      return
+    }
+    setPrimaryLookupDone(false)
+    let cancelled = false
+    void (async () => {
+      try {
+        const response = await fetch("/api/chat/threads")
+        const payload = (await response.json()) as { threads?: { id: string; created_at?: string }[] }
+        const list = Array.isArray(payload.threads) ? payload.threads : []
+        if (!cancelled) {
+          setPrimaryThreadId(pickPrimaryThreadIdFromList(list))
+          setPrimaryLookupDone(true)
+        }
+      } catch {
+        if (!cancelled) {
+          setPrimaryThreadId(null)
+          setPrimaryLookupDone(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isFullpage, threadId])
+
+  useEffect(() => {
+    if (!isFullpage) {
+      prevThreadIdForResetRef.current = threadId
+      return
+    }
+    const prev = prevThreadIdForResetRef.current
+    prevThreadIdForResetRef.current = threadId
+    if (prev === undefined && threadId === undefined) return
+    if (prev === threadId) return
+    setHasHydratedHistory(false)
+    setMessages([])
+    setInput("")
+    setAttachments([])
+    setUnreadAssistantReplies(0)
+  }, [isFullpage, threadId])
 
   const chatHistory = useMemo<ChatRequestMessage[]>(
     () => messages.map((message) => ({ role: message.role, content: message.content })),
@@ -179,7 +271,8 @@ export default function ChatWidget() {
     () => false,
   )
   const compactSigmaHeader =
-    viewportBelowSm || panelSize.width < SIGMA_CHAT_COMPACT_HEADER_MAX_WIDTH
+    viewportBelowSm ||
+    (!isFullpage && panelSize.width < SIGMA_CHAT_COMPACT_HEADER_MAX_WIDTH)
   const showStarterExamples =
     !hasUserMessages && (!isHydratingHistory || messages.length === 0)
   const quickActions = useMemo(() => {
@@ -194,6 +287,9 @@ export default function ChatWidget() {
     return actions.slice(0, 8)
   }, [])
   const webIntentPreview = useMemo(() => isWebLookupIntent(input), [input])
+  const chatInputId = threadId?.trim()
+    ? `synesi-chat-input-${threadId.trim()}`
+    : "synesi-chat-input-primary"
 
   useEffect(() => {
     const element = messageContainerRef.current
@@ -233,17 +329,18 @@ export default function ChatWidget() {
       observer?.disconnect()
       window.removeEventListener("resize", measureInputHintOverflow)
     }
-  }, [input, isOpen, panelSize.width])
+  }, [input, isFullpage, isOpen, panelSize.width])
 
   useEffect(() => {
-    if (!isOpen || hasHydratedHistory) return
+    const shouldHydrate = isFullpage || isOpen
+    if (!shouldHydrate || hasHydratedHistory) return
 
     let cancelled = false
 
     async function hydrateHistory() {
       setIsHydratingHistory(true)
       try {
-        const response = await fetch("/api/chat/history", { method: "GET" })
+        const response = await fetch(buildChatHistoryUrl(threadId), { method: "GET" })
         const payload = (await response.json()) as { messages?: ChatMessage[] }
 
         if (cancelled) return
@@ -271,14 +368,16 @@ export default function ChatWidget() {
     return () => {
       cancelled = true
     }
-  }, [isOpen, hasHydratedHistory])
+  }, [isFullpage, isOpen, hasHydratedHistory, threadId])
 
   useEffect(() => {
-    if (!isOpen || hasHydratedMemory) return
+    const shouldLoadMemory = isFullpage || isOpen
+    if (!shouldLoadMemory || hasHydratedMemory) return
     void loadMemoryProfile().finally(() => setHasHydratedMemory(true))
-  }, [isOpen, hasHydratedMemory])
+  }, [isFullpage, isOpen, hasHydratedMemory])
 
   useEffect(() => {
+    if (isFullpage) return
     function clamp(value: number, min: number, max: number) {
       return Math.min(Math.max(value, min), max)
     }
@@ -334,7 +433,7 @@ export default function ChatWidget() {
       document.body.style.userSelect = ""
       document.body.style.cursor = ""
     }
-  }, [])
+  }, [isFullpage])
 
   function handleResizeStart(direction: ResizeDirection, event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === "touch") return
@@ -529,6 +628,7 @@ export default function ChatWidget() {
           message,
           messages: chatHistory,
           attachmentIds: readyAttachments.map((attachment) => attachment.id),
+          ...(threadId?.trim() ? { threadId: threadId.trim() } : {}),
           context: {
             currentPath: pathname,
             webSearchEnabled: isWebSearchEnabled,
@@ -614,7 +714,7 @@ export default function ChatWidget() {
 
     setIsClearingHistory(true)
     try {
-      await fetch("/api/chat/history", { method: "DELETE" })
+      await fetch(buildChatHistoryUrl(threadId), { method: "DELETE" })
     } catch {
       // Keep UI reset even if network call fails.
     } finally {
@@ -666,91 +766,32 @@ export default function ChatWidget() {
     }
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        aria-label={
-          unreadAssistantReplies > 0
-            ? `Open Synesi assistant, ${unreadAssistantReplies} new ${unreadAssistantReplies === 1 ? "reply" : "replies"}`
-            : "Open Synesi assistant"
-        }
-        onClick={() => {
-          setIsOpen((current) => {
-            const next = !current
-            if (next) {
-              setUnreadAssistantReplies(0)
-              trackAppEvent("chat_widget_open", { currentPath: pathname })
-            }
-            return next
-          })
-        }}
-        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transform-gpu transition-[transform,box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-110 hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22] hover:shadow-2xl hover:shadow-black/45 active:scale-100"
-      >
-        <span
-          aria-hidden="true"
-          className="font-mono text-xl text-[#F0F0F0]"
-          style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
-        >
-          Σ
-        </span>
-        {unreadAssistantReplies > 0 ? (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full border border-[#0A0A0C] bg-[#00D1B2] px-1 font-mono text-[10px] font-semibold leading-none text-[#0A0A0C]"
-          >
-            {unreadAssistantReplies > 9 ? "9+" : unreadAssistantReplies}
-          </span>
-        ) : null}
-      </button>
-
-      <AnimatePresence>
-        {isOpen
-          ? [
-              <motion.div
-                key="sigma-backdrop"
-                role="presentation"
-                aria-hidden
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="fixed inset-0 z-[65] cursor-default bg-black/35 backdrop-blur-[1px]"
-                onClick={() => setIsOpen(false)}
-              />,
-              <motion.section
-                key="sigma-panel"
-                initial={{ opacity: 0, y: 12, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.99 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                style={
-                  {
-                    "--sigma-chat-width": `${panelSize.width}px`,
-                    "--sigma-chat-height": `${panelSize.height}px`,
-                  } as CSSProperties
-                }
-                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-8.5rem)] sm:max-w-[min(calc(100vw-1.5rem),1120px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
-              >
+  function renderSigmaPanelBody() {
+    return (
+      <>
+        {!isFullpage ? (
+          <>
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden -translate-y-[120%] items-center gap-1 rounded-full border border-[#2A2A32] bg-[#0F0F12]/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[#6B6B7B] sm:inline-flex">
               <span aria-hidden="true">↖</span>
               Drag to resize
             </div>
-          <div
-            aria-hidden="true"
-            onPointerDown={(event) => handleResizeStart("top-left", event)}
-            className="absolute left-0 top-0 z-10 hidden h-5 w-5 cursor-nwse-resize sm:block"
-          />
-          <div
-            aria-hidden="true"
-            onPointerDown={(event) => handleResizeStart("top", event)}
-            className="absolute left-5 right-0 top-0 z-10 hidden h-2 cursor-ns-resize sm:block"
-          />
-          <div
-            aria-hidden="true"
-            onPointerDown={(event) => handleResizeStart("left", event)}
-            className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
-          />
+            <div
+              aria-hidden="true"
+              onPointerDown={(event) => handleResizeStart("top-left", event)}
+              className="absolute left-0 top-0 z-10 hidden h-5 w-5 cursor-nwse-resize sm:block"
+            />
+            <div
+              aria-hidden="true"
+              onPointerDown={(event) => handleResizeStart("top", event)}
+              className="absolute left-5 right-0 top-0 z-10 hidden h-2 cursor-ns-resize sm:block"
+            />
+            <div
+              aria-hidden="true"
+              onPointerDown={(event) => handleResizeStart("left", event)}
+              className="absolute bottom-0 left-0 top-5 z-10 hidden w-2 cursor-ew-resize sm:block"
+            />
+          </>
+        ) : null}
           <header
             className={
               compactSigmaHeader
@@ -761,24 +802,26 @@ export default function ChatWidget() {
             {compactSigmaHeader ? (
               <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
                 <div className="flex min-w-0 items-center justify-start">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextEnabled = !memoryProfile.enabled
-                      setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
-                      void toggleMemoryEnabled(nextEnabled)
-                    }}
-                    disabled={isMemoryLoading || isMemorySaving}
-                    aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                    title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
-                    className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
-                      memoryProfile.enabled
-                        ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
-                        : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
-                    }`}
-                  >
-                    {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
-                  </button>
+                  {showMemoryControls ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextEnabled = !memoryProfile.enabled
+                        setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
+                        void toggleMemoryEnabled(nextEnabled)
+                      }}
+                      disabled={isMemoryLoading || isMemorySaving}
+                      aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
+                      title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                      className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
+                        memoryProfile.enabled
+                          ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
+                          : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
+                      }`}
+                    >
+                      {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="pointer-events-none flex min-w-0 items-center justify-center gap-2 sm:gap-2.5">
                   <span
@@ -808,36 +851,40 @@ export default function ChatWidget() {
                       {isClearingHistory ? "CLEARING" : "CLEAR"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="shrink-0 rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                  >
-                    CLOSE
-                  </button>
+                  {!isFullpage ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsOpen(false)}
+                      className="shrink-0 rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                    >
+                      CLOSE
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : (
               <>
                 <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextEnabled = !memoryProfile.enabled
-                      setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
-                      void toggleMemoryEnabled(nextEnabled)
-                    }}
-                    disabled={isMemoryLoading || isMemorySaving}
-                    aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                    title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
-                    className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
-                      memoryProfile.enabled
-                        ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
-                        : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
-                    }`}
-                  >
-                    {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
-                  </button>
+                  {showMemoryControls ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextEnabled = !memoryProfile.enabled
+                        setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
+                        void toggleMemoryEnabled(nextEnabled)
+                      }}
+                      disabled={isMemoryLoading || isMemorySaving}
+                      aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
+                      title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                      className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
+                        memoryProfile.enabled
+                          ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
+                          : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
+                      }`}
+                    >
+                      {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="pointer-events-none flex shrink-0 items-center justify-center gap-2 sm:gap-2.5">
                   <span
@@ -867,13 +914,15 @@ export default function ChatWidget() {
                       {isClearingHistory ? "CLEARING" : "CLEAR"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                  >
-                    CLOSE
-                  </button>
+                  {!isFullpage ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsOpen(false)}
+                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
+                    >
+                      CLOSE
+                    </button>
+                  ) : null}
                 </div>
               </>
             )}
@@ -1079,7 +1128,7 @@ export default function ChatWidget() {
             onDragLeave={() => setIsDraggingFiles(false)}
             onDrop={handleDrop}
           >
-            <label htmlFor="synesi-chat-input" className="sr-only">
+            <label htmlFor={chatInputId} className="sr-only">
               Ask the Synesi assistant
             </label>
             {attachments.length > 0 ? (
@@ -1160,7 +1209,7 @@ export default function ChatWidget() {
               </button>
               <label className="relative block w-full">
                 <input
-                  id="synesi-chat-input"
+                  id={chatInputId}
                   value={input}
                   maxLength={900}
                   onChange={(event) => setInput(event.target.value)}
@@ -1217,6 +1266,88 @@ export default function ChatWidget() {
               </p>
             ) : null}
           </form>
+      </>
+    )
+  }
+
+  if (isFullpage) {
+    return (
+      <section
+        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#111116]"
+        aria-label="Sigma conversation"
+      >
+        {renderSigmaPanelBody()}
+      </section>
+    )
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={
+          unreadAssistantReplies > 0
+            ? `Open Synesi assistant, ${unreadAssistantReplies} new ${unreadAssistantReplies === 1 ? "reply" : "replies"}`
+            : "Open Synesi assistant"
+        }
+        onClick={() => {
+          setIsOpen((current) => {
+            const next = !current
+            if (next) {
+              setUnreadAssistantReplies(0)
+              trackAppEvent("chat_widget_open", { currentPath: pathname })
+            }
+            return next
+          })
+        }}
+        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border border-[#F0F0F0]/35 bg-[#141418] shadow-lg shadow-black/30 transform-gpu transition-[transform,box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-110 hover:border-[#F0F0F0]/70 hover:bg-[#1C1C22] hover:shadow-2xl hover:shadow-black/45 active:scale-100"
+      >
+        <span
+          aria-hidden="true"
+          className="font-mono text-xl text-[#F0F0F0]"
+          style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+        >
+          Σ
+        </span>
+        {unreadAssistantReplies > 0 ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full border border-[#0A0A0C] bg-[#00D1B2] px-1 font-mono text-[10px] font-semibold leading-none text-[#0A0A0C]"
+          >
+            {unreadAssistantReplies > 9 ? "9+" : unreadAssistantReplies}
+          </span>
+        ) : null}
+      </button>
+
+      <AnimatePresence>
+        {isOpen
+          ? [
+              <motion.div
+                key="sigma-backdrop"
+                role="presentation"
+                aria-hidden
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="fixed inset-0 z-[65] cursor-default bg-black/35 backdrop-blur-[1px]"
+                onClick={() => setIsOpen(false)}
+              />,
+              <motion.section
+                key="sigma-panel"
+                initial={{ opacity: 0, y: 12, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.99 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                style={
+                  {
+                    "--sigma-chat-width": `${panelSize.width}px`,
+                    "--sigma-chat-height": `${panelSize.height}px`,
+                  } as CSSProperties
+                }
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-8.5rem)] sm:max-w-[min(calc(100vw-1.5rem),1120px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
+              >
+                {renderSigmaPanelBody()}
               </motion.section>,
             ]
           : null}
