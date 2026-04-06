@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import NavLinks from '@/components/layout/NavLinks'
 import SignOutButton from '@/components/layout/SignOutButton'
-import ChatWidget from '@/components/chat/ChatWidget'
+import AppChatWidgetGate from '@/components/layout/AppChatWidgetGate'
 import { AppMainTransition } from '@/components/layout/AppMainTransition'
 import TrialStatusBanner from '@/components/billing/TrialStatusBanner'
 import { createClient } from '@/lib/supabase/server'
@@ -66,7 +66,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
         {!hasActiveSubscription && isTrialUser ? <TrialStatusBanner trialState={trialState} /> : null}
         <AppMainTransition>{children}</AppMainTransition>
       </main>
-      <ChatWidget />
+      <AppChatWidgetGate />
     </>
   )
 }

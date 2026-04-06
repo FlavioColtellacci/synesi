@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { enforceResponseGuardrails, enforceResponseGuardrailsWithTelemetry } from "@/lib/chat/guard"
 import { getLatestSigmaMonitorRun } from "@/lib/chat/monitor"
-import { getUserSigmaMemoryProfile, persistChatExchange, syncUserReleaseRing } from "@/lib/chat/store"
+import {
+  getUserSigmaMemoryProfile,
+  persistChatExchange,
+  resolveOptionalThreadIdForUser,
+  syncUserReleaseRing,
+} from "@/lib/chat/store"
 import { extractFirstUrl, fetchSafeWebContext } from "@/lib/chat/web-context"
 import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
@@ -20,6 +25,8 @@ type ChatRequestBody = {
   message?: string
   messages?: ChatRequestMessage[]
   attachmentIds?: string[]
+  /** Omit or empty → persist to primary (oldest) thread. */
+  threadId?: string
   context?: {
     currentPath?: string
     webSearchEnabled?: boolean
@@ -830,6 +837,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const threadResolve = await resolveOptionalThreadIdForUser(supabase, user.id, body.threadId)
+    if (!threadResolve.ok) {
+      return NextResponse.json({ error: threadResolve.error }, { status: threadResolve.status })
+    }
+    const persistThreadId = threadResolve.threadId
+
     const userReleaseRing = resolveReleaseRing({ userId: user.id, email: user.email })
     const memoryTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_MEMORY_TARGET_RING, "internal")
     const evalTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_EVAL_TARGET_RING, "internal")
@@ -868,7 +881,7 @@ export async function POST(request: Request) {
       if (monitor) {
         const monitorResponse = mapMonitorSnapshotToChatResponse(monitor)
         try {
-          await persistChatExchange(supabase, user.id, latestMessage, monitorResponse)
+          await persistChatExchange(supabase, user.id, latestMessage, monitorResponse, persistThreadId)
         } catch (persistError) {
           console.warn(
             JSON.stringify({
@@ -1242,7 +1255,13 @@ export async function POST(request: Request) {
               : finalResponsePayloadWithWebContext
 
             try {
-              await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload)
+              await persistChatExchange(
+                supabase,
+                user.id,
+                latestMessage,
+                gatedFinalResponsePayload,
+                persistThreadId,
+              )
             } catch (persistError) {
               console.warn(
                 JSON.stringify({
@@ -1391,7 +1410,7 @@ export async function POST(request: Request) {
       : finalResponsePayloadWithWebContext
 
     try {
-      await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload)
+      await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload, persistThreadId)
     } catch (persistError) {
       console.warn(
         JSON.stringify({

@@ -409,6 +409,99 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          id: string
+          thread_id: string
+          user_id: string
+          role: string
+          content: string
+          metadata: Record<string, unknown>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          thread_id: string
+          user_id: string
+          role: string
+          content: string
+          metadata?: Record<string, unknown>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          thread_id?: string
+          user_id?: string
+          role?: string
+          content?: string
+          metadata?: Record<string, unknown>
+          created_at?: string
+        }
+        Relationships: []
+      }
+      chat_threads: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          created_at: string
+          updated_at: string
+          memory_enabled: boolean
+          memory_profile: Record<string, unknown>
+          memory_profile_updated_at: string | null
+          release_ring: string
+          project_id: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string
+          created_at?: string
+          updated_at?: string
+          memory_enabled?: boolean
+          memory_profile?: Record<string, unknown>
+          memory_profile_updated_at?: string | null
+          release_ring?: string
+          project_id?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          created_at?: string
+          updated_at?: string
+          memory_enabled?: boolean
+          memory_profile?: Record<string, unknown>
+          memory_profile_updated_at?: string | null
+          release_ring?: string
+          project_id?: string | null
+        }
+        Relationships: []
+      }
+      sigma_projects: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_uploaded_documents: {
         Row: {
           id: string
