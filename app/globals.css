@@ -61,6 +61,15 @@
   --color-synesi-at-risk: #FFB800;
   --color-synesi-broken: #FF3B30;
 
+  /* Sigma “Obsidian Loom” chat (Stitch reference) */
+  --color-sigma-obsidian-bg: #050505;
+  --color-sigma-obsidian-surface: #121212;
+  --color-sigma-obsidian-surface-container: #1a1a1a;
+  --color-sigma-obsidian-outline: #2a2a2a;
+  --color-sigma-obsidian-on-surface: #e5e2e1;
+  --color-sigma-obsidian-on-surface-variant: #888888;
+  --color-sigma-obsidian-primary: #888888;
+
   /* SYNESI font tokens */
   /* Make all "sans" text use the same monospace family for consistency. */
   --font-sans: var(--font-jetbrains), monospace;
@@ -206,6 +215,21 @@ body {
 
 .sigma-scrollbar::-webkit-scrollbar-thumb:active {
   background: rgba(240, 240, 240, 0.7);
+}
+
+/* Sigma Obsidian chat column — matches Stitch scrollbar thumb */
+.sigma-obsidian-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.sigma-obsidian-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sigma-obsidian-scrollbar::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 10px;
 }
 
 /* Sigma “Thinking” / typing dots — subtle vertical bounce, staggered */

@@ -12,11 +12,28 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react"
+import {
+  Content as DropdownMenuContent,
+  Item as DropdownMenuItem,
+  Portal as DropdownMenuPortal,
+  Root as DropdownMenuRoot,
+  Trigger as DropdownMenuTrigger,
+} from "@radix-ui/react-dropdown-menu"
 import { AnimatePresence, motion } from "framer-motion"
+import { ArrowUp, Check, Globe, MoreHorizontal, Paperclip, Share2 } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { trackAppEvent } from "@/lib/analytics"
+import { cn } from "@/lib/utils"
 import { renderAssistantContent, renderUserContent } from "@/components/chat/message-rendering"
 import { SigmaThinkingIndicator } from "@/components/chat/SigmaThinkingIndicator"
+import {
+  clearFabSession,
+  expireFabThread,
+  isFabSessionExpired,
+  readFabSession,
+  touchFabSession,
+  writeFabSession,
+} from "@/lib/chat/fab-session"
 import { isWebLookupIntent } from "@/lib/chat/web-intent"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
 
@@ -96,6 +113,18 @@ const SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED = readClientBooleanFlag(
 )
 const PHASE1_ROUTING_VISIBLE = SIGMA_PHASE1_SKILLS_ROUTER_ENABLED || SIGMA_PHASE1_PLAN_THEN_ANSWER_ENABLED
 
+function SigmaMessageAvatar() {
+  return (
+    <span
+      aria-hidden
+      className="select-none font-mono text-[15px] font-semibold leading-none text-white"
+      style={{ textShadow: "-1px 0 0 rgba(255,50,50,0.65), 1px 0 0 rgba(0,210,255,0.65)" }}
+    >
+      Σ
+    </span>
+  )
+}
+
 const QUICK_ACTIONS_BASE = [
   "Show my latest Sigma monitor summary",
   "How do I create a thesis?",
@@ -124,8 +153,8 @@ export type ChatWidgetProps = {
   /** FAB: floating button + sheet/panel. Full page: inline conversation (Sigma workspace). */
   variant?: "fab" | "fullpage"
   /**
-   * When set, history and sends target this thread. Omit to use the server-resolved primary (oldest) thread.
-   * FAB should omit this so the widget stays on primary; full-page Sigma passes the active route thread.
+   * When set, history and sends target this thread. Full-page Sigma passes the active route thread.
+   * FAB omits this: uses an ephemeral session thread (see `lib/chat/fab-session.ts`) with a TTL.
    */
   threadId?: string
 }
@@ -172,6 +201,10 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
     width: DEFAULT_PANEL_WIDTH,
     height: DEFAULT_PANEL_HEIGHT,
   })
+  const [shareHint, setShareHint] = useState<null | "copied" | "error">(null)
+  /** FAB-only: dedicated quick-chat thread (not the workspace primary). */
+  const [fabThreadId, setFabThreadId] = useState<string | null>(null)
+  const [fabSessionReady, setFabSessionReady] = useState(isFullpage)
   const messageContainerRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const inputHintViewportRef = useRef<HTMLSpanElement | null>(null)
@@ -204,10 +237,27 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
 
   useEffect(() => {
     if (!isFullpage) {
-      setPrimaryLookupDone(true)
-      setPrimaryThreadId(null)
-      prevThreadIdForResetRef.current = threadId
-      return
+      setPrimaryLookupDone(false)
+      let cancelled = false
+      void (async () => {
+        try {
+          const response = await fetch("/api/chat/threads")
+          const payload = (await response.json()) as { threads?: { id: string; created_at?: string }[] }
+          const list = Array.isArray(payload.threads) ? payload.threads : []
+          if (!cancelled) {
+            setPrimaryThreadId(pickPrimaryThreadIdFromList(list))
+            setPrimaryLookupDone(true)
+          }
+        } catch {
+          if (!cancelled) {
+            setPrimaryThreadId(null)
+            setPrimaryLookupDone(true)
+          }
+        }
+      })()
+      return () => {
+        cancelled = true
+      }
     }
     if (!threadId) {
       setPrimaryLookupDone(true)
@@ -253,6 +303,70 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
     setUnreadAssistantReplies(0)
   }, [isFullpage, threadId])
 
+  useEffect(() => {
+    if (!shareHint) return
+    const ms = shareHint === "error" ? 2800 : 2000
+    const t = window.setTimeout(() => setShareHint(null), ms)
+    return () => window.clearTimeout(t)
+  }, [shareHint])
+
+  useEffect(() => {
+    if (isFullpage || !isOpen || !primaryLookupDone) return
+
+    let cancelled = false
+
+    void (async () => {
+      const session = readFabSession()
+      if (session && !isFabSessionExpired(session)) {
+        touchFabSession()
+        if (!cancelled) {
+          setFabThreadId(session.threadId)
+          setFabSessionReady(true)
+        }
+        return
+      }
+
+      if (session?.threadId) {
+        try {
+          await expireFabThread(session.threadId, primaryThreadId)
+        } catch {
+          /* ignore */
+        }
+        clearFabSession()
+      }
+
+      if (cancelled) return
+
+      try {
+        const res = await fetch("/api/chat/threads", { method: "POST" })
+        const payload = (await res.json()) as { thread?: { id: string } }
+        if (!res.ok || !payload.thread?.id) throw new Error("fab thread")
+        const newId = payload.thread.id
+        writeFabSession({ threadId: newId, lastActivityAt: Date.now() })
+        if (!cancelled) {
+          setFabThreadId(newId)
+          setMessages([])
+          setHasHydratedHistory(false)
+          setFabSessionReady(true)
+        }
+      } catch {
+        if (!cancelled) {
+          setFabThreadId(null)
+          setFabSessionReady(true)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isFullpage, isOpen, primaryLookupDone, primaryThreadId])
+
+  useEffect(() => {
+    if (isFullpage || !fabThreadId) return
+    setHasHydratedHistory(false)
+  }, [isFullpage, fabThreadId])
+
   const chatHistory = useMemo<ChatRequestMessage[]>(
     () => messages.map((message) => ({ role: message.role, content: message.content })),
     [messages],
@@ -273,8 +387,14 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
   const compactSigmaHeader =
     viewportBelowSm ||
     (!isFullpage && panelSize.width < SIGMA_CHAT_COMPACT_HEADER_MAX_WIDTH)
+  const effectiveThreadId = useMemo(() => {
+    if (isFullpage) return threadId?.trim() || undefined
+    return fabThreadId ?? undefined
+  }, [isFullpage, threadId, fabThreadId])
   const showStarterExamples =
-    !hasUserMessages && (!isHydratingHistory || messages.length === 0)
+    !hasUserMessages &&
+    (!isHydratingHistory || messages.length === 0) &&
+    (isFullpage || fabSessionReady)
   const quickActions = useMemo(() => {
     const actions = [...QUICK_ACTIONS_BASE]
     if (SIGMA_PHASE1_SKILLS_ROUTER_ENABLED) {
@@ -287,8 +407,8 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
     return actions.slice(0, 8)
   }, [])
   const webIntentPreview = useMemo(() => isWebLookupIntent(input), [input])
-  const chatInputId = threadId?.trim()
-    ? `synesi-chat-input-${threadId.trim()}`
+  const chatInputId = effectiveThreadId
+    ? `synesi-chat-input-${effectiveThreadId}`
     : "synesi-chat-input-primary"
 
   useEffect(() => {
@@ -334,13 +454,14 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
   useEffect(() => {
     const shouldHydrate = isFullpage || isOpen
     if (!shouldHydrate || hasHydratedHistory) return
+    if (!isFullpage && (!fabSessionReady || !fabThreadId)) return
 
     let cancelled = false
 
     async function hydrateHistory() {
       setIsHydratingHistory(true)
       try {
-        const response = await fetch(buildChatHistoryUrl(threadId), { method: "GET" })
+        const response = await fetch(buildChatHistoryUrl(effectiveThreadId), { method: "GET" })
         const payload = (await response.json()) as { messages?: ChatMessage[] }
 
         if (cancelled) return
@@ -368,7 +489,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
     return () => {
       cancelled = true
     }
-  }, [isFullpage, isOpen, hasHydratedHistory, threadId])
+  }, [isFullpage, isOpen, hasHydratedHistory, effectiveThreadId, fabSessionReady, fabThreadId])
 
   useEffect(() => {
     const shouldLoadMemory = isFullpage || isOpen
@@ -591,6 +712,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
     if (!message || isSending) return
+    if (!isFullpage && !effectiveThreadId) return
     const readyAttachments = attachments.filter((attachment) => attachment.status === "ready")
 
     const userMessage: ChatMessage = {
@@ -628,7 +750,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
           message,
           messages: chatHistory,
           attachmentIds: readyAttachments.map((attachment) => attachment.id),
-          ...(threadId?.trim() ? { threadId: threadId.trim() } : {}),
+          ...(effectiveThreadId ? { threadId: effectiveThreadId } : {}),
           context: {
             currentPath: pathname,
             webSearchEnabled: isWebSearchEnabled,
@@ -688,6 +810,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
         escalation: assistantMessage.escalation ?? "none",
       })
       setAttachments([])
+      if (!isFullpage) touchFabSession()
     } catch {
       setMessages((current) => [
         ...current,
@@ -711,10 +834,11 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
 
   async function clearConversation() {
     if (isClearingHistory) return
+    if (!effectiveThreadId) return
 
     setIsClearingHistory(true)
     try {
-      await fetch(buildChatHistoryUrl(threadId), { method: "DELETE" })
+      await fetch(buildChatHistoryUrl(effectiveThreadId), { method: "DELETE" })
     } catch {
       // Keep UI reset even if network call fails.
     } finally {
@@ -724,6 +848,33 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
       setUnreadAssistantReplies(0)
       setHasHydratedHistory(true)
       setIsClearingHistory(false)
+    }
+  }
+
+  async function handleShareConversation() {
+    const url = typeof window !== "undefined" ? window.location.href : ""
+    if (!url) return
+
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "Sigma conversation",
+          text: "Open this Sigma conversation",
+          url,
+        })
+        return
+      } catch (err: unknown) {
+        const name =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : ""
+        if (name === "AbortError") return
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareHint("copied")
+    } catch {
+      setShareHint("error")
     }
   }
 
@@ -793,148 +944,133 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
           </>
         ) : null}
           <header
-            className={
-              compactSigmaHeader
-                ? "border-b border-[#2A2A32]/70 px-3 py-2.5 sm:px-4"
-                : "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-[#2A2A32]/70 px-3 py-2.5 sm:gap-3 sm:px-4"
-            }
-          >
-            {compactSigmaHeader ? (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
-                <div className="flex min-w-0 items-center justify-start">
-                  {showMemoryControls ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextEnabled = !memoryProfile.enabled
-                        setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
-                        void toggleMemoryEnabled(nextEnabled)
-                      }}
-                      disabled={isMemoryLoading || isMemorySaving}
-                      aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                      title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
-                      className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
-                        memoryProfile.enabled
-                          ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
-                          : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
-                      }`}
-                    >
-                      {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
-                    </button>
-                  ) : null}
-                </div>
-                <div className="pointer-events-none flex min-w-0 items-center justify-center gap-2 sm:gap-2.5">
-                  <span
-                    aria-hidden="true"
-                    className="shrink-0 font-mono text-base text-[#F0F0F0]"
-                    style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
-                  >
-                    Σ
-                  </span>
-                  <p className="truncate text-center font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
-                </div>
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
-                  {PHASE1_ROUTING_VISIBLE ? (
-                    <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
-                      Skills beta
-                    </span>
-                  ) : null}
-                  {hasUserMessages ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void clearConversation()
-                      }}
-                      disabled={isClearingHistory}
-                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isClearingHistory ? "CLEARING" : "CLEAR"}
-                    </button>
-                  ) : null}
-                  {!isFullpage ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsOpen(false)}
-                      className="shrink-0 rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                    >
-                      CLOSE
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
-                  {showMemoryControls ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextEnabled = !memoryProfile.enabled
-                        setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
-                        void toggleMemoryEnabled(nextEnabled)
-                      }}
-                      disabled={isMemoryLoading || isMemorySaving}
-                      aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
-                      title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
-                      className={`rounded-full border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] transition-colors ${
-                        memoryProfile.enabled
-                          ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8] hover:border-[#00D1B2]/70"
-                          : "border-[#2A2A32]/90 bg-[#15151B] text-[#8B8B9A] hover:border-[#F0F0F0]/35 hover:text-[#F0F0F0]"
-                      }`}
-                    >
-                      {isMemorySaving ? "Memory: ..." : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
-                    </button>
-                  ) : null}
-                </div>
-                <div className="pointer-events-none flex shrink-0 items-center justify-center gap-2 sm:gap-2.5">
-                  <span
-                    aria-hidden="true"
-                    className="font-mono text-base text-[#F0F0F0]"
-                    style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
-                  >
-                    Σ
-                  </span>
-                  <p className="whitespace-nowrap font-mono text-xs uppercase tracking-[0.22em] text-[#F0F0F0]">SIGMA</p>
-                </div>
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-1 gap-y-1 sm:gap-x-2 sm:gap-y-1">
-                  {PHASE1_ROUTING_VISIBLE ? (
-                    <span className="rounded-full border border-[#2A2A32]/90 bg-[#15151B] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#8B8B9A]">
-                      Skills beta
-                    </span>
-                  ) : null}
-                  {hasUserMessages ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void clearConversation()
-                      }}
-                      disabled={isClearingHistory}
-                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isClearingHistory ? "CLEARING" : "CLEAR"}
-                    </button>
-                  ) : null}
-                  {!isFullpage ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsOpen(false)}
-                      className="rounded-md border border-[#2A2A32]/80 px-2 py-1 font-mono text-[10px] tracking-widest text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
-                    >
-                      CLOSE
-                    </button>
-                  ) : null}
-                </div>
-              </>
+            className={cn(
+              "sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b border-[#2A2A2A] bg-[#050505]/50 backdrop-blur-md",
+              compactSigmaHeader ? "min-h-[3.25rem] flex-wrap px-3 py-2.5 sm:px-4" : "h-14 px-4 sm:px-6",
             )}
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="shrink-0 rounded border border-[#2A2A2A] px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-tight text-[#888888]">
+                Sigma 1.0
+              </span>
+              {showMemoryControls ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextEnabled = !memoryProfile.enabled
+                    setMemoryProfile((current) => ({ ...current, enabled: nextEnabled }))
+                    void toggleMemoryEnabled(nextEnabled)
+                  }}
+                  disabled={isMemoryLoading || isMemorySaving}
+                  aria-label={`Memory ${memoryProfile.enabled ? "on" : "off"}`}
+                  title={memoryProfile.enabled ? "Disable Sigma memory" : "Enable Sigma memory"}
+                  className="flex items-center gap-1.5 rounded px-0.5 py-0.5 transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      memoryProfile.enabled ? "bg-emerald-500" : "bg-slate-700",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="font-mono text-[9px] font-bold uppercase text-[#888888]">
+                    {isMemorySaving ? "Memory: …" : `Memory: ${memoryProfile.enabled ? "On" : "Off"}`}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            <div className="relative flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+              {PHASE1_ROUTING_VISIBLE ? (
+                <span className="rounded-full border border-[#2A2A2A] bg-[#121212] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.15em] text-[#888888]">
+                  Skills beta
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  void handleShareConversation()
+                }}
+                className="text-[#888888] transition-colors hover:text-[#e5e2e1]"
+                aria-label={
+                  typeof navigator !== "undefined" && typeof navigator.share === "function"
+                    ? "Share or copy conversation link"
+                    : "Copy conversation link"
+                }
+                title={
+                  typeof navigator !== "undefined" && typeof navigator.share === "function"
+                    ? "Share (mobile) or copy link"
+                    : "Copy link to this conversation"
+                }
+              >
+                {shareHint === "copied" ? (
+                  <Check className="h-[18px] w-[18px] text-emerald-400" aria-hidden strokeWidth={2.5} />
+                ) : (
+                  <Share2 className="h-[18px] w-[18px]" aria-hidden />
+                )}
+              </button>
+              <DropdownMenuRoot modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-[#888888] transition-colors hover:text-[#e5e2e1] data-[state=open]:text-[#e5e2e1]"
+                    aria-label="More options"
+                    title="More options"
+                  >
+                    <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={6}
+                    className="z-[80] min-w-[12rem] overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#121212] p-1 shadow-lg shadow-black/50"
+                  >
+                    <DropdownMenuItem
+                      className={cn(
+                        "cursor-pointer rounded px-2 py-2 text-sm text-[#e5e2e1] outline-none",
+                        "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+                        "data-[highlighted]:bg-[#1A1A1A]",
+                      )}
+                      disabled={!hasUserMessages || isClearingHistory}
+                      onSelect={() => {
+                        void clearConversation()
+                      }}
+                    >
+                      {isClearingHistory ? "Clearing conversation…" : "Clear conversation"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
+              {!isFullpage ? (
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="shrink-0 rounded-md border border-[#2A2A2A] px-2 py-1 font-mono text-[10px] tracking-widest text-[#888888] transition-colors hover:bg-[#1A1A1A] hover:text-[#e5e2e1]"
+                >
+                  CLOSE
+                </button>
+              ) : null}
+              {shareHint ? (
+                <span
+                  className="pointer-events-none absolute right-0 top-full z-20 mt-1 max-w-[min(90vw,16rem)] rounded border border-[#2A2A2A] bg-[#121212] px-2 py-1 text-center text-[11px] leading-snug text-[#e5e2e1] shadow-md"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {shareHint === "copied" ? "Link copied" : "Could not copy link"}
+                </span>
+              ) : null}
+            </div>
           </header>
 
           <div
             ref={messageContainerRef}
-            className={`sigma-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3 ${showStarterExamples ? "flex items-center justify-center" : ""}`}
+            className={`sigma-obsidian-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-10 ${showStarterExamples ? "flex items-center justify-center" : ""}`}
           >
-            <motion.div layout className="space-y-3">
-              {isHydratingHistory && !showStarterExamples ? (
-                <p className="font-mono text-xs text-[#6B6B7B]">Loading conversation…</p>
+            <motion.div layout className={`mx-auto w-full max-w-3xl ${showStarterExamples ? "space-y-5" : "space-y-12"}`}>
+              {!isFullpage && isOpen && (!fabSessionReady || !fabThreadId) ? (
+                <p className="font-mono text-xs text-[#888888]">Preparing quick chat…</p>
+              ) : isHydratingHistory && !showStarterExamples ? (
+                <p className="font-mono text-xs text-[#888888]">Loading conversation…</p>
               ) : null}
               {showStarterExamples ? (
                 <motion.div
@@ -945,12 +1081,12 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                 >
                   <div className="space-y-2">
                     <p
-                      className="font-mono text-[30px] leading-none text-[#F0F0F0]"
+                      className="font-mono text-[30px] leading-none text-[#e5e2e1]"
                       style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
                     >
                       Σ
                     </p>
-                    <p className="text-lg text-[#F0F0F0]">How can I help today?</p>
+                    <p className="text-lg text-[#e5e2e1]">How can I help today?</p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
                     {quickActions.map((action) => (
@@ -961,9 +1097,11 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                           void sendMessage(action)
                         }}
                         disabled={
-                          isSending || attachments.some((attachment) => attachment.status === "uploading")
+                          isSending ||
+                          attachments.some((attachment) => attachment.status === "uploading") ||
+                          (!isFullpage && !effectiveThreadId)
                         }
-                        className="rounded-full border border-[#2A2A32] bg-[#101018] px-4 py-1.5 text-sm text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 hover:bg-[#15151F] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-full border border-[#2A2A2A] bg-[#121212] px-4 py-1.5 text-sm text-[#e5e2e1] transition-colors hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {action}
                       </button>
@@ -981,14 +1119,23 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className={`flex w-full min-w-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex w-full min-w-0 ${message.role === "user" ? "flex-col items-end" : "items-start gap-4"}`}
                 >
+                  {message.role === "assistant" ? (
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#2A2A2A]"
+                      aria-hidden
+                    >
+                      <SigmaMessageAvatar />
+                    </div>
+                  ) : null}
                   <div
-                    className={`max-w-[min(92%,26rem)] min-w-0 rounded-2xl px-3 py-2 text-left break-words ${
+                    className={cn(
+                      "min-w-0 break-words text-left text-[13px] leading-relaxed",
                       message.role === "user"
-                        ? "rounded-br-md bg-[#202029] text-[#F3F3F8]"
-                        : "rounded-bl-md bg-[#14141A] text-[#ECECF2]"
-                    }`}
+                        ? "max-w-[85%] rounded-2xl rounded-br-md border border-[#2A2A2A] bg-[#121212] px-4 py-2.5 text-[#e5e2e1]"
+                        : "flex-1 space-y-4 pt-1 text-[#e5e2e1]",
+                    )}
                   >
                     {message.role === "assistant" ? (
                       renderAssistantContent(message.content)
@@ -1071,7 +1218,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                                 }}
                                 disabled={isBusy}
                                 title={action.rationale}
-                                className="rounded-full border border-[#2A2A32]/90 bg-[#101018] px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-[#D9D9E2] transition-colors hover:border-[#F0F0F0]/35 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-full border border-[#2A2A2A] bg-transparent px-3 py-1.5 text-[11px] text-[#888888] transition-colors hover:bg-[#1A1A1A] hover:text-[#e5e2e1] disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {isBusy ? "CONFIRMING..." : action.label}
                               </button>
@@ -1081,12 +1228,12 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                       </div>
                     ) : null}
                     {message.role === "assistant" && (message.retrievalEvidence?.length ?? 0) > 0 ? (
-                      <details className="mt-2 rounded-lg border border-[#2A2A32]/70 bg-[#101018]/80 px-2.5 py-2">
-                        <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-widest text-[#6B6B7B] marker:content-none [&::-webkit-details-marker]:hidden">
+                      <details className="mt-2 rounded-lg border border-[#2A2A2A]/70 bg-[#121212]/80 px-2.5 py-2">
+                        <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-widest text-[#888888] marker:content-none [&::-webkit-details-marker]:hidden">
                           Sources · {message.retrievalEvidence?.length ?? 0}{" "}
-                          <span className="font-sans normal-case tracking-normal text-[#5A5A68]">(tap to expand)</span>
+                          <span className="font-sans normal-case tracking-normal text-[#888888]/80">(tap to expand)</span>
                         </summary>
-                        <ul className="mt-2 space-y-1 border-t border-[#2A2A32]/50 pt-2 text-[11px] text-[#A8A8B8]">
+                        <ul className="mt-2 space-y-1 border-t border-[#2A2A2A]/50 pt-2 text-[11px] text-[#888888]">
                           {message.retrievalEvidence?.map((item, index) => (
                             <li key={`${item.source}-${index}`} className="leading-relaxed">
                               - {item.snippet}
@@ -1105,167 +1252,180 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex w-full justify-start"
+                  className="flex w-full items-start gap-4"
                 >
-                  <div className="inline-flex max-w-[min(92%,26rem)] items-center gap-2 rounded-2xl rounded-bl-md bg-[#14141A] px-3 py-2">
-                    <SigmaThinkingIndicator label="Thinking" />
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#2A2A2A]"
+                    aria-hidden
+                  >
+                    <SigmaMessageAvatar />
+                  </div>
+                  <div className="inline-flex min-w-0 flex-1 items-center gap-2 pt-1">
+                    <SigmaThinkingIndicator label="Thinking" labelClassName="text-[#888888]" />
                   </div>
                 </motion.div>
               ) : null}
             </motion.div>
           </div>
 
-          <form
-            className="border-t border-[#2A2A32] px-3 py-3"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void sendMessage(input)
-            }}
-            onDragOver={(event) => {
-              event.preventDefault()
-              setIsDraggingFiles(true)
-            }}
-            onDragLeave={() => setIsDraggingFiles(false)}
-            onDrop={handleDrop}
-          >
-            <label htmlFor={chatInputId} className="sr-only">
-              Ask the Synesi assistant
-            </label>
-            {attachments.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {attachments.map((attachment) => (
-                  <button
-                    key={attachment.id}
-                    type="button"
-                    onClick={() => {
-                      void removeAttachment(attachment)
-                    }}
-                    className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors ${
-                      attachment.status === "ready"
-                        ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200"
-                        : attachment.status === "failed"
-                          ? "border-rose-300/30 bg-rose-400/10 text-rose-200"
-                          : "border-[#3A3A46] bg-[#17171F] text-[#A8A8B8]"
-                    }`}
-                    title={attachment.extractionError ?? "Remove document"}
-                  >
-                    {attachment.fileName} · {formatBytes(attachment.sizeBytes)} · {attachment.status}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <div className="flex items-center gap-2 rounded-full border border-[#2A2A32]/85 bg-[#0B0B0F] px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.csv,.xlsx,.png,.jpg,.jpeg,image/png,image/jpeg"
-                className="hidden"
-                onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                  void handleFilesSelection(event.target.files)
-                  event.target.value = ""
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach files"
-                title="Attach files"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#2A2A32]/85 text-[#9A9AAA] transition-colors hover:text-[#F0F0F0]"
-              >
-                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M7.6 10.9 11.8 6.7a2.4 2.4 0 1 1 3.4 3.4l-5.7 5.7a3.4 3.4 0 1 1-4.8-4.8l6-6"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsWebSearchEnabled((current) => !current)}
-                aria-label={`Web search ${isWebSearchEnabled ? "on" : "off"}`}
-                title={
-                  isWebSearchEnabled
-                    ? "Web lookup is ON. Sigma runs it for messages classified as web lookup requests."
-                    : "Enable web lookup for messages like latest news, headlines, or explicit web search requests."
-                }
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
-                  isWebSearchEnabled
-                    ? "border-[#00D1B2]/45 bg-[#00D1B2]/10 text-[#8BE8D8]"
-                    : "border-[#2A2A32]/85 text-[#7D7D8D] hover:text-[#F0F0F0]"
-                }`}
-              >
-                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
-                  <path
-                    d="M2.9 8H13.1M8 2.5C9.4 4 10.2 5.9 10.2 8C10.2 10.1 9.4 12 8 13.5M8 2.5C6.6 4 5.8 5.9 5.8 8C5.8 10.1 6.6 12 8 13.5"
-                    stroke="currentColor"
-                    strokeWidth="1.1"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              <label className="relative block w-full">
-                <input
-                  id={chatInputId}
-                  value={input}
-                  maxLength={900}
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder=""
-                  className="peer w-full bg-transparent px-1 py-1.5 text-sm text-[#F0F0F0] outline-none"
-                />
-                {input.trim().length === 0 ? (
-                  <span
-                    ref={inputHintViewportRef}
-                    aria-hidden
-                    className="pointer-events-none absolute inset-y-0 left-1 right-1 flex items-center overflow-hidden text-sm text-[#6B6B7B] peer-focus:hidden"
-                  >
-                    <motion.span
-                      ref={inputHintTextRef}
-                      className="inline-block whitespace-nowrap"
-                      animate={inputHintOverflowPx > 0 ? { x: [0, -inputHintOverflowPx] } : { x: 0 }}
-                      transition={
-                        inputHintOverflowPx > 0
-                          ? {
-                              duration: Math.min(16, Math.max(8, inputHintOverflowPx / 14)),
-                              ease: "easeInOut",
-                              repeat: Number.POSITIVE_INFINITY,
-                              repeatType: "reverse",
-                              repeatDelay: 0.7,
-                              delay: 0.35,
-                            }
-                          : { duration: 0.12, ease: "linear" }
-                      }
+          <div className="bg-gradient-to-t from-[#050505] via-[#050505] to-transparent pb-8 pt-2">
+            <form
+              className="mx-auto w-full max-w-3xl px-4 sm:px-6"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void sendMessage(input)
+              }}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setIsDraggingFiles(true)
+              }}
+              onDragLeave={() => setIsDraggingFiles(false)}
+              onDrop={handleDrop}
+            >
+              <label htmlFor={chatInputId} className="sr-only">
+                Ask the Synesi assistant
+              </label>
+              {attachments.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {attachments.map((attachment) => (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      onClick={() => {
+                        void removeAttachment(attachment)
+                      }}
+                      className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors ${
+                        attachment.status === "ready"
+                          ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200"
+                          : attachment.status === "failed"
+                            ? "border-rose-300/30 bg-rose-400/10 text-rose-200"
+                            : "border-[#2A2A2A] bg-[#121212] text-[#888888]"
+                      }`}
+                      title={attachment.extractionError ?? "Remove document"}
                     >
-                      Ask Sigma about Synesi or your investing workflow...
-                    </motion.span>
+                      {attachment.fileName} · {formatBytes(attachment.sizeBytes)} · {attachment.status}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="group rounded-2xl border border-[#2A2A2A] bg-[#121212] p-2 pl-4 transition-colors focus-within:border-[#888888]/50">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.csv,.xlsx,.png,.jpg,.jpeg,image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      void handleFilesSelection(event.target.files)
+                      event.target.value = ""
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                    title="Attach files"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#888888] transition-colors hover:bg-[#1A1A1A] hover:text-[#e5e2e1]"
+                  >
+                    <Paperclip className="h-[18px] w-[18px]" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsWebSearchEnabled((current) => !current)}
+                    aria-label={`Web search ${isWebSearchEnabled ? "on" : "off"}`}
+                    title={
+                      isWebSearchEnabled
+                        ? "Web lookup is ON. Sigma runs it for messages classified as web lookup requests."
+                        : "Enable web lookup for messages like latest news, headlines, or explicit web search requests."
+                    }
+                    className={cn(
+                      "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+                      isWebSearchEnabled
+                        ? "bg-[#00D1B2]/10 text-[#8BE8D8] hover:bg-[#00D1B2]/15"
+                        : "text-[#888888] hover:bg-[#1A1A1A] hover:text-[#e5e2e1]",
+                    )}
+                  >
+                    <Globe className="h-[18px] w-[18px]" aria-hidden />
+                  </button>
+                  <label className="relative block min-w-0 flex-1">
+                    <input
+                      id={chatInputId}
+                      value={input}
+                      maxLength={900}
+                      onChange={(event) => setInput(event.target.value)}
+                      placeholder=""
+                      className="peer w-full border-none bg-transparent py-2.5 text-[13px] text-[#e5e2e1] outline-none ring-0 placeholder:text-[#888888]"
+                    />
+                    {input.trim().length === 0 ? (
+                      <span
+                        ref={inputHintViewportRef}
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center overflow-hidden text-[13px] text-[#888888] peer-focus:hidden"
+                      >
+                        <motion.span
+                          ref={inputHintTextRef}
+                          className="inline-block whitespace-nowrap"
+                          animate={inputHintOverflowPx > 0 ? { x: [0, -inputHintOverflowPx] } : { x: 0 }}
+                          transition={
+                            inputHintOverflowPx > 0
+                              ? {
+                                  duration: Math.min(16, Math.max(8, inputHintOverflowPx / 14)),
+                                  ease: "easeInOut",
+                                  repeat: Number.POSITIVE_INFINITY,
+                                  repeatType: "reverse",
+                                  repeatDelay: 0.7,
+                                  delay: 0.35,
+                                }
+                              : { duration: 0.12, ease: "linear" }
+                          }
+                        >
+                          Ask Sigma about Synesi or your investing workflow...
+                        </motion.span>
+                      </span>
+                    ) : null}
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={
+                      isSending ||
+                      input.trim().length === 0 ||
+                      attachments.some((item) => item.status === "uploading") ||
+                      (!isFullpage && !effectiveThreadId)
+                    }
+                    aria-busy={isSending}
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 font-bold text-[11px] text-black transition hover:bg-[#e5e2e1] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isSending ? (
+                      <SigmaThinkingIndicator compact />
+                    ) : (
+                      <ArrowUp className="h-4 w-4" aria-hidden strokeWidth={2.5} />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="mt-3 text-center text-[9px] font-medium tracking-wide text-[#888888]/50">
+                Sigma can make mistakes. Check important info.
+                {!isFullpage ? (
+                  <span className="mt-1 block text-[#888888]/70">
+                    Quick chat messages expire after 30 minutes without activity. Sigma memory still applies in the
+                    workspace.
                   </span>
                 ) : null}
-              </label>
-              <button
-                type="submit"
-                disabled={isSending || input.trim().length === 0 || attachments.some((item) => item.status === "uploading")}
-                aria-busy={isSending}
-                className="inline-flex min-w-[4.25rem] items-center justify-center rounded-full bg-[#F0F0F0] px-4 py-2 font-mono text-xs tracking-widest text-[#0A0A0C] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isSending ? <SigmaThinkingIndicator compact /> : "SEND"}
-              </button>
-            </div>
-            {isDraggingFiles ? (
-              <p className="mt-2 text-[11px] text-[#6B6B7B]">Drop files to upload.</p>
-            ) : null}
-            {isWebSearchEnabled ? (
-              <p className="mt-1 text-[11px] text-[#6B6B7B]">
-                {input.trim().length === 0
-                  ? "Web lookup is ON. Ask for latest news or explicitly request a web search to trigger it."
-                  : webIntentPreview
-                    ? "Web lookup will be attempted for this message."
-                    : "Web lookup is ON, but this message is not classified as a web lookup request."}
               </p>
-            ) : null}
-          </form>
+              {isDraggingFiles ? (
+                <p className="mt-2 text-[11px] text-[#888888]">Drop files to upload.</p>
+              ) : null}
+              {isWebSearchEnabled ? (
+                <p className="mt-1 text-[11px] text-[#888888]">
+                  {input.trim().length === 0
+                    ? "Web lookup is ON. Ask for latest news or explicitly request a web search to trigger it."
+                    : webIntentPreview
+                      ? "Web lookup will be attempted for this message."
+                      : "Web lookup is ON, but this message is not classified as a web lookup request."}
+                </p>
+              ) : null}
+            </form>
+          </div>
       </>
     )
   }
@@ -1273,7 +1433,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
   if (isFullpage) {
     return (
       <section
-        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#111116]"
+        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#050505]"
         aria-label="Sigma conversation"
       >
         {renderSigmaPanelBody()}
@@ -1345,7 +1505,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                     "--sigma-chat-height": `${panelSize.height}px`,
                   } as CSSProperties
                 }
-                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A32] bg-[#0F0F12] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-8.5rem)] sm:max-w-[min(calc(100vw-1.5rem),1120px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A32]/80 sm:bg-[#111116] sm:shadow-xl sm:shadow-black/35"
+                className="fixed inset-x-0 bottom-0 top-16 z-[70] flex flex-col border-t border-[#2A2A2A] bg-[#050505] sm:inset-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[var(--sigma-chat-height)] sm:w-[var(--sigma-chat-width)] sm:min-h-[520px] sm:min-w-[380px] sm:max-h-[calc(100vh-8.5rem)] sm:max-w-[min(calc(100vw-1.5rem),1120px)] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[#2A2A2A] sm:bg-[#050505] sm:shadow-xl sm:shadow-black/35"
               >
                 {renderSigmaPanelBody()}
               </motion.section>,
