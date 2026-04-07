@@ -113,7 +113,7 @@ function mapStoredMessage(row: PersistedRow): StoredChatMessage {
 
 /**
  * Primary thread = the user's oldest chat_threads row (created_at ASC).
- * Used for Sigma memory profile, release_ring sync, and the FAB when no threadId is passed.
+ * Used for Sigma memory profile and release_ring sync. The floating panel uses its own thread (see `fab-session.ts`).
  * Newer Sigma workspace threads are secondary until promoted (not implemented here).
  */
 export async function verifyThreadBelongsToUser(
