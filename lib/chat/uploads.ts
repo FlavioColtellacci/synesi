@@ -278,11 +278,13 @@ export async function buildUploadedDocumentContextBlock(
   supabase: SupabaseClient,
   userId: string,
   documentIds: string[],
+  options?: { omitDocumentIds?: Set<string> },
 ): Promise<UploadContextResult> {
   if (documentIds.length === 0) {
     return { block: null, evidenceSnippets: [], usedDocumentIds: [] }
   }
 
+  const omit = options?.omitDocumentIds
   const dedupedIds = [...new Set(documentIds)].slice(0, MAX_CONTEXT_DOCS)
   const { data } = await supabase
     .from("chat_uploaded_documents")
@@ -291,9 +293,10 @@ export async function buildUploadedDocumentContextBlock(
     .in("id", dedupedIds)
     .order("created_at", { ascending: false })
 
-  const readyDocs = (data ?? []).filter(
-    (row) => row.status === "ready" && typeof row.extracted_text === "string" && row.extracted_text.trim().length > 0,
-  )
+  const readyDocs = (data ?? []).filter((row) => {
+    if (omit?.has(row.id)) return false
+    return row.status === "ready" && typeof row.extracted_text === "string" && row.extracted_text.trim().length > 0
+  })
 
   if (readyDocs.length === 0) {
     return { block: null, evidenceSnippets: [], usedDocumentIds: [] }

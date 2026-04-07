@@ -12,6 +12,8 @@ import { buildChatSystemPrompt, type ChatSkillRoute } from "@/lib/chat/policy"
 import { normalizeHistory, parseAssistantResponse, parseAssistantTextFallback, parseStructuredPayload } from "@/lib/chat/parse"
 import { buildRagContextBlock } from "@/lib/chat/rag"
 import { buildUploadedDocumentContextBlock } from "@/lib/chat/uploads"
+import { buildVisionContentBlocksForAttachments } from "@/lib/chat/vision-attachments"
+import type { ContentBlockParam, ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources/messages/messages.js"
 import { createSigmaExportsForResponse } from "@/lib/chat/exports"
 import { resolveEvalGateDecision, runChatEvalHarness } from "@/lib/chat/evals"
 import { isRingIncludedInRollout, readRolloutTargetRing, resolveReleaseRing } from "@/lib/chat/release-rings"
@@ -83,14 +85,22 @@ function isRateLimited(userId: string, now: number) {
   return currentHits.length > RATE_LIMIT_MAX_REQUESTS
 }
 
-function toModelMessages(history: ChatRequestMessage[], latestMessage: string) {
-  return [
-    ...history.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-    { role: "user" as const, content: latestMessage },
-  ]
+function buildLlmMessages(
+  history: ChatRequestMessage[],
+  latestMessage: string,
+  visionBlocks: ImageBlockParam[],
+): MessageParam[] {
+  const prior = history.map((message) => ({
+    role: message.role,
+    content: message.content,
+  })) as MessageParam[]
+
+  if (visionBlocks.length === 0) {
+    return [...prior, { role: "user", content: latestMessage }]
+  }
+
+  const content: ContentBlockParam[] = [...visionBlocks, { type: "text", text: latestMessage }]
+  return [...prior, { role: "user", content }]
 }
 
 function buildPositionSummary(positions: PositionSnapshot[]) {
@@ -689,7 +699,7 @@ export async function runBoundedReadOnlyToolLoop(args: {
     model: string
     max_tokens: number
     system: string
-    messages: { role: "user" | "assistant"; content: string }[]
+    messages: MessageParam[]
   }
   supabase: Awaited<ReturnType<typeof createClient>>
   userId: string
@@ -1018,11 +1028,21 @@ export async function POST(request: Request) {
     const skillRoute = skillRoutingEnabled ? resolveSkillRoute(latestMessage) : "general"
     const shouldPlanFirst = planThenAnswerEnabled && shouldUsePlanThenAnswer(latestMessage)
 
+    const visionPack = await buildVisionContentBlocksForAttachments(supabase, user.id, attachmentIds)
+    const visionBlocks = visionPack.blocks
+    const visionOmitIds = new Set(visionPack.loadedIds)
+    const visionSystemNote =
+      visionBlocks.length > 0
+        ? `\n\nVISION: The user's latest message includes ${visionBlocks.length} image attachment(s) as image content. You can see them. Read visible text, charts, and UI; answer questions about the screenshot or photo.`
+        : ""
+
     const ragContext = await buildRagContextBlock(supabase, user.id, latestMessage)
     if (ragContext.block) {
       liveContextSections.push(ragContext.block)
     }
-    const uploadedDocumentContext = await buildUploadedDocumentContextBlock(supabase, user.id, attachmentIds)
+    const uploadedDocumentContext = await buildUploadedDocumentContextBlock(supabase, user.id, attachmentIds, {
+      omitDocumentIds: visionOmitIds,
+    })
     if (uploadedDocumentContext.block) {
       liveContextSections.push(uploadedDocumentContext.block)
     }
@@ -1076,13 +1096,13 @@ export async function POST(request: Request) {
       liveContextSections.length > 0
         ? `${systemPrompt}\n\n${liveContextSections.join("\n\n")}`
         : systemPrompt
-    ).toString()
+    ).toString() + visionSystemNote
 
     let completionBaseRequest = {
       model,
       max_tokens: 4096,
       system: resolvedSystemPrompt,
-      messages: toModelMessages(history, latestMessageForModel),
+      messages: buildLlmMessages(history, latestMessageForModel, visionBlocks),
     }
     let toolLoopStats: AgentToolLoopStats = {
       used: false,
@@ -1098,9 +1118,10 @@ export async function POST(request: Request) {
           ...completionBaseRequest,
           max_tokens: 600,
           system: `${completionBaseRequest.system}\n\nINTERNAL PLANNING INSTRUCTION\nReturn JSON only with keys: steps (array of short strings) and cautions (array of short strings). Do not include answer text.`,
-          messages: toModelMessages(
+          messages: buildLlmMessages(
             history,
             `${latestMessageForModel}\n\nCreate a concise internal plan that will help produce a better final answer. Keep steps practical and grounded in available Synesi context.`,
+            visionBlocks,
           ),
         })
         const planRawText = planCompletion.content
@@ -1124,7 +1145,7 @@ export async function POST(request: Request) {
             .join("\n\n")
           completionBaseRequest = {
             ...completionBaseRequest,
-            messages: toModelMessages(history, latestMessageForModel),
+            messages: buildLlmMessages(history, latestMessageForModel, visionBlocks),
           }
         }
       } catch {
@@ -1150,9 +1171,10 @@ export async function POST(request: Request) {
       return llm.messages.create({
         ...completionBaseRequest,
         system: `${completionBaseRequest.system}\n\n${braveContext}`,
-        messages: toModelMessages(
+        messages: buildLlmMessages(
           history,
           `${latestMessageForModel}\n\nThe system prompt includes fresh web search snippets and source URLs. Use them to answer; cite uncertainty where snippets are incomplete.`,
+          visionBlocks,
         ),
       })
     }
@@ -1324,9 +1346,10 @@ export async function POST(request: Request) {
 
           completion = await llm.messages.create({
             ...completionBaseRequest,
-            messages: toModelMessages(
+            messages: buildLlmMessages(
               history,
               `${latestMessageForModel}\n\nIf live web lookup is unavailable right now, do not claim a permanent inability to browse. Say it is temporarily unavailable in this session, then ask for public HTTPS URLs for precise summarization.`,
+              visionBlocks,
             ),
           })
         }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
 const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
+const MAX_TITLE_LEN = 200
 
 type RouteContext = {
   params: Promise<{
@@ -11,6 +12,14 @@ type RouteContext = {
 
 type PatchThreadBody = {
   projectId?: string | null
+  title?: unknown
+}
+
+function normalizeTitle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null
+  const t = raw.trim()
+  if (!t || t.length > MAX_TITLE_LEN) return null
+  return t
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -28,18 +37,30 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
     }
 
-    if (!("projectId" in body)) {
-      return NextResponse.json({ error: "projectId is required" }, { status: 400 })
+    const hasProjectKey = "projectId" in body
+    const hasTitleKey = "title" in body
+
+    if (!hasProjectKey && !hasTitleKey) {
+      return NextResponse.json({ error: "Provide projectId and/or title" }, { status: 400 })
     }
 
-    const { projectId } = body
-
-    if (projectId !== null && projectId !== undefined && typeof projectId !== "string") {
-      return NextResponse.json({ error: "projectId must be a string UUID or null" }, { status: 400 })
+    const title = hasTitleKey ? normalizeTitle(body.title) : null
+    if (hasTitleKey && !title) {
+      return NextResponse.json(
+        { error: `title must be a non-empty string (max ${MAX_TITLE_LEN} characters)` },
+        { status: 400 },
+      )
     }
 
-    if (typeof projectId === "string" && !UUID_RE.test(projectId)) {
-      return NextResponse.json({ error: "Invalid project id" }, { status: 400 })
+    let projectId: string | null | undefined
+    if (hasProjectKey) {
+      projectId = body.projectId
+      if (projectId !== null && projectId !== undefined && typeof projectId !== "string") {
+        return NextResponse.json({ error: "projectId must be a string UUID or null" }, { status: 400 })
+      }
+      if (typeof projectId === "string" && !UUID_RE.test(projectId)) {
+        return NextResponse.json({ error: "Invalid project id" }, { status: 400 })
+      }
     }
 
     const supabase = await createClient()
@@ -51,7 +72,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (typeof projectId === "string") {
+    if (hasProjectKey && typeof projectId === "string") {
       const { data: project, error: projectError } = await supabase
         .from("sigma_projects")
         .select("id")
@@ -67,9 +88,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     }
 
+    const updates: { project_id?: string | null; title?: string } = {}
+    if (hasProjectKey) {
+      updates.project_id = projectId ?? null
+    }
+    if (title) {
+      updates.title = title
+    }
+
     const { data, error } = await supabase
       .from("chat_threads")
-      .update({ project_id: projectId })
+      .update(updates)
       .eq("id", id)
       .eq("user_id", user.id)
       .select("id, title, updated_at, project_id")

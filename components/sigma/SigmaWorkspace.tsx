@@ -33,6 +33,8 @@ type SigmaProject = {
   updated_at: string
 }
 
+type RenameTarget = { kind: "project"; id: string } | { kind: "thread"; id: string }
+
 type ChatsSidebarPanelProps = {
   threads: Thread[]
   projects: SigmaProject[]
@@ -82,9 +84,15 @@ function ChatsSidebarPanel({
   const [threadMenuForId, setThreadMenuForId] = useState<string | null>(null)
   const [newProjectDraft, setNewProjectDraft] = useState("")
   const [creatingProject, setCreatingProject] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
+  const [renameDraft, setRenameDraft] = useState("")
+  const [renaming, setRenaming] = useState(false)
   const threadMenuRef = useRef<HTMLUListElement>(null)
+  const renameInputRef = useRef<HTMLInputElement>(null)
   const searchFieldId =
     instance === "mobile" ? "sigma-chats-search-mobile" : "sigma-chats-search-desktop"
+  const renameInputId =
+    instance === "mobile" ? "sigma-rename-input-mobile" : "sigma-rename-input-desktop"
 
   const filteredThreads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -119,6 +127,17 @@ function ChatsSidebarPanel({
       document.removeEventListener("mousedown", onDocMouseDown)
     }
   }, [threadMenuForId])
+
+  useEffect(() => {
+    if (!renameTarget) return
+    const id = requestAnimationFrame(() => {
+      const el = renameInputRef.current
+      if (!el) return
+      el.focus()
+      el.select()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [renameTarget])
 
   const handleNewChat = useCallback(async () => {
     try {
@@ -194,21 +213,54 @@ function ChatsSidebarPanel({
     }
   }, [newProjectDraft, onRefreshSidebar])
 
-  const handleRenameProject = useCallback(
-    async (projectId: string, currentName: string, e: ReactMouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const name = window.prompt("Project name", currentName)?.trim()
-      if (!name || name === currentName) return
-      const response = await fetch(`/api/chat/projects/${projectId}`, {
+  const submitRename = useCallback(async () => {
+    if (!renameTarget) return
+    const next = renameDraft.trim()
+    if (!next) return
+
+    if (renameTarget.kind === "project") {
+      const previous = projects.find((p) => p.id === renameTarget.id)?.name ?? ""
+      if (next === previous) {
+        setRenameTarget(null)
+        return
+      }
+      setRenaming(true)
+      try {
+        const response = await fetch(`/api/chat/projects/${renameTarget.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: next }),
+        })
+        if (response.ok) {
+          setRenameTarget(null)
+          await onRefreshSidebar()
+        }
+      } finally {
+        setRenaming(false)
+      }
+      return
+    }
+
+    const previousTitle = threads.find((x) => x.id === renameTarget.id)?.title ?? ""
+    if (next === (previousTitle || "").trim()) {
+      setRenameTarget(null)
+      return
+    }
+    setRenaming(true)
+    try {
+      const response = await fetch(`/api/chat/threads/${renameTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ title: next }),
       })
-      if (response.ok) await onRefreshSidebar()
-    },
-    [onRefreshSidebar],
-  )
+      if (response.ok) {
+        setRenameTarget(null)
+        await onRefreshSidebar()
+      }
+    } finally {
+      setRenaming(false)
+    }
+  }, [onRefreshSidebar, projects, renameDraft, renameTarget, threads])
 
   const handleDeleteProject = useCallback(
     async (projectId: string, e: ReactMouseEvent) => {
@@ -234,7 +286,7 @@ function ChatsSidebarPanel({
             aria-current={active ? "page" : undefined}
             onClick={() => onThreadNavigated?.()}
             className={cn(
-              "min-w-0 flex-1 rounded-lg border px-2.5 py-2 pr-[4.25rem] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0]",
+              "min-w-0 flex-1 rounded-lg border px-2.5 py-2 pr-[7rem] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0]",
               active
                 ? "border-[#6B6B7B] bg-[#1C1C22] text-[#F0F0F0]"
                 : "border-transparent text-[#C8C8D0] hover:border-[#2A2A32] hover:bg-[#16161A]",
@@ -245,7 +297,22 @@ function ChatsSidebarPanel({
               {formatThreadDate(t.updated_at)}
             </span>
           </Link>
-          <div className="absolute right-9 top-1/2 z-10 -translate-y-1/2">
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={`Rename chat ${t.title ?? "Untitled"}`}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setThreadMenuForId(null)
+              setRenameTarget({ kind: "thread", id: t.id })
+              setRenameDraft(t.title ?? "")
+            }}
+            className="absolute right-[4.75rem] top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#6B6B7B] opacity-100 transition-opacity hover:bg-[#2A2A32] hover:text-[#F0F0F0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0] disabled:pointer-events-none disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
+          </button>
+          <div className="absolute right-10 top-1/2 z-10 -translate-y-1/2">
             <button
               type="button"
               disabled={busy || projects.length === 0}
@@ -332,7 +399,8 @@ function ChatsSidebarPanel({
   }
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-3", className)}>
+    <>
+      <div className={cn("flex min-h-0 flex-1 flex-col gap-3", className)}>
       <div className="shrink-0 px-3 pt-3">
         <button
           type="button"
@@ -419,7 +487,13 @@ function ChatsSidebarPanel({
                         <button
                           type="button"
                           aria-label={`Rename project ${p.name}`}
-                          onClick={(e) => void handleRenameProject(p.id, p.name, e)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setRenameTarget({ kind: "project", id: p.id })
+                            setRenameDraft(p.name)
+                          }}
                           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#6B6B7B] hover:bg-[#2A2A32] hover:text-[#F0F0F0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0]"
                         >
                           <Pencil className="h-3 w-3" aria-hidden />
@@ -427,6 +501,7 @@ function ChatsSidebarPanel({
                         <button
                           type="button"
                           aria-label={`Delete project ${p.name}`}
+                          onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => void handleDeleteProject(p.id, e)}
                           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#6B6B7B] hover:bg-[#2A2A32] hover:text-[#F0F0F0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0]"
                         >
@@ -462,6 +537,69 @@ function ChatsSidebarPanel({
         </div>
       </nav>
     </div>
+
+      <Dialog.Root
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenameTarget(null)
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/45" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-[71] w-[min(100vw-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-[#2A2A32] bg-[#0F0F12] p-4 shadow-xl shadow-black/40 focus:outline-none"
+          >
+            <Dialog.Title className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6B6B7B]">
+              {renameTarget?.kind === "thread" ? "Rename conversation" : "Rename project"}
+            </Dialog.Title>
+            <Dialog.Description className="sr-only">
+              {renameTarget?.kind === "thread"
+                ? "Edit the conversation title and save to update it."
+                : "Edit the project name and save to update it."}
+            </Dialog.Description>
+            <form
+              className="mt-3 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void submitRename()
+              }}
+            >
+              <label htmlFor={renameInputId} className="sr-only">
+                {renameTarget?.kind === "thread" ? "Conversation title" : "Project name"}
+              </label>
+              <input
+                ref={renameInputRef}
+                id={renameInputId}
+                type="text"
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                disabled={renaming}
+                autoComplete="off"
+                className="sigma-scrollbar w-full rounded-lg border border-[#2A2A32] bg-[#141418] px-3 py-2 text-sm text-[#F0F0F0] placeholder:text-[#6B6B7B] focus:border-[#6B6B7B] focus:outline-none disabled:opacity-50"
+              />
+              <div className="flex justify-end gap-2">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    disabled={renaming}
+                    className="rounded-lg px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-[#C8C8D0] transition-colors hover:bg-[#1C1C22] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="submit"
+                  disabled={renaming || !renameDraft.trim()}
+                  className="rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-[#F0F0F0] transition-colors hover:border-[#6B6B7B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F0F0F0] disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   )
 }
 
