@@ -46,7 +46,6 @@ function createThreadVerifySupabase(owns: boolean) {
 function createSupabaseStub() {
   return {
     from(table: string) {
-      const state: Record<string, unknown> = { table }
       const query = {
         select(_columns: string) {
           return query
