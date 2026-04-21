@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getDailyPriceChange } from "@/lib/alpha-vantage"
+import { sendAlertPushToUser } from "@/lib/push/send-alert"
 import { createAdminClient } from "@/lib/supabase/server"
 
 type ThesisRow = { id: string; user_id: string; ticker: string }
@@ -116,6 +117,18 @@ export async function GET(request: Request) {
     }
 
     eventsInserted += eventsToInsert.length
+
+    const uniqueUserIds = [...new Set(holders.map((h) => h.userId))]
+    await Promise.allSettled(
+      uniqueUserIds.map((userId) =>
+        sendAlertPushToUser(supabase, userId, {
+          title: "SYNESI · Price alert",
+          body: eventDetail.length > 140 ? `${eventDetail.slice(0, 137)}…` : eventDetail,
+          url: "/app/dashboard?panel=alerts",
+          tag: `price-${ticker}-${dayStartIso}`,
+        }),
+      ),
+    )
   }
 
   return NextResponse.json({

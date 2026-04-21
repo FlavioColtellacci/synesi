@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createHash } from "node:crypto"
+import { sendAlertPushToUser } from "@/lib/push/send-alert"
 import { createAdminClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -550,6 +551,16 @@ export async function GET(request: Request) {
       eventErrors.push({ error: eventError.message })
     } else {
       eventsCreated++
+      const urlHash = createHash("sha256").update(pending.docUrl).digest("hex").slice(0, 16)
+      const bodyLine = `${pending.sourceName}: ${truncatedTitle}`
+      void sendAlertPushToUser(supabase, pending.user_id, {
+        title: "SYNESI · Source alert",
+        body: bodyLine.length > 140 ? `${bodyLine.slice(0, 137)}…` : bodyLine,
+        url: "/app/dashboard?panel=alerts",
+        tag: `trusted-${pending.thesis_id}-${urlHash}`,
+      }).catch(() => {
+        // Push failures must not fail ingestion
+      })
     }
   }
 
