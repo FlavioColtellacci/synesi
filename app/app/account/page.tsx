@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getTrialState } from '@/lib/billing/trial-state'
 import { ManageSubscriptionButton } from './manage-subscription-button'
+import { PushNotificationsSection } from './push-notifications-section'
 
 function formatRenewalDate(date: string | null) {
   if (!date) {
@@ -122,6 +123,10 @@ export default async function AccountPage() {
 
         <div className="mt-10 w-full [&>button]:min-h-[44px] [&>button]:w-full md:[&>button]:w-auto">
           <ManageSubscriptionButton />
+        </div>
+
+        <div className="mt-10">
+          <PushNotificationsSection />
         </div>
 
       </section>

@@ -20,6 +20,7 @@ const eslintConfig = defineConfig([
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
+    "public/sw.js",
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-playwright/**",
