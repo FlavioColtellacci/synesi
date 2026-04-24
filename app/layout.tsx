@@ -71,6 +71,13 @@ export const metadata: Metadata = {
     description: ogDescription,
     images: ['/opengraph-image'],
   },
+  ...(adsenseClientIdValid && adsenseClientId
+    ? {
+        other: {
+          'google-adsense-account': adsenseClientId,
+        },
+      }
+    : {}),
 }
 
 export default function RootLayout({
