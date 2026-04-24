@@ -39,13 +39,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
               href="/app/dashboard"
               className="font-mono text-base font-medium text-[#F0F0F0]"
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  textShadow:
-                    '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
-                }}
-              >
+              <span aria-hidden="true" className="synesi-sigma-mark">
                 Σ
               </span>{' '}
               <span>SYNESI</span>

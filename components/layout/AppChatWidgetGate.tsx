@@ -7,5 +7,6 @@ import ChatWidget from '@/components/chat/ChatWidget'
 export default function AppChatWidgetGate() {
   const pathname = usePathname()
   if (pathname?.startsWith('/app/sigma')) return null
+  if (pathname?.startsWith('/app/dashboard')) return null
   return <ChatWidget />
 }

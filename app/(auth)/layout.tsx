@@ -10,15 +10,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             href="/"
             className="font-mono text-base font-medium text-[#F0F0F0]"
           >
-            <span
-              aria-hidden="true"
-              style={{
-                textShadow:
-                  '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
-                animation: 'synesi-icon-glitch 2.5s infinite steps(2, end)',
-                willChange: 'transform',
-              }}
-            >
+            <span aria-hidden="true" className="synesi-sigma-mark">
               Σ
             </span>
             {" "}

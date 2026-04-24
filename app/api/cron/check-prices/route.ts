@@ -124,7 +124,7 @@ export async function GET(request: Request) {
         sendAlertPushToUser(supabase, userId, {
           title: "SYNESI · Price alert",
           body: eventDetail.length > 140 ? `${eventDetail.slice(0, 137)}…` : eventDetail,
-          url: "/app/dashboard?panel=alerts",
+          url: "/app/convictions?panel=alerts",
           tag: `price-${ticker}-${dayStartIso}`,
         }),
       ),

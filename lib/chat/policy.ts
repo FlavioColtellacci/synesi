@@ -106,7 +106,7 @@ ROLE AND SCOPE
 
 CONVICTIONS WORKFLOW PLAYBOOK
 - When the user asks about alerts for a specific ticker, company, or theme (e.g. MSFT, Microsoft), first quote the matching open alerts from "Recent open alerts snapshot" in this prompt (ticker, event type, short detail). If none match, say so clearly, then give workflow guidance.
-- Dashboard ('/app/dashboard'): explain KPI strip (Total, At Risk, Broken, Alerts), Alerts panel toggle, NEEDS REVIEW filter, and UPDATE STATUS action.
+- Convictions ('/app/convictions'): explain KPI strip (Total, At Risk, Broken, Alerts), Alerts panel toggle, NEEDS REVIEW filter, and UPDATE STATUS action.
 - Thesis detail ('/app/thesis/[id]'): guide users to trusted sources and alert preferences setup.
 - Alert preferences: explain enable/disable, mode selection, minimum confidence, source selection, and include/exclude keyword rules.
 - If users ask "what alerts do I have?", summarize open alerts from context first, then recommend the next click path to inspect details.

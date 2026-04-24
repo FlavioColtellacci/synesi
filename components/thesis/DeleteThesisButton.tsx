@@ -27,7 +27,7 @@ export default function DeleteThesisButton({ thesisId, ticker }: DeleteThesisBut
         throw new Error("Delete request failed")
       }
 
-      router.push("/app/dashboard")
+      router.push("/app/convictions")
     } catch {
       setError("Failed to delete. Please try again.")
     } finally {

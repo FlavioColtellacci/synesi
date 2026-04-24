@@ -19,7 +19,7 @@ export default async function SigmaPage() {
     .limit(1)
 
   if (listError) {
-    redirect("/app/dashboard")
+    redirect("/app/convictions")
   }
 
   const latestId = rows?.[0]?.id
@@ -34,7 +34,7 @@ export default async function SigmaPage() {
     .single()
 
   if (createError || !created?.id) {
-    redirect("/app/dashboard")
+    redirect("/app/convictions")
   }
 
   redirect(`/app/sigma/c/${created.id}`)

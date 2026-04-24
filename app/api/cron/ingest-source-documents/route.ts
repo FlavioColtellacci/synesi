@@ -556,7 +556,7 @@ export async function GET(request: Request) {
       void sendAlertPushToUser(supabase, pending.user_id, {
         title: "SYNESI · Source alert",
         body: bodyLine.length > 140 ? `${bodyLine.slice(0, 137)}…` : bodyLine,
-        url: "/app/dashboard?panel=alerts",
+        url: "/app/convictions?panel=alerts",
         tag: `trusted-${pending.thesis_id}-${urlHash}`,
       }).catch(() => {
         // Push failures must not fail ingestion

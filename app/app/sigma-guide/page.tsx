@@ -36,7 +36,7 @@ export default function SigmaGuidePage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
-            href="/app/dashboard"
+            href="/app/convictions"
             className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
           >
             ← CONVICTIONS

@@ -52,7 +52,7 @@ export async function sendAlertPushToUser(
   }
 
   const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
-  const defaultPath = "/app/dashboard?panel=alerts"
+  const defaultPath = "/app/convictions?panel=alerts"
   let url = payload.url ?? defaultPath
   if (url.startsWith("/") && origin) {
     url = `${origin}${url}`

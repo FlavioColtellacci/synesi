@@ -12,19 +12,23 @@ function getLinkClassName(isActive: boolean): string {
 
 export default function NavLinks() {
   const pathname = usePathname()
+  const dashboardActive = pathname.startsWith('/app/dashboard')
   const sigmaChatActive =
     pathname === '/app/sigma' || pathname.startsWith('/app/sigma/c/')
   const convictionsActive =
-    pathname.startsWith('/app/dashboard') || pathname.startsWith('/app/thesis')
+    pathname.startsWith('/app/convictions') || pathname.startsWith('/app/thesis')
   const sigmaGuideActive = pathname.startsWith('/app/sigma-guide')
   const accountActive = pathname === '/app/account'
 
   return (
     <div className="flex items-center gap-4 md:gap-6">
+      <Link href="/app/dashboard" className={getLinkClassName(dashboardActive)}>
+        DASHBOARD
+      </Link>
       <Link href="/app/sigma" className={getLinkClassName(sigmaChatActive)}>
         SIGMA CHAT
       </Link>
-      <Link href="/app/dashboard" className={getLinkClassName(convictionsActive)}>
+      <Link href="/app/convictions" className={getLinkClassName(convictionsActive)}>
         CONVICTIONS
       </Link>
       <Link href="/app/sigma-guide" className={getLinkClassName(sigmaGuideActive)}>

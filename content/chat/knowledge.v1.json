@@ -7,7 +7,7 @@
       "label": "ProductGuide",
       "entries": [
         "SYNESI helps users document investment theses and track conviction over time.",
-        "The dashboard at /app/dashboard is called My Convictions and shows thesis status, alerts, and summary counts.",
+        "The convictions view at /app/convictions is called My Convictions and shows thesis status, alerts, and summary counts.",
         "A thesis has statuses: intact, at_risk, and broken.",
         "Users can create a thesis in /app/new by writing a plain-English thesis, reviewing extracted fields, and saving.",
         "Each thesis detail page includes thesis statement, assumptions, sell criteria, AI analysis, history, trusted sources, and alert preferences.",

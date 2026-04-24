@@ -573,7 +573,7 @@ export default async function ThesisDetailPage({ params }: PageProps) {
     <main className="mx-auto min-h-screen max-w-7xl bg-[#0A0A0C] px-4 py-10 md:px-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/app/dashboard"
+          href="/app/convictions"
           className="text-sm font-mono text-[#6B6B7B] hover:text-[#F0F0F0] transition-colors"
         >
           ← CONVICTIONS

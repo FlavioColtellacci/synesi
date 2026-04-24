@@ -12,7 +12,7 @@ export default function ThesisNotFound() {
           This thesis doesn&apos;t exist or you don&apos;t have access to it.
         </p>
         <Link
-          href="/app/dashboard"
+          href="/app/convictions"
           className="inline-block rounded-lg bg-[#FFFFFF] px-6 py-3 font-mono text-xs uppercase tracking-widest text-[#0A0A0C] transition-colors hover:bg-[#E8E8E8]"
         >
           GO TO DASHBOARD

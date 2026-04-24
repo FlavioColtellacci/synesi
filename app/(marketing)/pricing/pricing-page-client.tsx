@@ -93,12 +93,8 @@ export function PricingPageContent() {
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
           <header className="mb-16 text-center">
             <p
-              className="mb-4 font-[var(--font-mono)] text-2xl text-white"
+              className="synesi-sigma-mark mb-4 font-[var(--font-mono)] text-2xl text-white"
               aria-hidden="true"
-              style={{
-                textShadow:
-                  '-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)',
-              }}
             >
               Σ
             </p>

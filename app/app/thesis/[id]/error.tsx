@@ -32,7 +32,7 @@ export default function ThesisError({ error, reset }: ThesisErrorProps) {
             TRY AGAIN
           </button>
           <Link
-            href="/app/dashboard"
+            href="/app/convictions"
             className="rounded-lg border border-[#2A2A32] px-6 py-3 font-mono text-xs uppercase tracking-widest text-[#6B6B7B] transition-colors hover:border-[#F0F0F0] hover:text-[#F0F0F0]"
           >
             GO TO DASHBOARD

@@ -6,8 +6,7 @@ export default function FeaturesSection() {
 
   const glitchAnimatedStyle: CSSProperties = {
     textShadow: glitchTextShadow,
-    // Small jitter to make the "glitch" feel alive.
-    animation: 'synesi-icon-glitch 2.5s infinite steps(2, end)',
+    animation: 'synesi-navbar-glitch 3s infinite',
     willChange: 'transform',
   }
 

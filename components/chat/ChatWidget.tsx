@@ -117,8 +117,7 @@ function SigmaMessageAvatar() {
   return (
     <span
       aria-hidden
-      className="select-none font-mono text-[15px] font-semibold leading-none text-white"
-      style={{ textShadow: "-1px 0 0 rgba(255,50,50,0.65), 1px 0 0 rgba(0,210,255,0.65)" }}
+      className="synesi-sigma-mark select-none font-mono text-[15px] font-semibold leading-none text-white"
     >
       Σ
     </span>
@@ -1081,8 +1080,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
                 >
                   <div className="space-y-2">
                     <p
-                      className="font-mono text-[30px] leading-none text-[#e5e2e1]"
-                      style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+                      className="synesi-sigma-mark font-mono text-[30px] leading-none text-[#e5e2e1]"
                     >
                       Σ
                     </p>
@@ -1464,8 +1462,7 @@ export default function ChatWidget({ variant = "fab", threadId }: ChatWidgetProp
       >
         <span
           aria-hidden="true"
-          className="font-mono text-xl text-[#F0F0F0]"
-          style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+          className="synesi-sigma-mark font-mono text-xl text-[#F0F0F0]"
         >
           Σ
         </span>

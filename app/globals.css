@@ -301,3 +301,30 @@ body {
     transform: translate(1px, -1px);
   }
 }
+
+@keyframes synesi-navbar-glitch {
+  0%,
+  90%,
+  100% {
+    text-shadow: -1.5px 0 0 rgba(255, 50, 50, 0.7), 1.5px 0 0 rgba(0, 210, 255, 0.7);
+    transform: translate(0);
+  }
+  92% {
+    text-shadow: -2px 0 0 rgba(255, 50, 50, 0.9), 2px 0 0 rgba(0, 210, 255, 0.9);
+    transform: translate(1px, -1px);
+  }
+  94% {
+    text-shadow: 2px 0 0 rgba(255, 50, 50, 0.9), -2px 0 0 rgba(0, 210, 255, 0.9);
+    transform: translate(-1px, 1px);
+  }
+  96% {
+    text-shadow: -1.5px 0 0 rgba(255, 50, 50, 0.7), 1.5px 0 0 rgba(0, 210, 255, 0.7);
+    transform: translate(0);
+  }
+}
+
+.synesi-sigma-mark {
+  display: inline-block;
+  text-shadow: -1.5px 0 0 rgba(255, 50, 50, 0.7), 1.5px 0 0 rgba(0, 210, 255, 0.7);
+  animation: synesi-navbar-glitch 3s infinite;
+}
