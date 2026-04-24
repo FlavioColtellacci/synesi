@@ -84,6 +84,15 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} [scrollbar-gutter:stable]`}
     >
       <body className="bg-synesi-bg text-synesi-text antialiased">
+        {adsenseClientIdValid && adsenseClientId ? (
+          <Script
+            id="adsense-loader"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
+            strategy="beforeInteractive"
+            crossOrigin="anonymous"
+          />
+        ) : null}
         {googleAnalyticsId ? (
           <>
             <Script
@@ -99,15 +108,6 @@ export default function RootLayout({
               `}
             </Script>
           </>
-        ) : null}
-        {adsenseClientIdValid && adsenseClientId ? (
-          <Script
-            id="adsense-loader"
-            async
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
-            strategy="afterInteractive"
-            crossOrigin="anonymous"
-          />
         ) : null}
         <ShellTransition>{children}</ShellTransition>
         <Analytics />
