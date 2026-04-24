@@ -46,13 +46,7 @@ export default function MarketingPageNav({ activeItem }: MarketingPageNavProps) 
       <div className="mx-auto flex max-w-6xl flex-col px-4 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:px-10 md:py-0">
         <div className="flex items-center justify-between">
           <Link href="/" className="font-mono text-base font-medium text-[#F0F0F0]">
-            <span
-              aria-hidden="true"
-              style={{
-                textShadow:
-                  "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
-              }}
-            >
+            <span aria-hidden="true" className="synesi-sigma-mark">
               Σ
             </span>{" "}
             <span>SYNESI</span>

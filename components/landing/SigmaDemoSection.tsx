@@ -344,8 +344,7 @@ export default function SigmaDemoSection() {
                 <div className="flex items-center gap-2">
                   <span
                     aria-hidden="true"
-                    className="font-mono text-lg text-[#F0F0F0]"
-                    style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+                    className="synesi-sigma-mark font-mono text-lg text-[#F0F0F0]"
                   >
                     Σ
                   </span>
@@ -407,8 +406,7 @@ export default function SigmaDemoSection() {
                 <div className="flex items-center gap-2">
                   <span
                     aria-hidden="true"
-                    className="font-mono text-lg text-[#F0F0F0]"
-                    style={{ textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)" }}
+                    className="synesi-sigma-mark font-mono text-lg text-[#F0F0F0]"
                   >
                     Σ
                   </span>

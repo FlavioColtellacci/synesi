@@ -1,84 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { trackFunnelEvent } from "@/lib/analytics"
 
 export default function HeroSection() {
-  const sigmaRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
-    const sigmaEl = sigmaRef.current
-    if (!sigmaEl) return
-
-    const triggerGlitch = () => {
-      sigmaEl.style.cssText = `
-        filter: drop-shadow(-4px 0 0 rgba(255,50,50,0.92)) drop-shadow(4px 0 0 rgba(0,210,255,0.92));
-        transform: translateX(3px) skewX(-2deg);
-      `
-      setTimeout(() => {
-        sigmaEl.style.cssText = ""
-      }, 90)
-      setTimeout(() => {
-        sigmaEl.style.cssText = `
-          filter: drop-shadow(-3px 0 0 rgba(255,50,50,0.78)) drop-shadow(3px 0 0 rgba(0,210,255,0.78));
-          transform: translateX(-2px) skewX(1.2deg);
-        `
-        setTimeout(() => {
-          sigmaEl.style.cssText = ""
-        }, 85)
-      }, 135)
-      setTimeout(() => {
-        sigmaEl.style.cssText = `
-          filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.62)) drop-shadow(2px 0 0 rgba(0,210,255,0.62));
-          transform: translateX(1px);
-        `
-        setTimeout(() => {
-          sigmaEl.style.cssText = ""
-        }, 70)
-      }, 250)
-    }
-
-    const randomInterval = () => Math.random() * 1000 + 2000
-
-    let timeout: ReturnType<typeof setTimeout>
-    const scheduleGlitch = () => {
-      timeout = setTimeout(() => {
-        triggerGlitch()
-        scheduleGlitch()
-      }, randomInterval())
-    }
-    scheduleGlitch()
     trackFunnelEvent("landing_view")
-
-    return () => clearTimeout(timeout)
   }, [])
 
   return (
     <>
       <style>{`
-        @keyframes sigma-subtle-glitch {
-          0%, 100% {
-            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.55)) drop-shadow(2px 0 0 rgba(0,210,255,0.55));
-            transform: translateX(0);
-          }
-          20% {
-            filter: drop-shadow(-1px 0 0 rgba(255,50,50,0.45)) drop-shadow(1px 0 0 rgba(0,210,255,0.45));
-            transform: translateX(-0.5px);
-          }
-          40% {
-            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.58)) drop-shadow(2px 0 0 rgba(0,210,255,0.58));
-            transform: translateX(0.5px);
-          }
-          60% {
-            filter: drop-shadow(-1px 0 0 rgba(255,50,50,0.42)) drop-shadow(1px 0 0 rgba(0,210,255,0.42));
-            transform: translateX(-0.3px);
-          }
-          80% {
-            filter: drop-shadow(-2px 0 0 rgba(255,50,50,0.5)) drop-shadow(2px 0 0 rgba(0,210,255,0.5));
-            transform: translateX(0.3px);
-          }
-        }
         @keyframes column-glow-pulse {
           0%, 100% { opacity: 0.45; }
           50% { opacity: 0.75; }
@@ -89,10 +22,6 @@ export default function HeroSection() {
         }
         .column-glow {
           animation: column-glow-pulse 6s ease-in-out infinite;
-        }
-        .sigma-subtle {
-          animation: sigma-subtle-glitch 1.8s steps(2, end) infinite;
-          will-change: transform, filter;
         }
         .dot-pulse {
           animation: dot-pulse 3s ease-in-out infinite;
@@ -149,7 +78,11 @@ export default function HeroSection() {
               />
 
               {/* Sigma assembly */}
-              <div ref={sigmaRef} className="sigma-subtle relative select-none" aria-hidden="true">
+              <div
+                className="relative select-none"
+                aria-hidden="true"
+                style={{ animation: "synesi-navbar-glitch 3s infinite", willChange: "transform" }}
+              >
                 <div className="relative flex h-[360px] w-[300px] items-center justify-center md:h-[430px] md:w-[360px]">
                   <span
                     className="absolute text-[248px] font-bold leading-none text-[rgba(255,50,50,0.7)] md:text-[306px]"

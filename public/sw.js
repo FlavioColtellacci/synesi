@@ -5,7 +5,7 @@ self.addEventListener("push", (event) => {
   let payload = {
     title: "SYNESI",
     body: "You have a new alert.",
-    url: "/app/dashboard?panel=alerts",
+    url: "/app/convictions?panel=alerts",
     tag: "synesi-alert",
   }
   try {
@@ -26,14 +26,14 @@ self.addEventListener("push", (event) => {
       icon: "/icon",
       badge: "/icon",
       tag: payload.tag || "synesi-alert",
-      data: { url: payload.url || "/app/dashboard?panel=alerts" },
+      data: { url: payload.url || "/app/convictions?panel=alerts" },
     }),
   )
 })
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close()
-  const url = event.notification.data?.url || "/app/dashboard?panel=alerts"
+  const url = event.notification.data?.url || "/app/convictions?panel=alerts"
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       const abs =

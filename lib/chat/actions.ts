@@ -78,11 +78,11 @@ export async function resolveConfirmedAction(
   }
 
   if (action.actionType === "filter_needs_review") {
-    return { method: "navigate", route: "/app/dashboard?filter=needs_review", status: "ready" }
+    return { method: "navigate", route: "/app/convictions?filter=needs_review", status: "ready" }
   }
 
   if (action.actionType === "open_alerts_panel") {
-    return { method: "navigate", route: "/app/dashboard?panel=alerts", status: "ready" }
+    return { method: "navigate", route: "/app/convictions?panel=alerts", status: "ready" }
   }
 
   if (action.actionType === "open_thesis") {

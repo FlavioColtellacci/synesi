@@ -42,12 +42,6 @@ const reviewInputClassName =
 const reviewTextareaClassName =
   "w-full resize-none rounded-lg border border-[#2A2A32] bg-[#1C1C22] px-4 py-4 text-sm leading-relaxed text-[#F0F0F0] placeholder:text-[#6B6B7B] transition-colors focus:border-[#F0F0F0] focus:outline-none sigma-scrollbar"
 
-const glitchSigmaStyle = {
-  textShadow: "-1.5px 0 0 rgba(255,50,50,0.7), 1.5px 0 0 rgba(0,210,255,0.7)",
-  animation: "synesi-icon-glitch 2.5s infinite steps(2, end)",
-  willChange: "transform",
-}
-
 export default function NewThesisPage() {
   const router = useRouter()
   const [pageState, setPageState] = useState<PageState>("input")
@@ -113,7 +107,7 @@ export default function NewThesisPage() {
       }
 
       trackFunnelEvent("first_thesis_saved")
-      router.push("/app/dashboard")
+      router.push("/app/convictions")
     } catch (error) {
       setSaving(false)
       console.error("Save failed:", error)
@@ -124,7 +118,7 @@ export default function NewThesisPage() {
     <main className="mx-auto min-h-screen w-full max-w-3xl bg-[#0A0A0C] px-4 py-10 md:px-10">
       <div className="mb-6">
         <Link
-          href="/app/dashboard"
+          href="/app/convictions"
           className="text-sm font-mono text-[#6B6B7B] transition-colors hover:text-[#F0F0F0]"
         >
           ← CONVICTIONS
@@ -224,7 +218,7 @@ export default function NewThesisPage() {
 
         {pageState === "loading" ? (
           <div className="py-16 flex flex-col items-center justify-center">
-            <p className="mb-4 text-4xl font-mono text-[#F0F0F0]" style={glitchSigmaStyle}>
+            <p className="synesi-sigma-mark mb-4 text-4xl font-mono text-[#F0F0F0]">
               Σ
             </p>
             <p className="text-sm text-[#6B6B7B] text-center max-w-sm">
