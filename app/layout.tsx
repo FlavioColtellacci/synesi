@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { ShellTransition } from '@/components/layout/ShellTransition'
 import { SITE_ORIGIN } from '@/lib/marketing/site-origin'
@@ -26,6 +27,8 @@ const defaultDescription =
 
 const ogDescription =
   'The narrative keeper for investors. Track how your conviction evolves and know when reality challenges your story.'
+
+const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_ID
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
@@ -77,6 +80,22 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} [scrollbar-gutter:stable]`}
     >
       <body className="bg-synesi-bg text-synesi-text antialiased">
+        {googleAnalyticsId ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${googleAnalyticsId}');
+              `}
+            </Script>
+          </>
+        ) : null}
         <ShellTransition>{children}</ShellTransition>
         <Analytics />
       </body>
