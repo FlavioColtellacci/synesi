@@ -30,6 +30,10 @@ const ogDescription =
 
 const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_ID
 
+const adsenseClientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID?.trim()
+const adsenseClientIdValid =
+  Boolean(adsenseClientId) && /^ca-pub-\d+$/i.test(adsenseClientId ?? '')
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
   icons: {
@@ -95,6 +99,15 @@ export default function RootLayout({
               `}
             </Script>
           </>
+        ) : null}
+        {adsenseClientIdValid && adsenseClientId ? (
+          <Script
+            id="adsense-loader"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
+            strategy="afterInteractive"
+            crossOrigin="anonymous"
+          />
         ) : null}
         <ShellTransition>{children}</ShellTransition>
         <Analytics />
