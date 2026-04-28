@@ -90,7 +90,7 @@ export function renderAssistantContent(content: string): ReactNode {
     } else {
       blocks.push(
         <div key={`ol-wrap-${blockIndex}`} className="rounded-lg border border-[#2A2A32]/80 bg-[#101018]/80 px-3 py-2">
-          <ol className="list-decimal space-y-1.5 pl-5 text-[#EAEAF0] marker:text-[#8BE8D8]">{listBody}</ol>
+          <ol className="list-inside list-decimal space-y-1.5 pl-1 text-[#EAEAF0] marker:text-[#8BE8D8]">{listBody}</ol>
         </div>,
       )
     }

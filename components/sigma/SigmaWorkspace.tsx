@@ -401,11 +401,7 @@ function ChatsSidebarPanel({
   return (
     <>
       <div className={cn("flex min-h-0 flex-1 flex-col gap-3", className)}>
-      <div className="shrink-0 px-4 pt-4">
-        <div className="mb-3 flex flex-col">
-          <h1 className="text-xs font-bold uppercase tracking-tight text-[#e5e2e1]">The Obsidian Loom</h1>
-          <span className="text-[9px] font-medium text-[#888888]">Sigma workspace</span>
-        </div>
+      <div className="shrink-0 px-4 pt-3">
         <button
           type="button"
           onClick={handleNewChat}
@@ -757,7 +753,8 @@ export default function SigmaWorkspace({ threadId }: { threadId: string }) {
           aria-label="Sigma chats sidebar"
         >
           {!desktopCollapsed ? (
-            <div className="flex shrink-0 items-center justify-end border-b border-[#2A2A2A] px-2 py-2">
+            <div className="flex shrink-0 items-center justify-between border-b border-[#2A2A2A] px-3 py-2">
+              <h1 className="text-xs font-bold uppercase tracking-tight text-[#e5e2e1]">SIGMA WORKSPACE</h1>
               <button
                 type="button"
                 onClick={() => setDesktopCollapsed(true)}
