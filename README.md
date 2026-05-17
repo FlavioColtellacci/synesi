@@ -24,7 +24,7 @@ synesi/
 │   └── vitest.config.ts
 │
 ├── infra/               # Infrastructure-as-code & DB history
-│   └── supabase/        # Legacy Postgres migrations (rollback reference)
+│   └── supabase/        # Historical SQL migrations (Supabase decommissioned)
 │
 ├── tests/
 │   └── e2e/             # Playwright end-to-end specs
