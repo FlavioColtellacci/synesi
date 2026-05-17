@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
@@ -12,8 +12,6 @@ import { trackFunnelEvent } from '@/lib/analytics'
 
 export default function SignupPage() {
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
-  const firebaseAuth = useMemo(() => getFirebaseClientAuth(), [])
 
   useEffect(() => {
     trackFunnelEvent("signup_start")
@@ -43,7 +41,7 @@ export default function SignupPage() {
       if (isFirebaseBackend()) {
         const normalizedEmail = email.trim().toLowerCase()
         const userCredential = await createUserWithEmailAndPassword(
-          firebaseAuth,
+          getFirebaseClientAuth(),
           normalizedEmail,
           password
         )
@@ -61,7 +59,7 @@ export default function SignupPage() {
         }
         router.push('/app/dashboard')
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { error: signUpError } = await createClient().auth.signUp({
           email,
           password,
           options: {

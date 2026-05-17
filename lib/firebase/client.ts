@@ -1,5 +1,5 @@
 import { type FirebaseApp, getApps, initializeApp } from "firebase/app"
-import { getAuth } from "firebase/auth"
+import { type Auth, getAuth } from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,7 +10,26 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
+function isFirebaseClientConfigured() {
+  return Boolean(
+    firebaseConfig.apiKey &&
+      firebaseConfig.authDomain &&
+      firebaseConfig.projectId &&
+      firebaseConfig.appId,
+  )
+}
+
 function getFirebaseClientApp(): FirebaseApp {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase client is only available in the browser.")
+  }
+
+  if (!isFirebaseClientConfigured()) {
+    throw new Error(
+      "Firebase client is not configured. Set NEXT_PUBLIC_FIREBASE_* environment variables.",
+    )
+  }
+
   if (getApps().length > 0) {
     return getApps()[0]!
   }
@@ -18,6 +37,6 @@ function getFirebaseClientApp(): FirebaseApp {
   return initializeApp(firebaseConfig)
 }
 
-export function getFirebaseClientAuth() {
+export function getFirebaseClientAuth(): Auth {
   return getAuth(getFirebaseClientApp())
 }

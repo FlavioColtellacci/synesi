@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { isFirebaseBackend } from '@/lib/data/backend'
 import { getFirebaseClientAuth } from '@/lib/firebase/client'
@@ -51,8 +51,6 @@ export function OAuthProviderButtons({
   onError,
   onOAuthAttempt,
 }: OAuthProviderButtonsProps) {
-  const supabase = useMemo(() => createClient(), [])
-  const firebaseAuth = useMemo(() => getFirebaseClientAuth(), [])
   const [activeProvider, setActiveProvider] = useState<OAuthProviderId | null>(
     null
   )
@@ -72,7 +70,7 @@ export function OAuthProviderButtons({
           throw new Error('Only Google OAuth is currently supported.')
         }
 
-        const credential = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
+        const credential = await signInWithPopup(getFirebaseClientAuth(), new GoogleAuthProvider())
         const idToken = await credential.user.getIdToken()
         const response = await fetch('/api/auth/session', {
           method: 'POST',
@@ -89,7 +87,7 @@ export function OAuthProviderButtons({
       }
 
       const redirectTo = `${window.location.origin}/auth/callback`
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await createClient().auth.signInWithOAuth({
         provider,
         options: { redirectTo },
       })

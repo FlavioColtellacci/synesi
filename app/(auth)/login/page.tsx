@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, FormEvent, useMemo, useState } from 'react'
+import { Suspense, FormEvent, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
@@ -25,8 +25,6 @@ function LoginFormFallback() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = useMemo(() => createClient(), [])
-  const firebaseAuth = useMemo(() => getFirebaseClientAuth(), [])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -63,6 +61,7 @@ function LoginForm() {
 
     try {
       if (isFirebaseBackend()) {
+        const firebaseAuth = getFirebaseClientAuth()
         await signOut(firebaseAuth).catch(() => undefined)
         const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password)
         const idToken = await credential.user.getIdToken()
@@ -75,6 +74,7 @@ function LoginForm() {
           throw new Error('Could not create a secure session. Please try again.')
         }
       } else {
+        const supabase = createClient()
         await supabase.auth.signOut()
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
