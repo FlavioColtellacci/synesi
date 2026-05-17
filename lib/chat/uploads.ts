@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
 
 export type UploadExtractionStatus = "ready" | "failed"
 export type MalwareScanStatus = "clean" | "blocked" | "skipped"
@@ -32,6 +33,12 @@ type UploadContextResult = {
   block: string | null
   evidenceSnippets: string[]
   usedDocumentIds: string[]
+}
+
+type UploadBackend = SupabaseClient | Firestore
+
+function isFirestoreBackend(backend: UploadBackend): backend is Firestore {
+  return "collection" in backend
 }
 
 const MAX_EXTRACTED_CHARS = 12_000
@@ -275,7 +282,7 @@ function trimSnippet(input: string) {
 }
 
 export async function buildUploadedDocumentContextBlock(
-  supabase: SupabaseClient,
+  backend: UploadBackend,
   userId: string,
   documentIds: string[],
   options?: { omitDocumentIds?: Set<string> },
@@ -286,14 +293,44 @@ export async function buildUploadedDocumentContextBlock(
 
   const omit = options?.omitDocumentIds
   const dedupedIds = [...new Set(documentIds)].slice(0, MAX_CONTEXT_DOCS)
-  const { data } = await supabase
-    .from("chat_uploaded_documents")
-    .select("id,file_name,status,extracted_text,created_at")
-    .eq("user_id", userId)
-    .in("id", dedupedIds)
-    .order("created_at", { ascending: false })
+  let rows: Array<{
+    id: string
+    user_id?: string
+    file_name: string
+    status: string
+    extracted_text: string | null
+    created_at: string
+  }> = []
+  if (isFirestoreBackend(backend)) {
+    const snapshots = await Promise.all(
+      dedupedIds.map((id) => backend.collection("chat_uploaded_documents").doc(id).get()),
+    )
+    rows = snapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot) => {
+        const data = (snapshot.data() ?? {}) as Record<string, unknown>
+        return {
+          id: snapshot.id,
+          user_id: typeof data.user_id === "string" ? data.user_id : "",
+          file_name: typeof data.file_name === "string" ? data.file_name : "",
+          status: typeof data.status === "string" ? data.status : "",
+          extracted_text: typeof data.extracted_text === "string" ? data.extracted_text : null,
+          created_at: typeof data.created_at === "string" ? data.created_at : "",
+        }
+      })
+      .filter((row) => row.user_id === userId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  } else {
+    const { data } = await backend
+      .from("chat_uploaded_documents")
+      .select("id,file_name,status,extracted_text,created_at")
+      .eq("user_id", userId)
+      .in("id", dedupedIds)
+      .order("created_at", { ascending: false })
+    rows = (data ?? []) as typeof rows
+  }
 
-  const readyDocs = (data ?? []).filter((row) => {
+  const readyDocs = rows.filter((row) => {
     if (omit?.has(row.id)) return false
     return row.status === "ready" && typeof row.extracted_text === "string" && row.extracted_text.trim().length > 0
   })

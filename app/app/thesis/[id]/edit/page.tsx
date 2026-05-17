@@ -1,5 +1,8 @@
 import { notFound, redirect } from "next/navigation"
 import EditThesisForm from "@/components/thesis/EditThesisForm"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { createRepositories } from "@/lib/data/repositories"
 import { createClient } from "@/lib/supabase/server"
 
 type PageProps = {
@@ -8,32 +11,21 @@ type PageProps = {
 
 export default async function EditThesisPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const userId = await getServerUserId()
 
-  if (!user) {
+  if (!userId) {
     redirect("/login")
   }
 
-  const { data: thesis } = await supabase
-    .from("theses")
-    .select("id, ticker, company_name, thesis_statement, investing_style, confidence_level, exit_criteria")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle()
+  const supabase = isFirebaseBackend() ? null : await createClient()
+  const repositories = createRepositories({ supabase: supabase ?? undefined })
 
+  const thesis = await repositories.theses.getById(userId, id)
   if (!thesis) {
     notFound()
   }
 
-  const { data: assumptionsData } = await supabase
-    .from("assumptions")
-    .select("category, statement, break_condition")
-    .eq("thesis_id", id)
-    .eq("user_id", user.id)
-    .order("sort_order", { ascending: true })
+  const assumptionsData = await repositories.assumptions.listEditableByThesisId(userId, id)
 
   return (
     <EditThesisForm
@@ -45,7 +37,7 @@ export default async function EditThesisPage({ params }: PageProps) {
         investingStyle: thesis.investing_style ?? "",
         confidenceLevel: (thesis.confidence_level as "high" | "medium" | "low") ?? "medium",
         exitCriteria: thesis.exit_criteria ?? "",
-        assumptions: (assumptionsData ?? []).map((assumption) => ({
+        assumptions: assumptionsData.map((assumption) => ({
           category: assumption.category,
           statement: assumption.statement,
           breakCondition: assumption.break_condition ?? "",

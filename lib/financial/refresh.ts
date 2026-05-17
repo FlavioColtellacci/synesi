@@ -9,8 +9,8 @@ import {
 } from "./providers/eodhd"
 import { normalizeEodhdToSnapshot } from "./normalize"
 import type { SnapshotBuildResult } from "./types"
-import { createAdminClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
+import { createAdminFinancialSnapshotRepository } from "@/lib/data/repositories/financial-snapshots"
 import { getGlobalQuotePrice } from "@/lib/alpha-vantage"
 import { getWebResearchContext } from "@/lib/web-research"
 import {
@@ -829,7 +829,7 @@ export async function refreshFinancialSnapshot(params: {
     return { ok: false, ticker: "", error: "Ticker is required" }
   }
 
-  const supabase = createAdminClient()
+  const financialSnapshots = createAdminFinancialSnapshotRepository()
 
   const built =
     source === "web"
@@ -848,11 +848,8 @@ export async function refreshFinancialSnapshot(params: {
   const coverageToPersist = { ...(built.coverage ?? {}) }
 
   if (source === "web") {
-    const { data: existingSnapshot } = await supabase
-      .from("financial_snapshots")
-      .select("payload, coverage")
-      .eq("ticker", normalizedTicker)
-      .maybeSingle()
+    const existingSnapshot =
+      await financialSnapshots.getPayloadAndCoverageByTicker(normalizedTicker)
 
     const existingPayload = coerceSnapshotPayload(
       (existingSnapshot?.payload ?? {}) as Partial<FinancialSnapshotPayload>,
@@ -909,12 +906,11 @@ export async function refreshFinancialSnapshot(params: {
     coverage: coverageToPersist as Record<string, unknown>,
   }
 
-  const { error } = await supabase
-    .from("financial_snapshots")
-    .upsert(row, { onConflict: "ticker" })
-
-  if (error) {
-    return { ok: false, ticker: normalizedTicker, error: error.message }
+  try {
+    await financialSnapshots.upsert(row)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to persist snapshot"
+    return { ok: false, ticker: normalizedTicker, error: message }
   }
 
   const metrics = coverageToPersist._metrics

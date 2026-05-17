@@ -5,6 +5,9 @@ import {
   updateUserSigmaMemoryProfile,
   type SigmaMemoryProfile,
 } from "@/lib/chat/store"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 type MemoryRequestBody = {
@@ -40,14 +43,12 @@ function sanitizeMemoryRequestBody(body: MemoryRequestBody): SigmaMemoryProfile 
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userId = await getServerUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const memory = await getUserSigmaMemoryProfile(supabase, user.id)
-    console.info(JSON.stringify({ event: "chat_memory_read", userId: user.id, enabled: memory.enabled }))
+    const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
+    const memory = await getUserSigmaMemoryProfile(backend, userId)
+    console.info(JSON.stringify({ event: "chat_memory_read", userId, enabled: memory.enabled }))
     return NextResponse.json({ memory })
   } catch {
     return NextResponse.json({ error: "Failed to load Sigma memory profile" }, { status: 500 })
@@ -56,19 +57,17 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (isMemoryMutationRateLimited(user.id, Date.now())) {
+    const userId = await getServerUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (isMemoryMutationRateLimited(userId, Date.now())) {
       return NextResponse.json({ error: "Too many memory updates. Please try again shortly." }, { status: 429 })
     }
 
+    const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
     const body = (await request.json()) as MemoryRequestBody
     const payload = sanitizeMemoryRequestBody(body)
-    const memory = await updateUserSigmaMemoryProfile(supabase, user.id, payload)
-    console.info(JSON.stringify({ event: "chat_memory_updated", userId: user.id, enabled: memory.enabled }))
+    const memory = await updateUserSigmaMemoryProfile(backend, userId, payload)
+    console.info(JSON.stringify({ event: "chat_memory_updated", userId, enabled: memory.enabled }))
     return NextResponse.json({ memory })
   } catch {
     return NextResponse.json({ error: "Failed to update Sigma memory profile" }, { status: 500 })
@@ -77,17 +76,15 @@ export async function PUT(request: Request) {
 
 export async function DELETE() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (isMemoryMutationRateLimited(user.id, Date.now())) {
+    const userId = await getServerUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (isMemoryMutationRateLimited(userId, Date.now())) {
       return NextResponse.json({ error: "Too many memory updates. Please try again shortly." }, { status: 429 })
     }
 
-    const memory = await resetUserSigmaMemoryProfile(supabase, user.id)
-    console.info(JSON.stringify({ event: "chat_memory_reset", userId: user.id }))
+    const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
+    const memory = await resetUserSigmaMemoryProfile(backend, userId)
+    console.info(JSON.stringify({ event: "chat_memory_reset", userId }))
     return NextResponse.json({ memory })
   } catch {
     return NextResponse.json({ error: "Failed to reset Sigma memory profile" }, { status: 500 })

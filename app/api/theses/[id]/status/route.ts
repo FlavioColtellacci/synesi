@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { createRepositories } from "@/lib/data/repositories"
 import { createClient } from "@/lib/supabase/server"
 
 const VALID_STATUSES = ["intact", "at_risk", "broken"] as const
@@ -27,50 +30,27 @@ export async function PATCH(
     const newStatus = body.status
     const note = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: thesis, error: fetchError } = await supabase
-      .from("theses")
-      .select("id, status, user_id")
-      .eq("id", thesisId)
-      .eq("user_id", user.id)
-      .single()
+    const supabase = isFirebaseBackend() ? null : await createClient()
+    const repositories = createRepositories({ supabase: supabase ?? undefined })
 
-    if (fetchError || !thesis) {
+    const oldStatus = await repositories.theses.updateStatus(userId, thesisId, newStatus)
+    if (!oldStatus) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
     }
 
-    const oldStatus = thesis.status
-
-    const { error: updateError } = await supabase
-      .from("theses")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq("id", thesisId)
-      .eq("user_id", user.id)
-
-    if (updateError) {
-      throw updateError
-    }
-
-    const { error: insertError } = await supabase.from("thesis_updates").insert({
+    await repositories.thesisUpdates.insert({
       thesis_id: thesisId,
-      user_id: user.id,
+      user_id: userId,
       update_type: "status_change",
       old_status: oldStatus,
       new_status: newStatus,
       note,
     })
-
-    if (insertError) {
-      throw insertError
-    }
 
     return NextResponse.json({ success: true, status: newStatus })
   } catch (error) {

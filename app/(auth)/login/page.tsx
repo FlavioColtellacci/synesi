@@ -1,9 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, FormEvent, useMemo, useState } from 'react'
+import { Suspense, FormEvent, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseClientAuth } from '@/lib/firebase/client'
 import { createClient } from '@/lib/supabase/client'
 
 function LoginFormFallback() {
@@ -22,7 +25,6 @@ function LoginFormFallback() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = useMemo(() => createClient(), [])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -57,27 +59,44 @@ function LoginForm() {
       return
     }
 
-    // Clear potentially stale local auth state before attempting a fresh sign-in.
-    await supabase.auth.signOut()
+    try {
+      if (isFirebaseBackend()) {
+        const firebaseAuth = getFirebaseClientAuth()
+        await signOut(firebaseAuth).catch(() => undefined)
+        const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password)
+        const idToken = await credential.user.getIdToken()
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        })
+        if (!response.ok) {
+          throw new Error('Could not create a secure session. Please try again.')
+        }
+      } else {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
+        if (signInError) {
+          throw signInError
+        }
+      }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    })
-
-    if (signInError) {
-      if (signInError.message === 'Invalid login credentials') {
+      router.push('/app/dashboard')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not sign in.'
+      if (message === 'Invalid login credentials') {
         setError(
           'Invalid login credentials. Check email/password, confirm your email if newly signed up, or reset your password.'
         )
       } else {
-        setError(signInError.message)
+        setError(message)
       }
       setIsLoading(false)
-      return
     }
-
-    router.push('/app/dashboard')
   }
 
   return (

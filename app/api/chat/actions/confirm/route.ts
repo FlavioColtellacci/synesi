@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 import { resolveConfirmedAction, type SigmaActionDraft } from "@/lib/chat/actions"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 type ConfirmActionBody = {
@@ -8,12 +11,8 @@ type ConfirmActionBody = {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  const userId = await getServerUserId()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -22,7 +21,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Confirmation and action payload are required" }, { status: 400 })
   }
 
-  const execution = await resolveConfirmedAction(supabase, user.id, body.action)
+  const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
+  const execution = await resolveConfirmedAction(backend, userId, body.action)
   if (!execution) {
     return NextResponse.json({ error: "Action is not allowed or not resolvable" }, { status: 400 })
   }

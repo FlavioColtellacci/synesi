@@ -19,9 +19,15 @@ import { resolveEvalGateDecision, runChatEvalHarness } from "@/lib/chat/evals"
 import { isRingIncludedInRollout, readRolloutTargetRing, resolveReleaseRing } from "@/lib/chat/release-rings"
 import { isWebLookupIntent } from "@/lib/chat/web-intent"
 import type { ChatAssistantResponse, ChatRequestMessage } from "@/lib/chat/types"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import { verifyFirebaseSessionCookie } from "@/lib/firebase/session"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
 import { createClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
+import type { Database } from "@/types/database"
 
 type ChatRequestBody = {
   message?: string
@@ -76,6 +82,12 @@ const userContextCache = new Map<
     alerts: AlertSnapshot[]
   }
 >()
+
+type ChatBackend = SupabaseClient<Database> | Firestore
+
+function isFirestoreBackend(backend: ChatBackend): backend is Firestore {
+  return "collection" in backend
+}
 
 function isRateLimited(userId: string, now: number) {
   const windowStart = now - RATE_LIMIT_WINDOW_MS
@@ -533,37 +545,73 @@ function parseToolUseBlocks(content: unknown): ToolUseBlock[] {
 }
 
 export async function invokeReadOnlyTool(args: {
-  supabase: Awaited<ReturnType<typeof createClient>>
+  backend: ChatBackend
   userId: string
   attachmentIds: string[]
   tool: ToolUseBlock
 }) {
-  const { supabase, userId, attachmentIds, tool } = args
+  const { backend, userId, attachmentIds, tool } = args
   const startedAt = Date.now()
 
   try {
     if (tool.name === "list_open_alerts") {
       const limit = readNumber(tool.input.limit, 6, 1, 20)
-      const { data: latestAlerts } = await supabase
-        .from("events")
-        .select("thesis_id,event_type,event_detail,created_at")
-        .eq("user_id", userId)
-        .eq("is_reviewed", false)
-        .order("created_at", { ascending: false })
-        .limit(limit)
+      const latestAlerts = await (async () => {
+        if (isFirestoreBackend(backend)) {
+          const snapshot = await backend
+            .collection("events")
+            .where("user_id", "==", userId)
+            .where("is_reviewed", "==", false)
+            .orderBy("created_at", "desc")
+            .limit(limit)
+            .get()
+          return snapshot.docs.map((doc) => {
+            const row = (doc.data() ?? {}) as Record<string, unknown>
+            return {
+              thesis_id: typeof row.thesis_id === "string" ? row.thesis_id : "",
+              event_type: typeof row.event_type === "string" ? row.event_type : "",
+              event_detail: typeof row.event_detail === "string" ? row.event_detail : null,
+              created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+            }
+          })
+        }
 
-      const thesisIds = Array.from(new Set((latestAlerts ?? []).map((event) => event.thesis_id).filter(Boolean)))
+        const { data } = await backend
+          .from("events")
+          .select("thesis_id,event_type,event_detail,created_at")
+          .eq("user_id", userId)
+          .eq("is_reviewed", false)
+          .order("created_at", { ascending: false })
+          .limit(limit)
+        return data ?? []
+      })()
+
+      const thesisIds = Array.from(new Set(latestAlerts.map((event) => event.thesis_id).filter(Boolean)))
       let thesisById = new Map<string, string>()
       if (thesisIds.length > 0) {
-        const { data: theses } = await supabase
-          .from("theses")
-          .select("id,ticker")
-          .eq("user_id", userId)
-          .in("id", thesisIds)
-        thesisById = new Map((theses ?? []).map((thesis) => [thesis.id, thesis.ticker]))
+        if (isFirestoreBackend(backend)) {
+          const snapshots = await Promise.all(thesisIds.map((id) => backend.collection("theses").doc(id).get()))
+          thesisById = new Map(
+            snapshots
+              .filter((snapshot) => snapshot.exists)
+              .map((snapshot) => {
+                const row = (snapshot.data() ?? {}) as Record<string, unknown>
+                const owner = typeof row.user_id === "string" ? row.user_id : ""
+                const ticker = typeof row.ticker === "string" ? row.ticker : "unknown"
+                return [snapshot.id, owner === userId ? ticker : "unknown"] as const
+              }),
+          )
+        } else {
+          const { data: theses } = await backend
+            .from("theses")
+            .select("id,ticker")
+            .eq("user_id", userId)
+            .in("id", thesisIds)
+          thesisById = new Map((theses ?? []).map((thesis) => [thesis.id, thesis.ticker]))
+        }
       }
 
-      const alerts = (latestAlerts ?? []).map((event) => ({
+      const alerts = latestAlerts.map((event) => ({
         thesisId: event.thesis_id,
         ticker: thesisById.get(event.thesis_id) ?? "unknown",
         eventType: event.event_type,
@@ -582,23 +630,66 @@ export async function invokeReadOnlyTool(args: {
       const thesisId = readString(tool.input.thesisId, 120)
       const ticker = readString(tool.input.ticker, 24).toUpperCase()
 
-      let query = supabase
-        .from("theses")
-        .select("id,ticker,company_name,status,thesis_statement,updated_at")
-        .eq("user_id", userId)
-      if (thesisId) {
-        query = query.eq("id", thesisId)
-      } else if (ticker) {
-        query = query.ilike("ticker", ticker)
-      } else {
+      const thesis = await (async () => {
+        if (isFirestoreBackend(backend)) {
+          if (thesisId) {
+            const snapshot = await backend.collection("theses").doc(thesisId).get()
+            if (!snapshot.exists) return null
+            const row = (snapshot.data() ?? {}) as Record<string, unknown>
+            if (typeof row.user_id !== "string" || row.user_id !== userId) return null
+            return {
+              id: snapshot.id,
+              ticker: typeof row.ticker === "string" ? row.ticker : "",
+              company_name: typeof row.company_name === "string" ? row.company_name : "",
+              status: typeof row.status === "string" ? row.status : "",
+              thesis_statement: typeof row.thesis_statement === "string" ? row.thesis_statement : "",
+              updated_at: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+            }
+          }
+          if (ticker) {
+            const snapshot = await backend
+              .collection("theses")
+              .where("user_id", "==", userId)
+              .where("ticker", "==", ticker)
+              .orderBy("updated_at", "desc")
+              .limit(1)
+              .get()
+            const doc = snapshot.docs[0]
+            if (!doc) return null
+            const row = (doc.data() ?? {}) as Record<string, unknown>
+            return {
+              id: doc.id,
+              ticker: typeof row.ticker === "string" ? row.ticker : "",
+              company_name: typeof row.company_name === "string" ? row.company_name : "",
+              status: typeof row.status === "string" ? row.status : "",
+              thesis_statement: typeof row.thesis_statement === "string" ? row.thesis_statement : "",
+              updated_at: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+            }
+          }
+          return null
+        }
+
+        let query = backend
+          .from("theses")
+          .select("id,ticker,company_name,status,thesis_statement,updated_at")
+          .eq("user_id", userId)
+        if (thesisId) {
+          query = query.eq("id", thesisId)
+        } else if (ticker) {
+          query = query.ilike("ticker", ticker)
+        } else {
+          return null
+        }
+        const { data } = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle()
+        return data ?? null
+      })()
+      if (!thesisId && !ticker) {
         return {
           ok: false,
           latencyMs: Date.now() - startedAt,
           result: { error: "Provide thesisId or ticker." },
         }
       }
-
-      const { data: thesis } = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle()
       if (!thesis) {
         return {
           ok: false,
@@ -624,7 +715,7 @@ export async function invokeReadOnlyTool(args: {
     }
 
     if (tool.name === "get_latest_monitor_snapshot") {
-      const snapshot = await getLatestSigmaMonitorRun(supabase, userId)
+      const snapshot = await getLatestSigmaMonitorRun(backend, userId)
       if (!snapshot) {
         return {
           ok: true,
@@ -657,21 +748,53 @@ export async function invokeReadOnlyTool(args: {
         : []
       const limit = readNumber(tool.input.limit, 3, 1, 4)
       const ids = (requestedIds.length > 0 ? requestedIds : attachmentIds).slice(0, 4)
-      const query = supabase
-        .from("chat_uploaded_documents")
-        .select("id,file_name,extracted_text,status,created_at")
-        .eq("user_id", userId)
-        .eq("status", "ready")
-        .order("created_at", { ascending: false })
-        .limit(limit)
-      const { data } = ids.length > 0 ? await query.in("id", ids) : await query
+      const documents = await (async () => {
+        if (isFirestoreBackend(backend)) {
+          let snapshot
+          if (ids.length > 0) {
+            snapshot = await backend
+              .collection("chat_uploaded_documents")
+              .where("id", "in", ids.slice(0, 10))
+              .where("user_id", "==", userId)
+              .where("status", "==", "ready")
+              .orderBy("created_at", "desc")
+              .limit(limit)
+              .get()
+          } else {
+            snapshot = await backend
+              .collection("chat_uploaded_documents")
+              .where("user_id", "==", userId)
+              .where("status", "==", "ready")
+              .orderBy("created_at", "desc")
+              .limit(limit)
+              .get()
+          }
+          return snapshot.docs.map((doc) => {
+            const row = (doc.data() ?? {}) as Record<string, unknown>
+            return {
+              id: doc.id,
+              fileName: typeof row.file_name === "string" ? row.file_name : "",
+              excerpt: typeof row.extracted_text === "string" ? row.extracted_text.slice(0, 700) : "",
+              createdAt: typeof row.created_at === "string" ? row.created_at : "",
+            }
+          })
+        }
 
-      const documents = (data ?? []).map((doc) => ({
-        id: doc.id,
-        fileName: doc.file_name,
-        excerpt: (doc.extracted_text ?? "").slice(0, 700),
-        createdAt: doc.created_at,
-      }))
+        const query = backend
+          .from("chat_uploaded_documents")
+          .select("id,file_name,extracted_text,status,created_at")
+          .eq("user_id", userId)
+          .eq("status", "ready")
+          .order("created_at", { ascending: false })
+          .limit(limit)
+        const { data } = ids.length > 0 ? await query.in("id", ids) : await query
+        return (data ?? []).map((doc) => ({
+          id: doc.id,
+          fileName: doc.file_name,
+          excerpt: (doc.extracted_text ?? "").slice(0, 700),
+          createdAt: doc.created_at,
+        }))
+      })()
       return {
         ok: true,
         latencyMs: Date.now() - startedAt,
@@ -701,7 +824,7 @@ export async function runBoundedReadOnlyToolLoop(args: {
     system: string
     messages: MessageParam[]
   }
-  supabase: Awaited<ReturnType<typeof createClient>>
+  backend: ChatBackend
   userId: string
   requestId: string
   attachmentIds: string[]
@@ -747,7 +870,7 @@ export async function runBoundedReadOnlyToolLoop(args: {
       }
 
       const result = await invokeReadOnlyTool({
-        supabase: args.supabase,
+        backend: args.backend,
         userId: args.userId,
         attachmentIds: args.attachmentIds,
         tool: toolUse,
@@ -815,6 +938,138 @@ export async function runBoundedReadOnlyToolLoop(args: {
   }
 }
 
+async function loadUserContextSnapshot(backend: ChatBackend, userId: string) {
+  if (isFirestoreBackend(backend)) {
+    const [thesisCountSnap, openAlertsCountSnap, latestThesesSnap, latestAlertsSnap] = await Promise.all([
+      backend.collection("theses").where("user_id", "==", userId).count().get(),
+      backend.collection("events").where("user_id", "==", userId).where("is_reviewed", "==", false).count().get(),
+      backend.collection("theses").where("user_id", "==", userId).orderBy("updated_at", "desc").limit(12).get(),
+      backend
+        .collection("events")
+        .where("user_id", "==", userId)
+        .where("is_reviewed", "==", false)
+        .orderBy("created_at", "desc")
+        .limit(12)
+        .get(),
+    ])
+
+    const positions = latestThesesSnap.docs.map((doc) => {
+      const thesis = (doc.data() ?? {}) as Record<string, unknown>
+      return {
+        id: doc.id,
+        ticker: typeof thesis.ticker === "string" ? thesis.ticker : "",
+        companyName: typeof thesis.company_name === "string" ? thesis.company_name : "",
+        status: typeof thesis.status === "string" ? thesis.status : "",
+        updatedAt: typeof thesis.updated_at === "string" ? thesis.updated_at : new Date().toISOString(),
+      }
+    })
+
+    const thesisById = new Map(positions.map((thesis) => [thesis.id, thesis]))
+    const alerts = latestAlertsSnap.docs
+      .map((doc) => {
+        const event = (doc.data() ?? {}) as Record<string, unknown>
+        const thesisId = typeof event.thesis_id === "string" ? event.thesis_id : ""
+        const thesis = thesisById.get(thesisId)
+        if (!thesis) return null
+        return {
+          thesisId,
+          ticker: thesis.ticker,
+          companyName: thesis.companyName,
+          eventType: typeof event.event_type === "string" ? event.event_type : "",
+          eventDetail: truncateEventDetail(typeof event.event_detail === "string" ? event.event_detail : null),
+          createdAt: typeof event.created_at === "string" ? event.created_at : new Date().toISOString(),
+        }
+      })
+      .filter((event): event is AlertSnapshot => event !== null)
+
+    return {
+      thesisCount: thesisCountSnap.data().count,
+      openAlertsCount: openAlertsCountSnap.data().count,
+      positions,
+      alerts,
+    }
+  }
+
+  const [{ count: freshThesisCount }, { count: freshOpenAlertsCount }, { data: latestTheses }, { data: latestAlerts }] =
+    await Promise.all([
+      backend.from("theses").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      backend
+        .from("events")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_reviewed", false),
+      backend
+        .from("theses")
+        .select("id,ticker,company_name,status,updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(12),
+      backend
+        .from("events")
+        .select("thesis_id,event_type,event_detail,created_at")
+        .eq("user_id", userId)
+        .eq("is_reviewed", false)
+        .order("created_at", { ascending: false })
+        .limit(12),
+    ])
+
+  const positions = (latestTheses ?? []).map((thesis) => ({
+    id: thesis.id,
+    ticker: thesis.ticker,
+    companyName: thesis.company_name,
+    status: thesis.status,
+    updatedAt: thesis.updated_at,
+  }))
+  const thesisById = new Map(positions.map((thesis) => [thesis.id, thesis]))
+  const missingThesisIds = Array.from(
+    new Set(
+      (latestAlerts ?? [])
+        .map((event) => event.thesis_id)
+        .filter((thesisId) => thesisId && !thesisById.has(thesisId)),
+    ),
+  )
+
+  if (missingThesisIds.length > 0) {
+    const { data: missingTheses } = await backend
+      .from("theses")
+      .select("id,ticker,company_name,status,updated_at")
+      .eq("user_id", userId)
+      .in("id", missingThesisIds)
+
+    for (const thesis of missingTheses ?? []) {
+      thesisById.set(thesis.id, {
+        id: thesis.id,
+        ticker: thesis.ticker,
+        companyName: thesis.company_name,
+        status: thesis.status,
+        updatedAt: thesis.updated_at,
+      })
+    }
+  }
+
+  const alerts = (latestAlerts ?? [])
+    .map((event) => {
+      const thesis = thesisById.get(event.thesis_id)
+      if (!thesis) return null
+      return {
+        thesisId: event.thesis_id,
+        ticker: thesis.ticker,
+        companyName: thesis.companyName,
+        eventType: event.event_type,
+        eventDetail: truncateEventDetail(event.event_detail),
+        createdAt: event.created_at,
+      }
+    })
+    .filter((event): event is AlertSnapshot => event !== null)
+
+  return {
+    thesisCount: freshThesisCount ?? 0,
+    openAlertsCount: freshOpenAlertsCount ?? 0,
+    positions,
+    alerts,
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID()
   const startedAt = Date.now()
@@ -838,22 +1093,28 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const firebaseMode = isFirebaseBackend()
+    const backend: ChatBackend = firebaseMode ? getFirebaseAdminFirestore() : await createClient()
+    const firebaseToken = firebaseMode ? await verifyFirebaseSessionCookie() : null
+    const supabaseUser = firebaseMode
+      ? null
+      : (
+          await (backend as SupabaseClient<Database>).auth.getUser()
+        ).data.user
+    const userId = firebaseMode ? (firebaseToken?.uid ?? null) : (supabaseUser?.id ?? null)
+    const userEmail = firebaseMode ? (firebaseToken?.email ?? null) : (supabaseUser?.email ?? null)
 
-    if (!user) {
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const threadResolve = await resolveOptionalThreadIdForUser(supabase, user.id, body.threadId)
+    const threadResolve = await resolveOptionalThreadIdForUser(backend, userId, body.threadId)
     if (!threadResolve.ok) {
       return NextResponse.json({ error: threadResolve.error }, { status: threadResolve.status })
     }
     const persistThreadId = threadResolve.threadId
 
-    const userReleaseRing = resolveReleaseRing({ userId: user.id, email: user.email })
+    const userReleaseRing = resolveReleaseRing({ userId, email: userEmail })
     const memoryTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_MEMORY_TARGET_RING, "internal")
     const evalTargetRing = readRolloutTargetRing(process.env.SIGMA_PHASE6_EVAL_TARGET_RING, "internal")
     const phase6MemoryEnabled =
@@ -866,13 +1127,13 @@ export async function POST(request: Request) {
       isRingIncludedInRollout({ userRing: userReleaseRing, targetRing: evalTargetRing })
 
     try {
-      await syncUserReleaseRing(supabase, user.id, userReleaseRing)
+      await syncUserReleaseRing(backend, userId, userReleaseRing)
     } catch {
       // Ring sync should not block chat responses.
     }
 
     const now = Date.now()
-    if (isRateLimited(user.id, now)) {
+    if (isRateLimited(userId, now)) {
       return NextResponse.json(
         {
           answer:
@@ -887,17 +1148,17 @@ export async function POST(request: Request) {
     }
 
     if (isMonitorSummaryQuestion(latestMessage)) {
-      const monitor = await getLatestSigmaMonitorRun(supabase, user.id)
+      const monitor = await getLatestSigmaMonitorRun(backend, userId)
       if (monitor) {
         const monitorResponse = mapMonitorSnapshotToChatResponse(monitor)
         try {
-          await persistChatExchange(supabase, user.id, latestMessage, monitorResponse, persistThreadId)
+          await persistChatExchange(backend, userId, latestMessage, monitorResponse, persistThreadId)
         } catch (persistError) {
           console.warn(
             JSON.stringify({
               event: "chat_persist_warning",
               requestId,
-              userId: user.id,
+              userId,
               error: persistError instanceof Error ? persistError.message : "Unknown persist error",
             }),
           )
@@ -906,7 +1167,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const cachedContext = userContextCache.get(user.id)
+    const cachedContext = userContextCache.get(userId)
     let thesisCount = cachedContext?.thesisCount
     let openAlertsCount = cachedContext?.openAlertsCount
     let tickers = cachedContext?.tickers
@@ -914,81 +1175,14 @@ export async function POST(request: Request) {
     let alerts = cachedContext?.alerts
 
     if (!cachedContext || cachedContext.expiresAt <= now) {
-      const [{ count: freshThesisCount }, { count: freshOpenAlertsCount }, { data: latestTheses }, { data: latestAlerts }] =
-        await Promise.all([
-          supabase.from("theses").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-          supabase
-            .from("events")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("is_reviewed", false),
-          supabase
-            .from("theses")
-            .select("id,ticker,company_name,status,updated_at")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false })
-            .limit(12),
-          supabase
-            .from("events")
-            .select("thesis_id,event_type,event_detail,created_at")
-            .eq("user_id", user.id)
-            .eq("is_reviewed", false)
-            .order("created_at", { ascending: false })
-            .limit(12),
-        ])
-      thesisCount = freshThesisCount ?? 0
-      openAlertsCount = freshOpenAlertsCount ?? 0
-      positions = (latestTheses ?? []).map((thesis) => ({
-        id: thesis.id,
-        ticker: thesis.ticker,
-        companyName: thesis.company_name,
-        status: thesis.status,
-        updatedAt: thesis.updated_at,
-      }))
-      tickers = (positions ?? []).map((thesis) => thesis.ticker)
-      const thesisById = new Map(positions.map((thesis) => [thesis.id, thesis]))
-      const missingThesisIds = Array.from(
-        new Set(
-          (latestAlerts ?? [])
-            .map((event) => event.thesis_id)
-            .filter((thesisId) => thesisId && !thesisById.has(thesisId)),
-        ),
-      )
+      const contextSnapshot = await loadUserContextSnapshot(backend, userId)
+      thesisCount = contextSnapshot.thesisCount
+      openAlertsCount = contextSnapshot.openAlertsCount
+      positions = contextSnapshot.positions
+      tickers = contextSnapshot.positions.map((position) => position.ticker)
+      alerts = contextSnapshot.alerts
 
-      if (missingThesisIds.length > 0) {
-        const { data: missingTheses } = await supabase
-          .from("theses")
-          .select("id,ticker,company_name,status,updated_at")
-          .eq("user_id", user.id)
-          .in("id", missingThesisIds)
-
-        for (const thesis of missingTheses ?? []) {
-          thesisById.set(thesis.id, {
-            id: thesis.id,
-            ticker: thesis.ticker,
-            companyName: thesis.company_name,
-            status: thesis.status,
-            updatedAt: thesis.updated_at,
-          })
-        }
-      }
-
-      alerts = (latestAlerts ?? [])
-        .map((event) => {
-          const thesis = thesisById.get(event.thesis_id)
-          if (!thesis) return null
-          return {
-            thesisId: event.thesis_id,
-            ticker: thesis.ticker,
-            companyName: thesis.companyName,
-            eventType: event.event_type,
-            eventDetail: truncateEventDetail(event.event_detail),
-            createdAt: event.created_at,
-          }
-        })
-        .filter((event): event is AlertSnapshot => event !== null)
-
-      userContextCache.set(user.id, {
+      userContextCache.set(userId, {
         expiresAt: now + USER_CONTEXT_CACHE_TTL_MS,
         thesisCount,
         openAlertsCount,
@@ -1028,7 +1222,7 @@ export async function POST(request: Request) {
     const skillRoute = skillRoutingEnabled ? resolveSkillRoute(latestMessage) : "general"
     const shouldPlanFirst = planThenAnswerEnabled && shouldUsePlanThenAnswer(latestMessage)
 
-    const visionPack = await buildVisionContentBlocksForAttachments(supabase, user.id, attachmentIds)
+    const visionPack = await buildVisionContentBlocksForAttachments(backend, userId, attachmentIds)
     const visionBlocks = visionPack.blocks
     const visionOmitIds = new Set(visionPack.loadedIds)
     const visionSystemNote =
@@ -1036,11 +1230,11 @@ export async function POST(request: Request) {
         ? `\n\nVISION: The user's latest message includes ${visionBlocks.length} image attachment(s) as image content. You can see them. Read visible text, charts, and UI; answer questions about the screenshot or photo.`
         : ""
 
-    const ragContext = await buildRagContextBlock(supabase, user.id, latestMessage)
+    const ragContext = await buildRagContextBlock(backend, userId, latestMessage)
     if (ragContext.block) {
       liveContextSections.push(ragContext.block)
     }
-    const uploadedDocumentContext = await buildUploadedDocumentContextBlock(supabase, user.id, attachmentIds, {
+    const uploadedDocumentContext = await buildUploadedDocumentContextBlock(backend, userId, attachmentIds, {
       omitDocumentIds: visionOmitIds,
     })
     if (uploadedDocumentContext.block) {
@@ -1067,13 +1261,13 @@ export async function POST(request: Request) {
     let sigmaMemoryProfile: Awaited<ReturnType<typeof getUserSigmaMemoryProfile>> | null = null
     if (phase6MemoryEnabled) {
       try {
-        sigmaMemoryProfile = await getUserSigmaMemoryProfile(supabase, user.id)
+        sigmaMemoryProfile = await getUserSigmaMemoryProfile(backend, userId)
       } catch {
         sigmaMemoryProfile = null
       }
     }
     const systemPrompt = buildChatSystemPrompt({
-      email: user.email ?? null,
+      email: userEmail,
       thesisCount: thesisCount ?? 0,
       openAlertsCount: openAlertsCount ?? 0,
       tickers: tickers ?? [],
@@ -1246,8 +1440,8 @@ export async function POST(request: Request) {
             let exportArtifacts: ChatAssistantResponse["artifacts"] = []
             try {
               exportArtifacts = await createSigmaExportsForResponse({
-                supabase,
-                userId: user.id,
+                backend,
+                userId,
                 requestId,
                 response: responsePayloadWithWebContext,
                 positions: positions ?? [],
@@ -1278,8 +1472,8 @@ export async function POST(request: Request) {
 
             try {
               await persistChatExchange(
-                supabase,
-                user.id,
+                backend,
+                userId,
                 latestMessage,
                 gatedFinalResponsePayload,
                 persistThreadId,
@@ -1289,7 +1483,7 @@ export async function POST(request: Request) {
                 JSON.stringify({
                   event: "chat_persist_warning",
                   requestId,
-                  userId: user.id,
+                  userId,
                   error: persistError instanceof Error ? persistError.message : "Unknown persist error",
                 }),
               )
@@ -1299,7 +1493,7 @@ export async function POST(request: Request) {
               JSON.stringify({
                 event: "chat_request",
                 requestId,
-                userId: user.id,
+                userId,
                 model,
                 latencyMs: Date.now() - startedAt,
                 sourceTags: normalizedResponsePayloadWithBrave.sourceTags,
@@ -1358,8 +1552,8 @@ export async function POST(request: Request) {
       const loopResult = await runBoundedReadOnlyToolLoop({
         llm,
         baseRequest: completionBaseRequest,
-        supabase,
-        userId: user.id,
+        backend,
+        userId,
         requestId,
         attachmentIds,
       })
@@ -1402,8 +1596,8 @@ export async function POST(request: Request) {
     let exportArtifacts: ChatAssistantResponse["artifacts"] = []
     try {
       exportArtifacts = await createSigmaExportsForResponse({
-        supabase,
-        userId: user.id,
+        backend,
+        userId,
         requestId,
         response: responsePayloadWithWebContext,
         positions: positions ?? [],
@@ -1433,13 +1627,13 @@ export async function POST(request: Request) {
       : finalResponsePayloadWithWebContext
 
     try {
-      await persistChatExchange(supabase, user.id, latestMessage, gatedFinalResponsePayload, persistThreadId)
+      await persistChatExchange(backend, userId, latestMessage, gatedFinalResponsePayload, persistThreadId)
     } catch (persistError) {
       console.warn(
         JSON.stringify({
           event: "chat_persist_warning",
           requestId,
-          userId: user.id,
+          userId,
           error: persistError instanceof Error ? persistError.message : "Unknown persist error",
         }),
       )
@@ -1449,7 +1643,7 @@ export async function POST(request: Request) {
       JSON.stringify({
         event: "chat_request",
         requestId,
-        userId: user.id,
+        userId,
         model,
         latencyMs: Date.now() - startedAt,
         sourceTags: normalizedResponsePayload.sourceTags,

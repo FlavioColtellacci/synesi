@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { createRepositories } from "@/lib/data/repositories"
 import { createClient } from "@/lib/supabase/server"
-import type { Database } from "@/types/database"
-
-type ThesisOwnership = Pick<
-  Database["public"]["Tables"]["theses"]["Row"],
-  "id" | "user_id"
->
 
 type DeleteRouteContext = {
   params: Promise<{
@@ -16,39 +13,18 @@ type DeleteRouteContext = {
 export async function DELETE(_request: Request, { params }: DeleteRouteContext) {
   try {
     const { id } = await params
-    const supabase = await createClient()
+    const userId = await getServerUserId()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: thesis, error: fetchError } = await supabase
-      .from("theses")
-      .select("id, user_id")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle<ThesisOwnership>()
+    const supabase = isFirebaseBackend() ? null : await createClient()
+    const repositories = createRepositories({ supabase: supabase ?? undefined })
 
-    if (fetchError) {
-      throw fetchError
-    }
-
-    if (!thesis) {
+    const deleted = await repositories.theses.delete(userId, id)
+    if (!deleted) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
-    }
-
-    const { error: deleteError } = await supabase
-      .from("theses")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id)
-
-    if (deleteError) {
-      throw deleteError
     }
 
     return NextResponse.json({ success: true })

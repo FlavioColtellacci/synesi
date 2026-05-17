@@ -2,6 +2,13 @@ import Stripe from 'stripe'
 import { NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/server'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import {
+  createFirebaseProfileRepository,
+  createSupabaseProfileRepository,
+  type ProfileRepository,
+} from '@/lib/data/repositories/profiles'
+import { getFirebaseAdminFirestore } from '@/lib/firebase/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +67,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  const profiles: ProfileRepository = isFirebaseBackend()
+    ? createFirebaseProfileRepository(getFirebaseAdminFirestore())
+    : createSupabaseProfileRepository(createAdminClient())
+
   switch (event.type) {
     case 'checkout.session.completed': {
       try {
@@ -85,23 +96,12 @@ export async function POST(request: Request) {
         const periodEnd = itemPeriodEnd
           ? new Date(itemPeriodEnd * 1000).toISOString()
           : new Date().toISOString()
-        const admin = createAdminClient()
-
-        const { data, error } = await admin
-          .from('profiles')
-          .update({
+        await profiles.updateByStripeCustomerId(customerId, {
             subscription_status: 'active',
             subscription_plan: plan,
             subscription_period_end: periodEnd,
             updated_at: new Date().toISOString(),
           })
-          .eq('stripe_customer_id', customerId)
-        console.log(
-          '[Webhook] Supabase update result:',
-          JSON.stringify(data),
-          'error:',
-          JSON.stringify(error)
-        )
       } catch (err) {
         console.error('[Webhook] Error:', err instanceof Error ? err.message : String(err))
         console.error('Webhook checkout.session.completed handling failed:', err)
@@ -131,17 +131,12 @@ export async function POST(request: Request) {
             : subscription.status === 'canceled'
               ? 'cancelled'
               : 'inactive'
-        const admin = createAdminClient()
-
-        await admin
-          .from('profiles')
-          .update({
+        await profiles.updateByStripeCustomerId(customerId, {
             subscription_status: status,
             subscription_plan: plan,
             subscription_period_end: periodEnd,
             updated_at: new Date().toISOString(),
           })
-          .eq('stripe_customer_id', customerId)
       } catch (error) {
         console.error('Webhook customer.subscription.updated handling failed:', error)
       }
@@ -158,15 +153,10 @@ export async function POST(request: Request) {
           break
         }
 
-        const admin = createAdminClient()
-
-        await admin
-          .from('profiles')
-          .update({
+        await profiles.updateByStripeCustomerId(customerId, {
             subscription_status: 'cancelled',
             updated_at: new Date().toISOString(),
           })
-          .eq('stripe_customer_id', customerId)
       } catch (error) {
         console.error('Webhook customer.subscription.deleted handling failed:', error)
       }

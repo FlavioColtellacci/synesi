@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
@@ -63,21 +66,57 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const threadRef = firestore.collection("chat_threads").doc(id)
+      const threadSnapshot = await threadRef.get()
+      if (!threadSnapshot.exists) {
+        return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+      }
+      const thread = (threadSnapshot.data() ?? {}) as Record<string, unknown>
+      if (thread.user_id !== userId) {
+        return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+      }
+
+      if (hasProjectKey && typeof projectId === "string") {
+        const projectSnapshot = await firestore.collection("sigma_projects").doc(projectId).get()
+        const project = (projectSnapshot.data() ?? {}) as Record<string, unknown>
+        if (!projectSnapshot.exists || project.user_id !== userId) {
+          return NextResponse.json({ error: "Project not found" }, { status: 404 })
+        }
+      }
+
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (hasProjectKey) updates.project_id = projectId ?? null
+      if (title) updates.title = title
+
+      await threadRef.set(updates, { merge: true })
+      const updatedSnapshot = await threadRef.get()
+      const updated = (updatedSnapshot.data() ?? {}) as Record<string, unknown>
+      return NextResponse.json({
+        thread: {
+          id,
+          title: typeof updated.title === "string" ? updated.title : "Sigma conversation",
+          updated_at:
+            typeof updated.updated_at === "string" ? updated.updated_at : new Date().toISOString(),
+          project_id: typeof updated.project_id === "string" ? updated.project_id : null,
+        },
+      })
+    }
+
+    const supabase = await createClient()
 
     if (hasProjectKey && typeof projectId === "string") {
       const { data: project, error: projectError } = await supabase
         .from("sigma_projects")
         .select("id")
         .eq("id", projectId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .maybeSingle()
 
       if (projectError) {
@@ -100,7 +139,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       .from("chat_threads")
       .update(updates)
       .eq("id", id)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .select("id, title, updated_at, project_id")
       .maybeSingle()
 
@@ -127,20 +166,46 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Invalid thread id" }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const threadRef = firestore.collection("chat_threads").doc(id)
+      const threadSnapshot = await threadRef.get()
+      if (!threadSnapshot.exists) {
+        return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+      }
+      const thread = (threadSnapshot.data() ?? {}) as Record<string, unknown>
+      if (thread.user_id !== userId) {
+        return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+      }
+
+      while (true) {
+        const messages = await firestore
+          .collection("chat_messages")
+          .where("thread_id", "==", id)
+          .limit(300)
+          .get()
+        if (messages.empty) break
+        const batch = firestore.batch()
+        for (const doc of messages.docs) batch.delete(doc.ref)
+        await batch.commit()
+      }
+
+      await threadRef.delete()
+      return NextResponse.json({ ok: true })
+    }
+
+    const supabase = await createClient()
 
     const { data, error } = await supabase
       .from("chat_threads")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .select("id")
 
     if (error) {

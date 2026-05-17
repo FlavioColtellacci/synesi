@@ -5,6 +5,8 @@ import SignOutButton from '@/components/layout/SignOutButton'
 import AppChatWidgetGate from '@/components/layout/AppChatWidgetGate'
 import { AppMainTransition } from '@/components/layout/AppMainTransition'
 import TrialStatusBanner from '@/components/billing/TrialStatusBanner'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseSessionWithProfile } from '@/lib/firebase/session'
 import { createClient } from '@/lib/supabase/server'
 import { getTrialState } from '@/lib/billing/trial-state'
 
@@ -13,18 +15,26 @@ type AppLayoutProps = {
 }
 
 export default async function AppLayout({ children }: AppLayoutProps) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const profile = await (async () => {
+    if (isFirebaseBackend()) {
+      const { profile: firebaseProfile } = await getFirebaseSessionWithProfile()
+      return firebaseProfile ?? null
+    }
 
-  const { data: profile } = user
-    ? await supabase
-        .from('profiles')
-        .select('subscription_status, trial_ends_at')
-        .eq('id', user.id)
-        .maybeSingle()
-    : { data: null }
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) return null
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('subscription_status, trial_ends_at')
+      .eq('id', user.id)
+      .maybeSingle()
+    return data
+  })()
 
   const hasActiveSubscription = profile?.subscription_status === 'active'
   const trialState = getTrialState(profile?.trial_ends_at)

@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getServerUserId } from "@/lib/data/auth"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import {
+  createAlertRule as createFirebaseAlertRule,
+  isOwnedThesis as isOwnedFirebaseThesis,
+  listAlertRulesByThesis as listFirebaseAlertRulesByThesis,
+} from "@/lib/firebase/alerting"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -58,16 +66,25 @@ export async function GET(
 ) {
   try {
     const { id: thesisId } = await params
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const thesisExists = await ensureThesisOwnership(thesisId, user.id, supabase)
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const thesisExists = await isOwnedFirebaseThesis(firestore, userId, thesisId)
+      if (!thesisExists) {
+        return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+      }
+
+      const rules = await listFirebaseAlertRulesByThesis(firestore, userId, thesisId)
+      return NextResponse.json({ rules })
+    }
+
+    const supabase = await createClient()
+
+    const thesisExists = await ensureThesisOwnership(thesisId, userId, supabase)
     if (!thesisExists) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
     }
@@ -78,7 +95,7 @@ export async function GET(
         "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
       )
       .eq("thesis_id", thesisId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("created_at", { ascending: true })
 
     if (rulesError) {
@@ -124,16 +141,67 @@ export async function POST(
   try {
     const { id: thesisId } = await params
     const body = (await request.json()) as CreateAlertRulePayload
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const thesisExists = await ensureThesisOwnership(thesisId, user.id, supabase)
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const thesisExists = await isOwnedFirebaseThesis(firestore, userId, thesisId)
+      if (!thesisExists) {
+        return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+      }
+
+      const name = typeof body.name === "string" ? body.name.trim() : ""
+      const mode = body.mode
+      const minConfidence = body.minConfidence
+      const isEnabled = typeof body.isEnabled === "boolean" ? body.isEnabled : true
+      const includeKeywords = parseKeywordList(body.includeKeywords)
+      const excludeKeywords = parseKeywordList(body.excludeKeywords)
+
+      if (!name) {
+        return NextResponse.json({ error: "Rule name is required" }, { status: 400 })
+      }
+      if (!isValidMode(mode)) {
+        return NextResponse.json(
+          { error: "Invalid mode. Use only_sources, include_sources, or exclude_sources." },
+          { status: 400 },
+        )
+      }
+      if (!isValidMinConfidence(minConfidence)) {
+        return NextResponse.json(
+          { error: "Invalid minimum confidence. Use high or medium." },
+          { status: 400 },
+        )
+      }
+
+      const inserted = await createFirebaseAlertRule(firestore, {
+        user_id: userId,
+        thesis_id: thesisId,
+        name,
+        mode,
+        min_confidence: minConfidence,
+        is_enabled: isEnabled,
+        include_keywords: includeKeywords ?? [],
+        exclude_keywords: excludeKeywords ?? [],
+      })
+
+      return NextResponse.json(
+        {
+          message: "Alert rule created",
+          rule: {
+            ...inserted,
+            sourceIds: [] as string[],
+          },
+        },
+        { status: 201 },
+      )
+    }
+
+    const supabase = await createClient()
+
+    const thesisExists = await ensureThesisOwnership(thesisId, userId, supabase)
     if (!thesisExists) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
     }
@@ -162,7 +230,7 @@ export async function POST(
     }
 
     const insertPayload: AlertRuleInsert = {
-      user_id: user.id,
+      user_id: userId,
       thesis_id: thesisId,
       name,
       mode,

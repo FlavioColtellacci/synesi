@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server"
 import { createHash } from "node:crypto"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import {
+  insertEvent as insertFirestoreEvent,
+  insertSourceDocumentIfNew,
+  insertThesisSourceMatchIfNew,
+  listActiveThesesByIds,
+  listEnabledAlertRulesByThesisIds,
+  listIngestTrustedSources,
+  listSourceIdsByRuleIds,
+  listTrustedSourcesByNames,
+} from "@/lib/firebase/alerting"
 import { sendAlertPushToUser } from "@/lib/push/send-alert"
 import { createAdminClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
@@ -257,19 +269,21 @@ export async function GET(request: Request) {
 
   const maxDocsPerRun = parsePositiveInt(process.env.CRON_MAX_SOURCE_DOCS_PER_RUN, 50)
   const minConfidence = (process.env.CRON_MATCHING_MIN_CONFIDENCE ?? "high") as ConfidenceLevel
-  const supabase = createAdminClient()
+  const firebaseBackend = isFirebaseBackend()
+  const firestore = firebaseBackend ? getFirebaseAdminFirestore() : null
+  const supabase = firebaseBackend ? null : createAdminClient()
 
   // -------------------------------------------------------------------------
   // Phase 1: Ingest
   // -------------------------------------------------------------------------
-  const { data: allSources, error: sourcesError } = await supabase
-    .from("trusted_sources")
-    .select("id, thesis_id, user_id, name, url, source_type")
-    .not("url", "is", null)
-
-  if (sourcesError) {
-    return NextResponse.json({ ok: false, error: sourcesError.message }, { status: 500 })
-  }
+  const allSources = firebaseBackend
+    ? await listIngestTrustedSources(firestore!)
+    : (
+        await supabase!
+          .from("trusted_sources")
+          .select("id, thesis_id, user_id, name, url, source_type")
+          .not("url", "is", null)
+      ).data ?? []
 
   // Deduplicate by URL: keep first source_name/type per URL; same feed used by
   // multiple users triggers only one HTTP fetch.
@@ -311,28 +325,52 @@ export async function GET(request: Request) {
         metadata: null,
       }
 
-      const { data: insertedRow, error } = await supabase
-        .from("source_documents")
-        .insert(row)
-        .select("id")
-        .single()
-
-      if (error) {
-        if (error.code === "23505") {
-          docsSkipped++
-        } else {
-          fetchErrors.push({ feedUrl: item.url, error: error.message })
+      if (firebaseBackend) {
+        try {
+          const inserted = await insertSourceDocumentIfNew(firestore!, row)
+          if (!inserted.inserted) {
+            docsSkipped++
+          } else {
+            insertedDocs.push({
+              docId: inserted.id,
+              sourceName,
+              sourceType,
+              url: item.url,
+              title: item.title,
+              contentExcerpt: item.contentExcerpt,
+            })
+            budgetRemaining--
+          }
+        } catch (error) {
+          fetchErrors.push({
+            feedUrl: item.url,
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
-      } else if (insertedRow) {
-        insertedDocs.push({
-          docId: insertedRow.id,
-          sourceName,
-          sourceType,
-          url: item.url,
-          title: item.title,
-          contentExcerpt: item.contentExcerpt,
-        })
-        budgetRemaining--
+      } else {
+        const { data: insertedRow, error } = await supabase!
+          .from("source_documents")
+          .insert(row)
+          .select("id")
+          .single()
+
+        if (error) {
+          if (error.code === "23505") {
+            docsSkipped++
+          } else {
+            fetchErrors.push({ feedUrl: item.url, error: error.message })
+          }
+        } else if (insertedRow) {
+          insertedDocs.push({
+            docId: insertedRow.id,
+            sourceName,
+            sourceType,
+            url: item.url,
+            title: item.title,
+            contentExcerpt: item.contentExcerpt,
+          })
+          budgetRemaining--
+        }
       }
     }
   }
@@ -358,9 +396,13 @@ export async function GET(request: Request) {
 
   const distinctSourceNames = new Set(insertedDocs.map((d) => d.sourceName.toLowerCase()))
 
-  const { data: trustedSources } = await supabase
-    .from("trusted_sources")
-    .select("id, thesis_id, user_id, name")
+  const trustedSources = firebaseBackend
+    ? await listTrustedSourcesByNames(firestore!, [...distinctSourceNames])
+    : (
+        await supabase!
+          .from("trusted_sources")
+          .select("id, thesis_id, user_id, name")
+      ).data ?? []
 
   const matchingTrustedSources = (trustedSources ?? []).filter((ts) =>
     distinctSourceNames.has(ts.name.toLowerCase())
@@ -377,11 +419,15 @@ export async function GET(request: Request) {
 
   const thesisIds = [...new Set(matchingTrustedSources.map((ts) => ts.thesis_id))]
 
-  const { data: theses } = await supabase
-    .from("theses")
-    .select("id, user_id, ticker, company_name, thesis_statement")
-    .in("id", thesisIds)
-    .neq("status", "broken")
+  const theses = firebaseBackend
+    ? await listActiveThesesByIds(firestore!, thesisIds)
+    : (
+        await supabase!
+          .from("theses")
+          .select("id, user_id, ticker, company_name, thesis_statement")
+          .in("id", thesisIds)
+          .neq("status", "broken")
+      ).data ?? []
 
   const thesisMap = new Map((theses ?? []).map((t) => [t.id, t]))
 
@@ -432,31 +478,55 @@ export async function GET(request: Request) {
         confidence: scored.confidence,
       }
 
-      const { error: matchError } = await supabase
-        .from("thesis_source_matches")
-        .insert(matchRow)
-
-      if (matchError) {
-        if (matchError.code === "23505") {
-          matchesSkipped++
-        } else {
-          matchErrors.push({ error: matchError.message })
+      if (firebaseBackend) {
+        try {
+          const inserted = await insertThesisSourceMatchIfNew(firestore!, matchRow)
+          if (!inserted) {
+            matchesSkipped++
+          } else {
+            matchesInserted++
+            pendingEvents.push({
+              thesis_id: ts.thesis_id,
+              user_id: ts.user_id,
+              trusted_source_id: ts.id,
+              confidence: scored.confidence,
+              sourceName: doc.sourceName,
+              docTitle: doc.title,
+              docExcerpt: doc.contentExcerpt,
+              docUrl: doc.url,
+              matchReason: scored.reason,
+            })
+          }
+        } catch (error) {
+          matchErrors.push({ error: error instanceof Error ? error.message : String(error) })
         }
       } else {
-        matchesInserted++
-        // Only successful inserts are eligible for event emission; this is the
-        // dedup gate: a 23505 means the match already existed, so no duplicate event.
-        pendingEvents.push({
-          thesis_id: ts.thesis_id,
-          user_id: ts.user_id,
-          trusted_source_id: ts.id,
-          confidence: scored.confidence,
-          sourceName: doc.sourceName,
-          docTitle: doc.title,
-          docExcerpt: doc.contentExcerpt,
-          docUrl: doc.url,
-          matchReason: scored.reason,
-        })
+        const { error: matchError } = await supabase!
+          .from("thesis_source_matches")
+          .insert(matchRow)
+
+        if (matchError) {
+          if (matchError.code === "23505") {
+            matchesSkipped++
+          } else {
+            matchErrors.push({ error: matchError.message })
+          }
+        } else {
+          matchesInserted++
+          // Only successful inserts are eligible for event emission; this is the
+          // dedup gate: a 23505 means the match already existed, so no duplicate event.
+          pendingEvents.push({
+            thesis_id: ts.thesis_id,
+            user_id: ts.user_id,
+            trusted_source_id: ts.id,
+            confidence: scored.confidence,
+            sourceName: doc.sourceName,
+            docTitle: doc.title,
+            docExcerpt: doc.contentExcerpt,
+            docUrl: doc.url,
+            matchReason: scored.reason,
+          })
+        }
       }
     }
   }
@@ -469,40 +539,48 @@ export async function GET(request: Request) {
   const selectedSourceIdsByRule = new Map<string, Set<string>>()
 
   if (eventThesisIds.length > 0) {
-    const { data: enabledRules, error: enabledRulesError } = await supabase
-      .from("alert_rules")
-      .select(
-        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
-      )
-      .in("thesis_id", eventThesisIds)
-      .eq("is_enabled", true)
-
-    if (enabledRulesError) {
-      return NextResponse.json(
-        { ok: false, error: "Failed to evaluate alert rules", details: enabledRulesError.message },
-        { status: 500 },
-      )
-    }
+    const enabledRules = firebaseBackend
+      ? await listEnabledAlertRulesByThesisIds(firestore!, eventThesisIds)
+      : (
+          await supabase!
+            .from("alert_rules")
+            .select(
+              "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
+            )
+            .in("thesis_id", eventThesisIds)
+            .eq("is_enabled", true)
+        ).data ?? []
 
     const ruleIds = (enabledRules ?? []).map((rule) => rule.id)
 
     if (ruleIds.length > 0) {
-      const { data: ruleSources, error: ruleSourcesError } = await supabase
-        .from("alert_rule_sources")
-        .select("alert_rule_id, trusted_source_id")
-        .in("alert_rule_id", ruleIds)
+      if (firebaseBackend) {
+        const sourceIdsByRule = await listSourceIdsByRuleIds(firestore!, ruleIds)
+        for (const [ruleId, sourceIds] of sourceIdsByRule) {
+          selectedSourceIdsByRule.set(ruleId, new Set(sourceIds))
+        }
+      } else {
+        const { data: ruleSources, error: ruleSourcesError } = await supabase!
+          .from("alert_rule_sources")
+          .select("alert_rule_id, trusted_source_id")
+          .in("alert_rule_id", ruleIds)
 
-      if (ruleSourcesError) {
-        return NextResponse.json(
-          { ok: false, error: "Failed to evaluate alert rule sources", details: ruleSourcesError.message },
-          { status: 500 },
-        )
-      }
+        if (ruleSourcesError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Failed to evaluate alert rule sources",
+              details: ruleSourcesError.message,
+            },
+            { status: 500 },
+          )
+        }
 
-      for (const sourceMapping of ruleSources ?? []) {
-        const current = selectedSourceIdsByRule.get(sourceMapping.alert_rule_id) ?? new Set<string>()
-        current.add(sourceMapping.trusted_source_id)
-        selectedSourceIdsByRule.set(sourceMapping.alert_rule_id, current)
+        for (const sourceMapping of ruleSources ?? []) {
+          const current = selectedSourceIdsByRule.get(sourceMapping.alert_rule_id) ?? new Set<string>()
+          current.add(sourceMapping.trusted_source_id)
+          selectedSourceIdsByRule.set(sourceMapping.alert_rule_id, current)
+        }
       }
     }
 
@@ -546,14 +624,28 @@ export async function GET(request: Request) {
       is_reviewed: false,
     }
 
-    const { error: eventError } = await supabase.from("events").insert(eventRow)
-    if (eventError) {
-      eventErrors.push({ error: eventError.message })
+    let eventInserted = false
+    if (firebaseBackend) {
+      try {
+        await insertFirestoreEvent(firestore!, eventRow)
+        eventInserted = true
+      } catch (error) {
+        eventErrors.push({ error: error instanceof Error ? error.message : String(error) })
+      }
     } else {
+      const { error: eventError } = await supabase!.from("events").insert(eventRow)
+      if (eventError) {
+        eventErrors.push({ error: eventError.message })
+      } else {
+        eventInserted = true
+      }
+    }
+
+    if (eventInserted) {
       eventsCreated++
       const urlHash = createHash("sha256").update(pending.docUrl).digest("hex").slice(0, 16)
       const bodyLine = `${pending.sourceName}: ${truncatedTitle}`
-      void sendAlertPushToUser(supabase, pending.user_id, {
+      void sendAlertPushToUser(firebaseBackend ? firestore! : supabase!, pending.user_id, {
         title: "SYNESI · Source alert",
         body: bodyLine.length > 140 ? `${bodyLine.slice(0, 137)}…` : bodyLine,
         url: "/app/convictions?panel=alerts",

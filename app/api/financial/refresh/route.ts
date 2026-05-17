@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import { verifyFirebaseSessionCookie } from "@/lib/firebase/session"
 import { createClient } from "@/lib/supabase/server"
 import { refreshFinancialSnapshot } from "@/lib/financial/refresh"
 
@@ -44,6 +47,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ticker is required" }, { status: 400 })
     }
 
+    const firebaseMode = isFirebaseBackend()
     let supabaseForUser: Awaited<ReturnType<typeof createClient>> | null = null
     let userIdForLog: string | null = null
     let thesisIdForLog: string | null = null
@@ -52,65 +56,113 @@ export async function POST(request: Request) {
 
     // Allow either internal cron-style auth or logged-in app users.
     if (!hasInternalAccess(request)) {
-      const supabase = await createClient()
-      supabaseForUser = supabase
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
       const limit = getUserDailyRefreshLimit()
       const dayStartIso = getStartOfUtcDayIso()
 
-      const { count, error: countError } = await supabase
-        .from("thesis_updates")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("update_type", "financial_refresh")
-        .gte("created_at", dayStartIso)
+      if (firebaseMode) {
+        const token = await verifyFirebaseSessionCookie()
+        const userId = token?.uid ?? null
+        if (!userId) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
 
-      if (countError) {
-        return NextResponse.json({ error: countError.message }, { status: 500 })
+        const firestore = getFirebaseAdminFirestore()
+        const [dailyCountSnapshot, ownedThesisSnapshot] = await Promise.all([
+          firestore
+            .collection("thesis_updates")
+            .where("user_id", "==", userId)
+            .where("update_type", "==", "financial_refresh")
+            .where("created_at", ">=", dayStartIso)
+            .count()
+            .get(),
+          firestore
+            .collection("theses")
+            .where("user_id", "==", userId)
+            .where("ticker", "==", ticker)
+            .limit(1)
+            .get(),
+        ])
+
+        const usedToday = dailyCountSnapshot.data().count
+        usedTodayBeforeCall = usedToday
+        dailyLimitForUser = limit
+        if (usedToday >= limit) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: `Daily refresh limit reached (${limit}/${limit}). Try again tomorrow.`,
+            },
+            { status: 429 },
+          )
+        }
+
+        if (ownedThesisSnapshot.empty) {
+          return NextResponse.json(
+            { ok: false, error: "Ticker must belong to one of your theses" },
+            { status: 403 },
+          )
+        }
+
+        thesisIdForLog = ownedThesisSnapshot.docs[0]?.id ?? null
+        userIdForLog = userId
+      } else {
+        const supabase = await createClient()
+        supabaseForUser = supabase
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const { count, error: countError } = await supabase
+          .from("thesis_updates")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("update_type", "financial_refresh")
+          .gte("created_at", dayStartIso)
+
+        if (countError) {
+          return NextResponse.json({ error: countError.message }, { status: 500 })
+        }
+
+        const usedToday = count ?? 0
+        usedTodayBeforeCall = usedToday
+        dailyLimitForUser = limit
+        if (usedToday >= limit) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: `Daily refresh limit reached (${limit}/${limit}). Try again tomorrow.`,
+            },
+            { status: 429 },
+          )
+        }
+
+        const { data: ownedThesis, error: thesisLookupError } = await supabase
+          .from("theses")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("ticker", ticker)
+          .limit(1)
+          .maybeSingle()
+
+        if (thesisLookupError) {
+          return NextResponse.json({ error: thesisLookupError.message }, { status: 500 })
+        }
+
+        if (!ownedThesis) {
+          return NextResponse.json(
+            { ok: false, error: "Ticker must belong to one of your theses" },
+            { status: 403 },
+          )
+        }
+
+        const thesis = ownedThesis as ThesisLookupRow
+        thesisIdForLog = thesis.id
+        userIdForLog = user.id
       }
-
-      const usedToday = count ?? 0
-      usedTodayBeforeCall = usedToday
-      dailyLimitForUser = limit
-      if (usedToday >= limit) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Daily refresh limit reached (${limit}/${limit}). Try again tomorrow.`,
-          },
-          { status: 429 },
-        )
-      }
-
-      const { data: ownedThesis, error: thesisLookupError } = await supabase
-        .from("theses")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("ticker", ticker)
-        .limit(1)
-        .maybeSingle()
-
-      if (thesisLookupError) {
-        return NextResponse.json({ error: thesisLookupError.message }, { status: 500 })
-      }
-
-      if (!ownedThesis) {
-        return NextResponse.json(
-          { ok: false, error: "Ticker must belong to one of your theses" },
-          { status: 403 },
-        )
-      }
-
-      const thesis = ownedThesis as ThesisLookupRow
-      thesisIdForLog = thesis.id
-      userIdForLog = user.id
     }
 
     const result = await refreshFinancialSnapshot({ ticker, source })
@@ -125,13 +177,26 @@ export async function POST(request: Request) {
     }
     console.log("[financial/refresh] OK", { ...logCtx, staleAfter: result.staleAfter })
 
-    if (supabaseForUser && userIdForLog && thesisIdForLog) {
-      await supabaseForUser.from("thesis_updates").insert({
-        thesis_id: thesisIdForLog,
-        user_id: userIdForLog,
-        update_type: "financial_refresh",
-        note: `Manual ${source === "web" ? "web" : "provider"} financial refresh for ${ticker}`,
-      })
+    if (userIdForLog && thesisIdForLog) {
+      if (firebaseMode) {
+        const firestore = getFirebaseAdminFirestore()
+        const updateId = crypto.randomUUID()
+        await firestore.collection("thesis_updates").doc(updateId).set({
+          id: updateId,
+          thesis_id: thesisIdForLog,
+          user_id: userIdForLog,
+          update_type: "financial_refresh",
+          note: `Manual ${source === "web" ? "web" : "provider"} financial refresh for ${ticker}`,
+          created_at: new Date().toISOString(),
+        })
+      } else if (supabaseForUser) {
+        await supabaseForUser.from("thesis_updates").insert({
+          thesis_id: thesisIdForLog,
+          user_id: userIdForLog,
+          update_type: "financial_refresh",
+          note: `Manual ${source === "web" ? "web" : "provider"} financial refresh for ${ticker}`,
+        })
+      }
     }
 
     return NextResponse.json({

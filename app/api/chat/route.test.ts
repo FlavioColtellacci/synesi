@@ -318,6 +318,7 @@ describe("loadChatHistoryForThread (thread isolation)", () => {
 describe("POST /api/chat threadId validation", () => {
   beforeEach(() => {
     vi.mocked(createClient).mockReset()
+    process.env.DATA_BACKEND = "supabase"
   })
 
   it("returns 400 when threadId is not a valid UUID", async () => {
@@ -380,7 +381,7 @@ describe("runBoundedReadOnlyToolLoop", () => {
         system: "system",
         messages: [{ role: "user", content: "show alerts" }],
       },
-      supabase: createSupabaseStub() as never,
+      backend: createSupabaseStub() as never,
       userId: "user-1",
       requestId: "req-1",
       attachmentIds: [],
@@ -428,7 +429,7 @@ describe("runBoundedReadOnlyToolLoop", () => {
         system: "system",
         messages: [{ role: "user", content: "help" }],
       },
-      supabase: createSupabaseStub() as never,
+      backend: createSupabaseStub() as never,
       userId: "user-1",
       requestId: "req-2",
       attachmentIds: [],

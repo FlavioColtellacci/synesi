@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
 
 type RagEvidence = {
   score: number
@@ -63,57 +64,95 @@ function rankEvidence(
   }
 }
 
+type RagBackend = SupabaseClient | Firestore
+
+function isFirestoreBackend(backend: RagBackend): backend is Firestore {
+  return "collection" in backend
+}
+
 export async function buildRagContextBlock(
-  supabase: SupabaseClient,
+  backend: RagBackend,
   userId: string,
   query: string,
 ): Promise<RagContextResult> {
-  const [assumptionsResult, sourceMatchesResult, updatesResult] = await Promise.all([
-    supabase
-      .from("assumptions")
-      .select("statement,evidence,break_condition,thesis_id")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("thesis_source_matches")
-      .select("thesis_id,match_reason,confidence,relevance_score")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("thesis_updates")
-      .select("thesis_id,note,new_status")
-      .eq("user_id", userId)
-      .eq("update_type", "status_change")
-      .order("created_at", { ascending: false })
-      .limit(80),
-  ])
+  const [assumptionsRows, sourceMatchRows, updateRows] = await (async () => {
+    if (isFirestoreBackend(backend)) {
+      const [assumptionsSnapshot, sourceMatchSnapshot, updatesSnapshot] = await Promise.all([
+        backend.collection("assumptions").where("user_id", "==", userId).orderBy("updated_at", "desc").limit(120).get(),
+        backend
+          .collection("thesis_source_matches")
+          .where("user_id", "==", userId)
+          .orderBy("created_at", "desc")
+          .limit(120)
+          .get(),
+        backend
+          .collection("thesis_updates")
+          .where("user_id", "==", userId)
+          .where("update_type", "==", "status_change")
+          .orderBy("created_at", "desc")
+          .limit(80)
+          .get(),
+      ])
+
+      return [
+        assumptionsSnapshot.docs.map((doc) => (doc.data() ?? {}) as Record<string, unknown>),
+        sourceMatchSnapshot.docs.map((doc) => (doc.data() ?? {}) as Record<string, unknown>),
+        updatesSnapshot.docs.map((doc) => (doc.data() ?? {}) as Record<string, unknown>),
+      ] as const
+    }
+
+    const [assumptionsResult, sourceMatchesResult, updatesResult] = await Promise.all([
+      backend
+        .from("assumptions")
+        .select("statement,evidence,break_condition,thesis_id")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(120),
+      backend
+        .from("thesis_source_matches")
+        .select("thesis_id,match_reason,confidence,relevance_score")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(120),
+      backend
+        .from("thesis_updates")
+        .select("thesis_id,note,new_status")
+        .eq("user_id", userId)
+        .eq("update_type", "status_change")
+        .order("created_at", { ascending: false })
+        .limit(80),
+    ])
+
+    return [assumptionsResult.data ?? [], sourceMatchesResult.data ?? [], updatesResult.data ?? []] as const
+  })()
 
   const candidates: string[] = []
 
-  for (const row of assumptionsResult.data ?? []) {
+  for (const row of assumptionsRows) {
     const parts = [row.statement, row.evidence, row.break_condition].filter(
       (value): value is string => typeof value === "string" && value.trim().length > 0,
     )
     if (parts.length > 0) {
-      candidates.push(`Assumption (${row.thesis_id}): ${parts.join(" | ")}`)
+      const thesisId = typeof row.thesis_id === "string" ? row.thesis_id : "unknown"
+      candidates.push(`Assumption (${thesisId}): ${parts.join(" | ")}`)
     }
   }
 
-  for (const row of sourceMatchesResult.data ?? []) {
+  for (const row of sourceMatchRows) {
     const reason = typeof row.match_reason === "string" ? row.match_reason : "No reason provided"
     const confidence = typeof row.confidence === "string" ? row.confidence : "unknown"
     const relevance = typeof row.relevance_score === "number" ? row.relevance_score.toFixed(2) : "n/a"
+    const thesisId = typeof row.thesis_id === "string" ? row.thesis_id : "unknown"
     candidates.push(
-      `Source match (${row.thesis_id}): ${reason} | confidence=${confidence} | relevance=${relevance}`,
+      `Source match (${thesisId}): ${reason} | confidence=${confidence} | relevance=${relevance}`,
     )
   }
 
-  for (const row of updatesResult.data ?? []) {
-    if (!row.note) continue
-    const nextStatus = row.new_status ?? "unknown"
-    candidates.push(`Status note (${row.thesis_id}): ${row.note} | status=${nextStatus}`)
+  for (const row of updateRows) {
+    if (typeof row.note !== "string" || row.note.trim().length === 0) continue
+    const nextStatus = typeof row.new_status === "string" ? row.new_status : "unknown"
+    const thesisId = typeof row.thesis_id === "string" ? row.thesis_id : "unknown"
+    candidates.push(`Status note (${thesisId}): ${row.note} | status=${nextStatus}`)
   }
 
   const { promptSnippets, clientEvidenceSnippets } = rankEvidence(query, candidates)

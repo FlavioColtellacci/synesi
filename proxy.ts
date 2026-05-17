@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { isFirebaseBackend } from '@/lib/data/backend'
 import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
@@ -8,9 +9,43 @@ export async function proxy(request: NextRequest) {
   if (
     request.nextUrl.pathname === '/api/stripe/webhook' ||
     request.nextUrl.pathname.startsWith('/api/cron/') ||
+    request.nextUrl.pathname.startsWith('/api/auth/') ||
     request.nextUrl.pathname === '/api/financial/refresh' ||
     request.nextUrl.pathname === '/api/marketing/sigma-demo'
   ) {
+    return NextResponse.next()
+  }
+
+  if (isFirebaseBackend()) {
+    const verifyResponse = await fetch(new URL('/api/auth/verify', request.url), {
+      method: 'GET',
+      headers: {
+        cookie: request.headers.get('cookie') ?? '',
+      },
+      cache: 'no-store',
+    })
+
+    if (!verifyResponse.ok) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    const payload = (await verifyResponse.json()) as {
+      profile?: { subscription_status?: string | null; trial_ends_at?: string | null } | null
+    }
+
+    if (request.nextUrl.pathname === '/app' || request.nextUrl.pathname.startsWith('/app/')) {
+      const profile = payload.profile
+      const hasActiveSubscription = profile?.subscription_status === 'active'
+      const hasActiveTrial =
+        typeof profile?.trial_ends_at === 'string' && new Date(profile.trial_ends_at).getTime() > Date.now()
+
+      if (!hasActiveSubscription && !hasActiveTrial) {
+        const pricingUrl = new URL('/pricing', request.url)
+        pricingUrl.searchParams.set('reason', 'trial-expired')
+        return NextResponse.redirect(pricingUrl)
+      }
+    }
+
     return NextResponse.next()
   }
 
@@ -78,5 +113,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/|financial/refresh|marketing/sigma-demo).*)'],
+  matcher: ['/app/:path*', '/api/:path((?!stripe/webhook|cron/|auth/|financial/refresh|marketing/sigma-demo).*)'],
 }

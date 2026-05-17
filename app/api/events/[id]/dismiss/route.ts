@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { createRepositories } from "@/lib/data/repositories"
 import { createClient } from "@/lib/supabase/server"
 
 export async function PATCH(
@@ -8,24 +11,17 @@ export async function PATCH(
   const { id } = await params
   void request
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (!user || userError) {
+  const userId = await getServerUserId()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { error } = await supabase
-    .from("events")
-    .update({ is_reviewed: true })
-    .eq("id", id)
-    .eq("user_id", user.id)
+  const supabase = isFirebaseBackend() ? null : await createClient()
+  const repositories = createRepositories({ supabase: supabase ?? undefined })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const updated = await repositories.events.markReviewed(userId, id)
+  if (!updated) {
+    return NextResponse.json({ error: "Event not found" }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true }, { status: 200 })

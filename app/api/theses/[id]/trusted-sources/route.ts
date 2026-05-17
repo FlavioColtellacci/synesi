@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import {
+  createTrustedSource as createFirebaseTrustedSource,
+  isOwnedThesis as isOwnedFirebaseThesis,
+} from "@/lib/firebase/alerting"
 import { createClient } from "@/lib/supabase/server"
 
 const VALID_SOURCE_TYPES = [
@@ -76,20 +83,45 @@ export async function POST(
       }
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const thesisExists = await isOwnedFirebaseThesis(firestore, userId, thesisId)
+      if (!thesisExists) {
+        return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+      }
+
+      try {
+        const inserted = await createFirebaseTrustedSource(firestore, {
+          thesis_id: thesisId,
+          user_id: userId,
+          name,
+          url: normalizedUrl,
+          source_type: sourceType,
+        })
+        return NextResponse.json({ source: inserted }, { status: 201 })
+      } catch (error) {
+        if (error instanceof Error && error.message === "DUPLICATE_TRUSTED_SOURCE") {
+          return NextResponse.json(
+            { error: "This source already exists for this thesis" },
+            { status: 409 },
+          )
+        }
+        throw error
+      }
+    }
+
+    const supabase = await createClient()
 
     const { data: thesis } = await supabase
       .from("theses")
       .select("id")
       .eq("id", thesisId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle()
 
     if (!thesis) {
@@ -100,7 +132,7 @@ export async function POST(
       .from("trusted_sources")
       .insert({
         thesis_id: thesisId,
-        user_id: user.id,
+        user_id: userId,
         name,
         url: normalizedUrl,
         source_type: sourceType,
