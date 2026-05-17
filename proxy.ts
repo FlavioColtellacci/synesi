@@ -5,6 +5,13 @@ import { isFirebaseBackend } from '@/lib/data/backend'
 import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
+function buildUnauthorizedResponse(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return NextResponse.redirect(new URL('/login', request.url))
+}
+
 export async function proxy(request: NextRequest) {
   if (
     request.nextUrl.pathname === '/api/stripe/webhook' ||
@@ -26,7 +33,7 @@ export async function proxy(request: NextRequest) {
     })
 
     if (!verifyResponse.ok) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return buildUnauthorizedResponse(request)
     }
 
     const payload = (await verifyResponse.json()) as {
@@ -86,7 +93,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    supabaseResponse = NextResponse.redirect(new URL('/login', request.url))
+    supabaseResponse = buildUnauthorizedResponse(request)
     return supabaseResponse
   }
 

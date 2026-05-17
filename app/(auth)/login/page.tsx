@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense, FormEvent, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import type { FirebaseError } from 'firebase/app'
 import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
 import { isFirebaseBackend } from '@/lib/data/backend'
 import { getFirebaseClientAuth } from '@/lib/firebase/client'
@@ -44,6 +45,32 @@ function LoginForm() {
   function handleOAuthError(message: string) {
     clearAuthErrorQuery()
     setError(message)
+  }
+
+  function mapSignInError(error: unknown) {
+    if (!isFirebaseBackend()) {
+      const message = error instanceof Error ? error.message : 'Could not sign in.'
+      if (message === 'Invalid login credentials') {
+        return 'Invalid login credentials. Check email/password, confirm your email if newly signed up, or reset your password.'
+      }
+      return message
+    }
+
+    const firebaseCode = (error as FirebaseError | undefined)?.code
+    if (
+      firebaseCode === 'auth/invalid-credential' ||
+      firebaseCode === 'auth/wrong-password' ||
+      firebaseCode === 'auth/user-not-found' ||
+      firebaseCode === 'auth/invalid-email'
+    ) {
+      return 'Invalid email or password. If your account was created before the Firebase migration, create a new account or use Google sign-in.'
+    }
+
+    if (firebaseCode === 'auth/too-many-requests') {
+      return 'Too many sign-in attempts. Please wait a minute and try again.'
+    }
+
+    return error instanceof Error ? error.message : 'Could not sign in.'
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -87,14 +114,7 @@ function LoginForm() {
 
       router.push('/app/dashboard')
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not sign in.'
-      if (message === 'Invalid login credentials') {
-        setError(
-          'Invalid login credentials. Check email/password, confirm your email if newly signed up, or reset your password.'
-        )
-      } else {
-        setError(message)
-      }
+      setError(mapSignInError(error))
       setIsLoading(false)
     }
   }

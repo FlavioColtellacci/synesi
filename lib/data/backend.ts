@@ -1,7 +1,11 @@
 export type DataBackend = "supabase" | "firebase"
 
 export function getDataBackend(): DataBackend {
-  const raw = process.env.DATA_BACKEND?.trim().toLowerCase()
+  const raw = (
+    process.env.DATA_BACKEND ?? process.env.NEXT_PUBLIC_DATA_BACKEND
+  )
+    ?.trim()
+    .toLowerCase()
   if (raw === "supabase") return "supabase"
   return "firebase"
 }
