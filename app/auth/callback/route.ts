@@ -1,10 +1,12 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseSessionWithProfile } from '@/lib/firebase/session'
+import { createAdminClient } from '@/lib/supabase/server'
+import { sendTrialStartedEmail } from '@/lib/email/trial'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
-import { createAdminClient } from '@/lib/supabase/server'
-import { sendTrialStartedEmail } from '@/lib/email/trial'
 
 function redirectOAuthFailureToLogin(request: Request, requestUrl: URL) {
   const oauthError = requestUrl.searchParams.get('error')
@@ -38,6 +40,20 @@ function redirectOAuthFailureToLogin(request: Request, requestUrl: URL) {
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
+  if (isFirebaseBackend()) {
+    const oauthError = requestUrl.searchParams.get('error')
+    if (oauthError) {
+      return redirectOAuthFailureToLogin(request, requestUrl)
+    }
+
+    const { token } = await getFirebaseSessionWithProfile()
+    if (!token) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    return NextResponse.redirect(new URL('/app/dashboard', request.url))
+  }
+
   const code = requestUrl.searchParams.get('code')
   const oauthError = requestUrl.searchParams.get('error')
 

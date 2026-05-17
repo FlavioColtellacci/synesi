@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { getDailyPriceChange } from "@/lib/alpha-vantage"
 import { sendAlertPushToUser } from "@/lib/push/send-alert"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createAdminClient } from "@/lib/supabase/server"
 
 type ThesisRow = { id: string; user_id: string; ticker: string }
@@ -25,17 +27,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("theses")
-    .select("id, user_id, ticker")
-    .neq("status", "broken")
+  const usingFirestore = isFirebaseBackend()
+  const supabase = usingFirestore ? null : createAdminClient()
+  const firestore = usingFirestore ? getFirebaseAdminFirestore() : null
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  const theses: ThesisRow[] = await (async () => {
+    if (usingFirestore && firestore) {
+      const snapshot = await firestore.collection("theses").where("status", "!=", "broken").get()
+      return snapshot.docs.map((doc) => {
+        const data = (doc.data() ?? {}) as Record<string, unknown>
+        return {
+          id: doc.id,
+          user_id: typeof data.user_id === "string" ? data.user_id : "",
+          ticker: typeof data.ticker === "string" ? data.ticker : "",
+        }
+      })
+    }
 
-  const theses: ThesisRow[] = data ?? []
+    const { data, error } = await supabase!
+      .from("theses")
+      .select("id, user_id, ticker")
+      .neq("status", "broken")
+    if (error) {
+      throw new Error(error.message)
+    }
+    return data ?? []
+  })().catch((error: unknown) => {
+    throw error
+  })
 
   if (theses.length === 0) {
     return NextResponse.json({
@@ -50,19 +69,43 @@ export async function GET(request: Request) {
 
   const dayStartIso = getStartOfUtcDayIso()
   const thesisIds = theses.map((thesis) => thesis.id)
-  const { data: todayEvents, error: eventsError } = await supabase
-    .from("events")
-    .select("thesis_id")
-    .eq("event_type", "price_move")
-    .gte("created_at", dayStartIso)
-    .in("thesis_id", thesisIds)
+  const todayEvents: EventRow[] = await (async () => {
+    if (usingFirestore && firestore) {
+      const rows: EventRow[] = []
+      for (let index = 0; index < thesisIds.length; index += 30) {
+        const chunk = thesisIds.slice(index, index + 30)
+        const snapshot = await firestore
+          .collection("events")
+          .where("event_type", "==", "price_move")
+          .where("created_at", ">=", dayStartIso)
+          .where("thesis_id", "in", chunk)
+          .get()
+        rows.push(
+          ...snapshot.docs.map((doc) => {
+            const data = (doc.data() ?? {}) as Record<string, unknown>
+            return { thesis_id: typeof data.thesis_id === "string" ? data.thesis_id : "" }
+          }),
+        )
+      }
+      return rows
+    }
 
-  if (eventsError) {
-    return NextResponse.json({ error: eventsError.message }, { status: 500 })
-  }
+    const { data, error } = await supabase!
+      .from("events")
+      .select("thesis_id")
+      .eq("event_type", "price_move")
+      .gte("created_at", dayStartIso)
+      .in("thesis_id", thesisIds)
+    if (error) {
+      throw new Error(error.message)
+    }
+    return (data ?? []) as EventRow[]
+  })().catch((error: unknown) => {
+    throw error
+  })
 
   const alreadyAlertedToday = new Set(
-    ((todayEvents ?? []) as EventRow[]).map((event) => event.thesis_id),
+    todayEvents.map((event) => event.thesis_id),
   )
   const tickerMap = new Map<string, Array<{ thesisId: string; userId: string }>>()
 
@@ -110,10 +153,28 @@ export async function GET(request: Request) {
       is_reviewed: false,
     }))
 
-    const { error: insertError } = await supabase.from("events").insert(eventsToInsert)
-    if (insertError) {
-      errors.push(`${ticker}: ${insertError.message}`)
-      continue
+    if (usingFirestore && firestore) {
+      const batch = firestore.batch()
+      for (const event of eventsToInsert) {
+        const eventId = crypto.randomUUID()
+        batch.set(firestore.collection("events").doc(eventId), {
+          id: eventId,
+          ...event,
+          created_at: new Date().toISOString(),
+        })
+      }
+      try {
+        await batch.commit()
+      } catch (error) {
+        errors.push(`${ticker}: ${error instanceof Error ? error.message : "Failed to insert events"}`)
+        continue
+      }
+    } else {
+      const { error: insertError } = await supabase!.from("events").insert(eventsToInsert)
+      if (insertError) {
+        errors.push(`${ticker}: ${insertError.message}`)
+        continue
+      }
     }
 
     eventsInserted += eventsToInsert.length
@@ -121,7 +182,7 @@ export async function GET(request: Request) {
     const uniqueUserIds = [...new Set(holders.map((h) => h.userId))]
     await Promise.allSettled(
       uniqueUserIds.map((userId) =>
-        sendAlertPushToUser(supabase, userId, {
+        sendAlertPushToUser(usingFirestore && firestore ? firestore : supabase!, userId, {
           title: "SYNESI · Price alert",
           body: eventDetail.length > 140 ? `${eventDetail.slice(0, 137)}…` : eventDetail,
           url: "/app/convictions?panel=alerts",

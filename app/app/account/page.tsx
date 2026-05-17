@@ -1,8 +1,20 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseAdminFirestore } from '@/lib/firebase/admin'
+import { getFirebaseSessionWithProfile } from '@/lib/firebase/session'
 import { createClient } from '@/lib/supabase/server'
 import { getTrialState } from '@/lib/billing/trial-state'
 import { ManageSubscriptionButton } from './manage-subscription-button'
 import { PushNotificationsSection } from './push-notifications-section'
+
+type AccountProfile = {
+  email?: string | null
+  subscription_status?: string | null
+  subscription_plan?: string | null
+  subscription_period_end?: string | null
+  trial_ends_at?: string | null
+}
 
 function formatRenewalDate(date: string | null) {
   if (!date) {
@@ -45,20 +57,37 @@ function getAccountStatusLabel(statusActive: boolean, trialState: ReturnType<typ
 }
 
 export default async function AccountPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let userEmail: string | null = null
+  let profile: AccountProfile | null = null
 
-  const { data: profile } = user
-    ? await supabase
-        .from('profiles')
-        .select('email, subscription_status, subscription_plan, subscription_period_end, trial_ends_at')
-        .eq('id', user.id)
-        .single()
-    : { data: null }
+  if (isFirebaseBackend()) {
+    const { token } = await getFirebaseSessionWithProfile()
+    if (!token) {
+      redirect('/login')
+    }
 
-  const email = profile?.email ?? user?.email ?? 'N/A'
+    userEmail = token.email ?? null
+    const snapshot = await getFirebaseAdminFirestore().collection('profiles').doc(token.uid).get()
+    profile = snapshot.exists ? (snapshot.data() as AccountProfile) : null
+  } else {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    userEmail = user?.email ?? null
+    const { data } = user
+      ? await supabase
+          .from('profiles')
+          .select('email, subscription_status, subscription_plan, subscription_period_end, trial_ends_at')
+          .eq('id', user.id)
+          .single()
+      : { data: null }
+
+    profile = data
+  }
+
+  const email = profile?.email ?? userEmail ?? 'N/A'
   const plan = formatPlan(profile?.subscription_plan ?? null)
   const statusActive = profile?.subscription_status === 'active'
   const renews = formatRenewalDate(profile?.subscription_period_end ?? null)

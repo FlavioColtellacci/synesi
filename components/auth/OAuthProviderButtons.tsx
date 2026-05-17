@@ -1,6 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseClientAuth } from '@/lib/firebase/client'
 import { createClient } from '@/lib/supabase/client'
 
 /** Official multicolor Google mark (brand-compliant for “Sign in with Google” style actions). */
@@ -49,6 +52,7 @@ export function OAuthProviderButtons({
   onOAuthAttempt,
 }: OAuthProviderButtonsProps) {
   const supabase = useMemo(() => createClient(), [])
+  const firebaseAuth = useMemo(() => getFirebaseClientAuth(), [])
   const [activeProvider, setActiveProvider] = useState<OAuthProviderId | null>(
     null
   )
@@ -62,27 +66,49 @@ export function OAuthProviderButtons({
     setActiveProvider(provider)
     onBusyChange?.(true)
 
-    const redirectTo = `${window.location.origin}/auth/callback`
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo },
-    })
+    try {
+      if (isFirebaseBackend()) {
+        if (provider !== 'google') {
+          throw new Error('Only Google OAuth is currently supported.')
+        }
 
-    if (error) {
-      onError?.(error.message)
+        const credential = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
+        const idToken = await credential.user.getIdToken()
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Could not start Firebase session.')
+        }
+
+        window.location.assign('/app/dashboard')
+        return
+      }
+
+      const redirectTo = `${window.location.origin}/auth/callback`
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      if (data.url) {
+        window.location.assign(data.url)
+        return
+      }
+
+      throw new Error('Could not start sign-in. Please try again.')
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : 'Could not complete sign-in.')
       setActiveProvider(null)
       onBusyChange?.(false)
-      return
     }
-
-    if (data.url) {
-      window.location.assign(data.url)
-      return
-    }
-
-    onError?.('Could not start sign-in. Please try again.')
-    setActiveProvider(null)
-    onBusyChange?.(false)
   }
 
   const secondaryButtonClass =

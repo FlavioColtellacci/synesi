@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { verifyFirebaseSessionCookie } from '@/lib/firebase/session'
+import {
+  createFirebaseProfileRepository,
+  createSupabaseProfileRepository,
+  type ProfileRepository,
+} from '@/lib/data/repositories/profiles'
+import { getFirebaseAdminFirestore } from '@/lib/firebase/admin'
 
 type CheckoutPlan = 'monthly' | 'annual'
 
@@ -10,13 +18,30 @@ function isCheckoutPlan(value: unknown): value is CheckoutPlan {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const firebaseBackend = isFirebaseBackend()
+    const profileRepository: ProfileRepository = firebaseBackend
+      ? createFirebaseProfileRepository(getFirebaseAdminFirestore())
+      : createSupabaseProfileRepository(createAdminClient())
+    let userId: string | null = null
+    let userEmail: string | null = null
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (firebaseBackend) {
+      const token = await verifyFirebaseSessionCookie()
+      if (!token) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      userId = token.uid
+      userEmail = token.email ?? null
+    } else {
+      const supabase = await createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      userId = user.id
+      userEmail = user.email ?? null
     }
 
     const body: unknown = await request.json()
@@ -33,34 +58,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Stripe price is not configured' }, { status: 500 })
     }
 
-    const admin = createAdminClient()
-    const { data: profile, error: profileError } = await admin
-      .from('profiles')
-      .select('stripe_customer_id, email')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile?.email) {
-      throw new Error(profileError?.message ?? 'Profile not found')
+    const profile = await profileRepository.getById(userId)
+    const email = profile?.email || userEmail
+    if (!email) {
+      throw new Error('Profile email not found')
     }
-
-    let customerId = profile.stripe_customer_id
+    let customerId = profile?.stripe_customer_id ?? null
 
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: profile.email,
+        email,
       })
 
       customerId = customer.id
 
-      const { error: updateError } = await admin
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
-
-      if (updateError) {
-        throw new Error(updateError.message)
-      }
+      await profileRepository.upsert({
+        id: userId,
+        email,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      })
     }
 
     const session = await stripe.checkout.sessions.create({

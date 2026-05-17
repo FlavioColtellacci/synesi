@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 const MAX_NAME_LEN = 200
@@ -12,19 +15,35 @@ function normalizeName(raw: unknown): string | null {
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    if (isFirebaseBackend()) {
+      const snapshot = await getFirebaseAdminFirestore()
+        .collection("sigma_projects")
+        .where("user_id", "==", userId)
+        .orderBy("updated_at", "desc")
+        .get()
+      const projects = snapshot.docs.map((doc) => {
+        const row = (doc.data() ?? {}) as Record<string, unknown>
+        return {
+          id: doc.id,
+          name: typeof row.name === "string" ? row.name : "",
+          updated_at: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+          created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+        }
+      })
+      return NextResponse.json({ projects })
+    }
+
+    const supabase = await createClient()
 
     const { data, error } = await supabase
       .from("sigma_projects")
       .select("id, name, updated_at, created_at")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("updated_at", { ascending: false })
 
     if (error) {
@@ -39,12 +58,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -60,9 +75,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "name is required (non-empty string)" }, { status: 400 })
     }
 
+    if (isFirebaseBackend()) {
+      const now = new Date().toISOString()
+      const projectId = crypto.randomUUID()
+      const project = {
+        id: projectId,
+        user_id: userId,
+        name,
+        created_at: now,
+        updated_at: now,
+      }
+      await getFirebaseAdminFirestore().collection("sigma_projects").doc(projectId).set(project)
+      return NextResponse.json({
+        project: { id: projectId, name, updated_at: now, created_at: now },
+      })
+    }
+
+    const supabase = await createClient()
     const { data, error } = await supabase
       .from("sigma_projects")
-      .insert({ user_id: user.id, name })
+      .insert({ user_id: userId, name })
       .select("id, name, updated_at, created_at")
       .single()
 

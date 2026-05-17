@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server"
+import { removeFromFirebaseStorage, uploadBufferToFirebaseStorage } from "@/lib/firebase/storage"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 import {
   extractDocumentText,
@@ -20,12 +24,11 @@ function badRequest(message: string, status = 400) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) return badRequest("Unauthorized", 401)
+    const userId = await getServerUserId()
+    if (!userId) return badRequest("Unauthorized", 401)
+    const usingFirestore = isFirebaseBackend()
+    const firestore = usingFirestore ? getFirebaseAdminFirestore() : null
+    const supabase = usingFirestore ? null : await createClient()
 
     const formData = await request.formData()
     const fileValue = formData.get("file")
@@ -55,17 +58,29 @@ export async function POST(request: Request) {
       return badRequest(magicError)
     }
 
-    const { data: existingRows, error: existingError } = await supabase
-      .from("chat_uploaded_documents")
-      .select("size_bytes")
-      .eq("user_id", user.id)
-
-    if (existingError) {
-      return badRequest("Failed to check upload quota.", 500)
+    let existingRows: Array<{ size_bytes: number }> = []
+    if (usingFirestore && firestore) {
+      const snapshot = await firestore
+        .collection("chat_uploaded_documents")
+        .where("user_id", "==", userId)
+        .get()
+      existingRows = snapshot.docs.map((doc) => {
+        const row = (doc.data() ?? {}) as Record<string, unknown>
+        return { size_bytes: typeof row.size_bytes === "number" ? row.size_bytes : 0 }
+      })
+    } else if (supabase) {
+      const { data, error: existingError } = await supabase
+        .from("chat_uploaded_documents")
+        .select("size_bytes")
+        .eq("user_id", userId)
+      if (existingError) {
+        return badRequest("Failed to check upload quota.", 500)
+      }
+      existingRows = (data ?? []) as Array<{ size_bytes: number }>
     }
 
-    const existingCount = existingRows?.length ?? 0
-    const existingTotalBytes = (existingRows ?? []).reduce((total, row) => total + (row.size_bytes ?? 0), 0)
+    const existingCount = existingRows.length
+    const existingTotalBytes = existingRows.reduce((total, row) => total + (row.size_bytes ?? 0), 0)
     const maxFiles = getUploadMaxFilesPerUser()
     const maxTotalBytes = getUploadMaxBytesPerUser()
     if (existingCount >= maxFiles) {
@@ -90,21 +105,27 @@ export async function POST(request: Request) {
     const bucket = getUploadBucketName()
     const uploadId = crypto.randomUUID()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 100)
-    const storagePath = `${user.id}/${uploadId}-${safeName}`
+    const storagePath = `uploads/${userId}/${uploadId}-${safeName}`
     const binary = Buffer.from(arrayBuffer)
 
-    const storageUpload = await supabase.storage.from(bucket).upload(storagePath, binary, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    })
-    if (storageUpload.error) {
-      return badRequest(`Storage upload failed: ${storageUpload.error.message}`, 500)
+    try {
+      await uploadBufferToFirebaseStorage({
+        bucketName: bucket,
+        storagePath,
+        content: binary,
+        contentType: file.type || "application/octet-stream",
+      })
+    } catch (error) {
+      return badRequest(
+        `Storage upload failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        500
+      )
     }
 
     const extracted = await extractDocumentText(extension, binary)
     const insertPayload = {
       id: uploadId,
-      user_id: user.id,
+      user_id: userId,
       bucket,
       storage_path: storagePath,
       file_name: file.name,
@@ -122,10 +143,26 @@ export async function POST(request: Request) {
       },
     }
 
-    const { error: insertError } = await supabase.from("chat_uploaded_documents").insert(insertPayload)
-    if (insertError) {
-      await supabase.storage.from(bucket).remove([storagePath])
-      return badRequest(`Failed to persist uploaded file metadata: ${insertError.message}`, 500)
+    if (usingFirestore && firestore) {
+      try {
+        await firestore.collection("chat_uploaded_documents").doc(uploadId).set({
+          ...insertPayload,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      } catch (error) {
+        await removeFromFirebaseStorage({ bucketName: bucket, storagePath })
+        return badRequest(
+          `Failed to persist uploaded file metadata: ${error instanceof Error ? error.message : "unknown error"}`,
+          500,
+        )
+      }
+    } else if (supabase) {
+      const { error: insertError } = await supabase.from("chat_uploaded_documents").insert(insertPayload)
+      if (insertError) {
+        await removeFromFirebaseStorage({ bucketName: bucket, storagePath })
+        return badRequest(`Failed to persist uploaded file metadata: ${insertError.message}`, 500)
+      }
     }
 
     return NextResponse.json({
@@ -145,39 +182,69 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) return badRequest("Unauthorized", 401)
+    const userId = await getServerUserId()
+    if (!userId) return badRequest("Unauthorized", 401)
+    const usingFirestore = isFirebaseBackend()
+    const firestore = usingFirestore ? getFirebaseAdminFirestore() : null
+    const supabase = usingFirestore ? null : await createClient()
 
     const url = new URL(request.url)
     const id = url.searchParams.get("id")?.trim()
     if (!id) return badRequest("Missing upload id.")
 
-    const { data: row, error: rowError } = await supabase
-      .from("chat_uploaded_documents")
-      .select("id,bucket,storage_path")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (rowError) return badRequest("Failed to load upload record.", 500)
-    if (!row) return badRequest("Upload not found.", 404)
-
-    const storageResult = await supabase.storage.from(row.bucket).remove([row.storage_path])
-    if (storageResult.error) {
-      return badRequest(`Failed to remove uploaded file: ${storageResult.error.message}`, 500)
+    let row: { id: string; bucket: string; storage_path: string } | null = null
+    if (usingFirestore && firestore) {
+      const snapshot = await firestore.collection("chat_uploaded_documents").doc(id).get()
+      if (snapshot.exists) {
+        const data = (snapshot.data() ?? {}) as Record<string, unknown>
+        if (data.user_id === userId) {
+          row = {
+            id: snapshot.id,
+            bucket: typeof data.bucket === "string" ? data.bucket : "",
+            storage_path: typeof data.storage_path === "string" ? data.storage_path : "",
+          }
+        }
+      }
+    } else if (supabase) {
+      const { data, error: rowError } = await supabase
+        .from("chat_uploaded_documents")
+        .select("id,bucket,storage_path")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle()
+      if (rowError) return badRequest("Failed to load upload record.", 500)
+      row = (data as typeof row) ?? null
     }
 
-    const { error: deleteError } = await supabase
-      .from("chat_uploaded_documents")
-      .delete()
-      .eq("id", row.id)
-      .eq("user_id", user.id)
-    if (deleteError) {
-      return badRequest(`Failed to remove upload metadata: ${deleteError.message}`, 500)
+    if (!row) return badRequest("Upload not found.", 404)
+
+    try {
+      await removeFromFirebaseStorage({ bucketName: row.bucket, storagePath: row.storage_path })
+    } catch (error) {
+      return badRequest(
+        `Failed to remove uploaded file: ${error instanceof Error ? error.message : "unknown error"}`,
+        500
+      )
+    }
+
+    if (usingFirestore && firestore) {
+      try {
+        await firestore.collection("chat_uploaded_documents").doc(row.id).delete()
+      } catch (error) {
+        return badRequest(
+          `Failed to remove upload metadata: ${error instanceof Error ? error.message : "unknown error"}`,
+          500,
+        )
+      }
+    } else if (supabase) {
+      const { error: deleteError } = await supabase
+        .from("chat_uploaded_documents")
+        .delete()
+        .eq("id", row.id)
+        .eq("user_id", userId)
+      if (deleteError) {
+        return badRequest(`Failed to remove upload metadata: ${deleteError.message}`, 500)
+      }
     }
 
     return NextResponse.json({ ok: true })

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { createSigmaExportsForResponse, createSignedUrlForStoredExport } from "@/lib/chat/exports"
 import type { ChatAssistantResponse, ChatRequestedExport } from "@/lib/chat/types"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 type ExportRequestBody = {
@@ -25,17 +28,15 @@ function sanitizeEvidenceSource(input: unknown): "assumption" | "source_match" |
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return badRequest("Unauthorized", 401)
+    const userId = await getServerUserId()
+    if (!userId) return badRequest("Unauthorized", 401)
+    const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
 
     const url = new URL(request.url)
     const exportId = url.searchParams.get("id")?.trim()
     if (!exportId) return badRequest("Missing export id.")
 
-    const artifact = await createSignedUrlForStoredExport(supabase, user.id, exportId)
+    const artifact = await createSignedUrlForStoredExport(backend, userId, exportId)
     if (!artifact) return badRequest("Export not found.", 404)
     return NextResponse.json({ artifact })
   } catch {
@@ -45,11 +46,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return badRequest("Unauthorized", 401)
+    const userId = await getServerUserId()
+    if (!userId) return badRequest("Unauthorized", 401)
+    const backend = isFirebaseBackend() ? getFirebaseAdminFirestore() : await createClient()
 
     const body = (await request.json()) as ExportRequestBody
     const answer = typeof body.answer === "string" ? body.answer.trim() : ""
@@ -82,8 +81,8 @@ export async function POST(request: Request) {
 
     const requestId = crypto.randomUUID()
     const artifacts = await createSigmaExportsForResponse({
-      supabase,
-      userId: user.id,
+      backend,
+      userId,
       requestId,
       response: responseForExport,
       positions: Array.isArray(body.positions)

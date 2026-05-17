@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseSessionWithProfile } from "@/lib/firebase/session"
 import { createClient } from "@/lib/supabase/server"
 import FAQSection from "@/components/landing/FAQSection"
 import FeaturesSection from "@/components/landing/FeaturesSection"
@@ -24,10 +26,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     redirect(`/auth/callback?code=${params.code}`)
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    redirect('/app/dashboard')
+  if (isFirebaseBackend()) {
+    const { token } = await getFirebaseSessionWithProfile()
+    if (token) {
+      redirect('/app/dashboard')
+    }
+  } else {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      redirect('/app/dashboard')
+    }
   }
 
   return (

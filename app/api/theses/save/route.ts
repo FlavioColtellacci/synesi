@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { createRepositories } from "@/lib/data/repositories"
 import { createClient } from "@/lib/supabase/server"
 
 type ExtractedThesis = {
@@ -26,67 +29,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing thesis payload" }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: insertedThesis, error: thesisError } = await supabase
-      .from("theses")
-      .insert({
-        user_id: user.id,
-        ticker: thesis.ticker,
-        company_name: thesis.companyName,
-        thesis_statement: thesis.thesisStatement,
-        investing_style: thesis.investingStyle,
-        bull_case: thesis.bullCase,
-        bear_case: thesis.bearCase,
-        exit_criteria: thesis.exitCriteria,
-        confidence_level: thesis.confidenceLevel,
-        status: "intact",
-      })
-      .select("id")
-      .single()
+    const supabase = isFirebaseBackend() ? null : await createClient()
+    const repositories = createRepositories({ supabase: supabase ?? undefined })
 
-    if (thesisError) {
-      throw thesisError
-    }
-
-    const newThesisId = insertedThesis.id
+    const newThesisId = await repositories.theses.create({
+      user_id: userId,
+      ticker: thesis.ticker,
+      company_name: thesis.companyName,
+      thesis_statement: thesis.thesisStatement,
+      investing_style: thesis.investingStyle,
+      bull_case: thesis.bullCase,
+      bear_case: thesis.bearCase,
+      exit_criteria: thesis.exitCriteria,
+      confidence_level: thesis.confidenceLevel,
+      status: "intact",
+    })
 
     if (thesis.assumptions.length > 0) {
-      const assumptionsToInsert = thesis.assumptions.map((assumption, index) => ({
-        thesis_id: newThesisId,
-        user_id: user.id,
-        category: assumption.category,
-        statement: assumption.statement,
-        break_condition: assumption.breakCondition,
-        sort_order: index,
-      }))
-
-      const { error: assumptionsError } = await supabase
-        .from("assumptions")
-        .insert(assumptionsToInsert)
-
-      if (assumptionsError) {
-        throw assumptionsError
-      }
+      await repositories.assumptions.insertMany(
+        thesis.assumptions.map((assumption, index) => ({
+          thesis_id: newThesisId,
+          user_id: userId,
+          category: assumption.category,
+          statement: assumption.statement,
+          break_condition: assumption.breakCondition,
+          sort_order: index,
+        })),
+      )
     }
 
-    const { error: updateError } = await supabase.from("thesis_updates").insert({
+    await repositories.thesisUpdates.insert({
       thesis_id: newThesisId,
-      user_id: user.id,
+      user_id: userId,
       update_type: "edit",
       note: "Thesis created",
     })
-
-    if (updateError) {
-      throw updateError
-    }
 
     return NextResponse.json({ success: true, thesisId: newThesisId })
   } catch (error) {

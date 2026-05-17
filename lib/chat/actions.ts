@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
 
 export type SigmaActionType =
   | "open_thesis"
@@ -69,7 +70,7 @@ export function sanitizeActionDrafts(input: unknown): SigmaActionDraft[] {
 }
 
 export async function resolveConfirmedAction(
-  supabase: SupabaseClient,
+  backend: SupabaseClient | Firestore,
   userId: string,
   action: SigmaActionDraft,
 ): Promise<SigmaActionExecution | null> {
@@ -87,36 +88,50 @@ export async function resolveConfirmedAction(
 
   if (action.actionType === "open_thesis") {
     if (!action.thesisId) return null
-    const { data: thesis, error } = await supabase
-      .from("theses")
-      .select("id")
-      .eq("id", action.thesisId)
-      .eq("user_id", userId)
-      .maybeSingle()
+    if ("collection" in backend) {
+      const thesisDoc = await backend.collection("theses").doc(action.thesisId).get()
+      if (!thesisDoc.exists) return null
+      const data = (thesisDoc.data() ?? {}) as Record<string, unknown>
+      if (typeof data.user_id !== "string" || data.user_id !== userId) return null
+    } else {
+      const { data: thesis, error } = await backend
+        .from("theses")
+        .select("id")
+        .eq("id", action.thesisId)
+        .eq("user_id", userId)
+        .maybeSingle()
 
-    if (error || !thesis?.id) return null
+      if (error || !thesis?.id) return null
+    }
 
     return {
       method: "navigate",
-      route: `/app/thesis/${thesis.id}`,
+      route: `/app/thesis/${action.thesisId}`,
       status: "ready",
     }
   }
 
   if (action.actionType === "draft_alert_rule_update") {
     if (!action.thesisId) return null
-    const { data: thesis, error } = await supabase
-      .from("theses")
-      .select("id")
-      .eq("id", action.thesisId)
-      .eq("user_id", userId)
-      .maybeSingle()
+    if ("collection" in backend) {
+      const thesisDoc = await backend.collection("theses").doc(action.thesisId).get()
+      if (!thesisDoc.exists) return null
+      const data = (thesisDoc.data() ?? {}) as Record<string, unknown>
+      if (typeof data.user_id !== "string" || data.user_id !== userId) return null
+    } else {
+      const { data: thesis, error } = await backend
+        .from("theses")
+        .select("id")
+        .eq("id", action.thesisId)
+        .eq("user_id", userId)
+        .maybeSingle()
 
-    if (error || !thesis?.id) return null
+      if (error || !thesis?.id) return null
+    }
 
     return {
       method: "navigate",
-      route: `/app/thesis/${thesis.id}`,
+      route: `/app/thesis/${action.thesisId}`,
       status: "requires_manual_completion",
     }
   }

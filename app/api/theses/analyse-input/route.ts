@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
-import { createClient } from "@/lib/supabase/server"
+import { getServerUserId } from "@/lib/data/auth"
 
 type ExtractedThesis = {
   ticker: string
@@ -35,12 +35,8 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

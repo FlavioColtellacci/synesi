@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
 import {
   AlignmentType,
   Document,
@@ -15,6 +16,11 @@ import {
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import * as XLSX from "xlsx"
 import type { ChatAssistantResponse, ChatExportArtifact, ChatExportFormat } from "@/lib/chat/types"
+import {
+  createFirebaseSignedDownloadUrl,
+  uploadBufferToFirebaseStorage,
+} from "@/lib/firebase/storage"
+import { newDocumentId, toFirestorePayload } from "@/lib/data/firestore-utils"
 
 type ExportPositionSnapshot = {
   ticker: string
@@ -45,6 +51,12 @@ type PersistedExportRow = {
   mime_type: string
   size_bytes: number
   signed_url_expires_at: string
+}
+
+type ExportBackend = SupabaseClient | Firestore
+
+function isFirestoreBackend(backend: ExportBackend): backend is Firestore {
+  return "collection" in backend
 }
 
 const DEFAULT_SIGNED_URL_TTL_SECONDS = 10 * 60
@@ -570,25 +582,79 @@ function ensureRequestedExports(response: ChatAssistantResponse) {
 }
 
 export async function createSignedUrlForStoredExport(
-  supabase: SupabaseClient,
+  backend: ExportBackend,
   userId: string,
   exportId: string,
 ): Promise<ChatExportArtifact | null> {
-  const { data: row } = await supabase
-    .from("chat_exports")
-    .select("id,file_name,format,mime_type,size_bytes,bucket,storage_path")
-    .eq("id", exportId)
-    .eq("user_id", userId)
-    .maybeSingle()
+  let row:
+    | {
+        id: string
+        file_name: string
+        format: ChatExportFormat
+        mime_type: string
+        size_bytes: number
+        bucket: string
+        storage_path: string
+      }
+    | null = null
+
+  if (isFirestoreBackend(backend)) {
+    const snapshot = await backend.collection("chat_exports").doc(exportId).get()
+    if (snapshot.exists) {
+      const data = (snapshot.data() ?? {}) as Record<string, unknown>
+      if (data.user_id === userId) {
+        row = {
+          id: snapshot.id,
+          file_name: typeof data.file_name === "string" ? data.file_name : "export",
+          format:
+            data.format === "csv" || data.format === "docx" || data.format === "pdf" || data.format === "xlsx"
+              ? data.format
+              : "pdf",
+          mime_type: typeof data.mime_type === "string" ? data.mime_type : "application/octet-stream",
+          size_bytes: typeof data.size_bytes === "number" ? data.size_bytes : 0,
+          bucket: typeof data.bucket === "string" ? data.bucket : getExportBucketName(),
+          storage_path: typeof data.storage_path === "string" ? data.storage_path : "",
+        }
+      }
+    }
+  } else {
+    const result = await backend
+      .from("chat_exports")
+      .select("id,file_name,format,mime_type,size_bytes,bucket,storage_path")
+      .eq("id", exportId)
+      .eq("user_id", userId)
+      .maybeSingle()
+    row = (result.data as typeof row) ?? null
+  }
 
   if (!row) return null
 
   const ttlSeconds = getExportSignedUrlTtlSeconds()
-  const { data: signedData, error: signedError } = await supabase.storage.from(row.bucket).createSignedUrl(row.storage_path, ttlSeconds)
-  if (signedError || !signedData?.signedUrl) return null
+  const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000)
+  let signedUrl: string
+  try {
+    signedUrl = await createFirebaseSignedDownloadUrl({
+      bucketName: row.bucket,
+      storagePath: row.storage_path,
+      expiresAt: expiresAtDate,
+    })
+  } catch {
+    return null
+  }
 
-  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
-  await supabase.from("chat_exports").update({ signed_url_expires_at: expiresAt }).eq("id", row.id).eq("user_id", userId)
+  const expiresAt = expiresAtDate.toISOString()
+  if (isFirestoreBackend(backend)) {
+    await backend
+      .collection("chat_exports")
+      .doc(row.id)
+      .set(toFirestorePayload({ signed_url_expires_at: expiresAt }), { merge: true })
+  } else {
+    await backend
+      .from("chat_exports")
+      .update({ signed_url_expires_at: expiresAt })
+      .eq("id", row.id)
+      .eq("user_id", userId)
+  }
 
   return {
     id: row.id,
@@ -596,13 +662,13 @@ export async function createSignedUrlForStoredExport(
     format: row.format,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
-    signedUrl: signedData.signedUrl,
+    signedUrl,
     signedUrlExpiresAt: expiresAt,
   }
 }
 
 export async function createSigmaExportsForResponse(args: {
-  supabase: SupabaseClient
+  backend: ExportBackend
   userId: string
   requestId: string
   response: ChatAssistantResponse
@@ -629,20 +695,27 @@ export async function createSigmaExportsForResponse(args: {
     const safeLabel = sanitizeLabel(request.label, `Sigma ${format.toUpperCase()} export`)
     const safeSlug = slugifyLabel(safeLabel)
     const fileName = `${safeSlug}.${format}`
-    const storagePath = `${args.userId}/${args.requestId}/${crypto.randomUUID()}-${fileName}`
+    const storagePath = `exports/${args.userId}/${args.requestId}/${crypto.randomUUID()}-${fileName}`
     const mimeType = MIMES[format]
     const content = await buildExportBuffer(format, exportInput)
 
-    const uploadResult = await args.supabase.storage.from(bucket).upload(storagePath, content, {
-      contentType: mimeType,
-      upsert: false,
-    })
-    if (uploadResult.error) continue
+    try {
+      await uploadBufferToFirebaseStorage({
+        bucketName: bucket,
+        storagePath,
+        content,
+        contentType: mimeType,
+      })
+    } catch {
+      continue
+    }
 
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
-    const { data: insertedRow } = await args.supabase
-      .from("chat_exports")
-      .insert({
+    let persisted: PersistedExportRow | null = null
+    if (isFirestoreBackend(args.backend)) {
+      const id = newDocumentId()
+      const payload = {
+        id,
         user_id: args.userId,
         bucket,
         storage_path: storagePath,
@@ -652,15 +725,48 @@ export async function createSigmaExportsForResponse(args: {
         size_bytes: content.byteLength,
         source_request_id: args.requestId,
         signed_url_expires_at: expiresAt,
-      })
-      .select("id,file_name,format,mime_type,size_bytes,signed_url_expires_at")
-      .single()
+        created_at: new Date().toISOString(),
+      }
+      await args.backend.collection("chat_exports").doc(id).set(payload)
+      persisted = {
+        id,
+        file_name: fileName,
+        format,
+        mime_type: mimeType,
+        size_bytes: content.byteLength,
+        signed_url_expires_at: expiresAt,
+      }
+    } else {
+      const { data: insertedRow } = await args.backend
+        .from("chat_exports")
+        .insert({
+          user_id: args.userId,
+          bucket,
+          storage_path: storagePath,
+          file_name: fileName,
+          format,
+          mime_type: mimeType,
+          size_bytes: content.byteLength,
+          source_request_id: args.requestId,
+          signed_url_expires_at: expiresAt,
+        })
+        .select("id,file_name,format,mime_type,size_bytes,signed_url_expires_at")
+        .single()
+      persisted = insertedRow as PersistedExportRow | null
+    }
 
-    const persisted = insertedRow as PersistedExportRow | null
     if (!persisted) continue
 
-    const { data: signedData, error: signedError } = await args.supabase.storage.from(bucket).createSignedUrl(storagePath, ttlSeconds)
-    if (signedError || !signedData?.signedUrl) continue
+    let signedUrl: string
+    try {
+      signedUrl = await createFirebaseSignedDownloadUrl({
+        bucketName: bucket,
+        storagePath,
+        expiresAt: new Date(expiresAt),
+      })
+    } catch {
+      continue
+    }
 
     artifacts.push({
       id: persisted.id,
@@ -668,7 +774,7 @@ export async function createSigmaExportsForResponse(args: {
       format: persisted.format,
       mimeType: persisted.mime_type,
       sizeBytes: persisted.size_bytes,
-      signedUrl: signedData.signedUrl,
+      signedUrl,
       signedUrlExpiresAt: persisted.signed_url_expires_at,
     })
   }

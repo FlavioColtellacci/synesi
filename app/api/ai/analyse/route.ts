@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
 import { createClient } from "@/lib/supabase/server"
 import type { Database } from "@/types/database"
 
@@ -106,31 +109,92 @@ function sanitizeAnalysisPayload(parsed: Record<string, unknown>): AnalysisRespo
 }
 
 async function buildDocumentEvidencePack(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  backend: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof getFirebaseAdminFirestore>,
   userId: string,
   thesisId: string,
 ) {
-  const [sourceMatchesResult, uploadsResult] = await Promise.all([
-    supabase
-      .from("thesis_source_matches")
-      .select("match_reason,confidence,relevance_score,source_documents(title,source_name,content_excerpt)")
-      .eq("user_id", userId)
-      .eq("thesis_id", thesisId)
-      .order("created_at", { ascending: false })
-      .limit(8),
-    supabase
-      .from("chat_uploaded_documents")
-      .select("file_name,extracted_text,metadata")
-      .eq("user_id", userId)
-      .eq("status", "ready")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ])
+  const usingFirestore = "collection" in backend
+  const [sourceMatches, uploads] = await (async () => {
+    if (usingFirestore) {
+      const [sourceMatchSnapshot, uploadsSnapshot] = await Promise.all([
+        backend
+          .collection("thesis_source_matches")
+          .where("user_id", "==", userId)
+          .where("thesis_id", "==", thesisId)
+          .orderBy("created_at", "desc")
+          .limit(8)
+          .get(),
+        backend
+          .collection("chat_uploaded_documents")
+          .where("user_id", "==", userId)
+          .where("status", "==", "ready")
+          .orderBy("created_at", "desc")
+          .limit(8)
+          .get(),
+      ])
+
+      const sourceRows = await Promise.all(
+        sourceMatchSnapshot.docs.map(async (doc) => {
+          const row = (doc.data() ?? {}) as Record<string, unknown>
+          const sourceDocumentId =
+            typeof row.source_document_id === "string" ? row.source_document_id : null
+          let sourceDocument: { title?: string | null; source_name?: string | null; content_excerpt?: string | null } | null =
+            null
+          if (sourceDocumentId) {
+            const sourceDoc = await backend.collection("source_documents").doc(sourceDocumentId).get()
+            if (sourceDoc.exists) {
+              sourceDocument = (sourceDoc.data() ?? {}) as {
+                title?: string | null
+                source_name?: string | null
+                content_excerpt?: string | null
+              }
+            }
+          }
+          return {
+            match_reason: typeof row.match_reason === "string" ? row.match_reason : null,
+            confidence: typeof row.confidence === "string" ? row.confidence : null,
+            relevance_score: typeof row.relevance_score === "number" ? row.relevance_score : null,
+            source_documents: sourceDocument,
+          }
+        }),
+      )
+
+      const uploadRows = uploadsSnapshot.docs.map((doc) => {
+        const row = (doc.data() ?? {}) as Record<string, unknown>
+        return {
+          file_name: typeof row.file_name === "string" ? row.file_name : null,
+          extracted_text: typeof row.extracted_text === "string" ? row.extracted_text : null,
+          metadata: typeof row.metadata === "object" && row.metadata !== null ? row.metadata : null,
+        }
+      })
+
+      return [sourceRows, uploadRows]
+    }
+
+    const [sourceMatchesResult, uploadsResult] = await Promise.all([
+      backend
+        .from("thesis_source_matches")
+        .select("match_reason,confidence,relevance_score,source_documents(title,source_name,content_excerpt)")
+        .eq("user_id", userId)
+        .eq("thesis_id", thesisId)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      backend
+        .from("chat_uploaded_documents")
+        .select("file_name,extracted_text,metadata")
+        .eq("user_id", userId)
+        .eq("status", "ready")
+        .order("created_at", { ascending: false })
+        .limit(8),
+    ])
+
+    return [sourceMatchesResult.data ?? [], uploadsResult.data ?? []]
+  })()
 
   const lines: string[] = []
   let evidenceIndex = 1
 
-  for (const row of sourceMatchesResult.data ?? []) {
+  for (const row of sourceMatches) {
     const sourceDocument = row.source_documents as
       | { title?: string | null; source_name?: string | null; content_excerpt?: string | null }
       | null
@@ -151,7 +215,7 @@ async function buildDocumentEvidencePack(
     if (evidenceIndex > 6) break
   }
 
-  const uploads = (uploadsResult.data ?? [])
+  const filteredUploads = uploads
     .filter((row) => {
       const metadata = row.metadata
       if (!metadata || typeof metadata !== "object") return true
@@ -162,7 +226,7 @@ async function buildDocumentEvidencePack(
     })
     .slice(0, 3)
 
-  for (const row of uploads) {
+  for (const row of filteredUploads) {
     if (evidenceIndex > 8) break
     const excerpt =
       typeof row.extracted_text === "string"
@@ -240,54 +304,93 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing thesisId" }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    const usingFirestore = isFirebaseBackend()
+    const firestore = usingFirestore ? getFirebaseAdminFirestore() : null
+    const supabase = usingFirestore ? null : await createClient()
 
     const llm = createLlm()
 
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { data: existingAnalyses } = await supabase
-      .from("thesis_updates")
-      .select("id")
-      .eq("thesis_id", thesisId)
-      .eq("user_id", user.id)
-      .eq("update_type", "ai_analysis")
-      .gt("created_at", last24Hours)
-      .limit(1)
+    const existingAnalyses = await (async () => {
+      if (usingFirestore && firestore) {
+        const snapshot = await firestore
+          .collection("thesis_updates")
+          .where("thesis_id", "==", thesisId)
+          .where("user_id", "==", userId)
+          .where("update_type", "==", "ai_analysis")
+          .where("created_at", ">", last24Hours)
+          .limit(1)
+          .get()
+        return snapshot.empty ? [] : [{}]
+      }
+      const { data } = await supabase!
+        .from("thesis_updates")
+        .select("id")
+        .eq("thesis_id", thesisId)
+        .eq("user_id", userId)
+        .eq("update_type", "ai_analysis")
+        .gt("created_at", last24Hours)
+        .limit(1)
+      return data ?? []
+    })()
 
-    if ((existingAnalyses ?? []).length > 0) {
+    if (existingAnalyses.length > 0) {
       return NextResponse.json(
         { error: "Analysis already run in the last 24 hours" },
         { status: 429 },
       )
     }
 
-    const { data: thesis } = await supabase
-      .from("theses")
-      .select("*")
-      .eq("id", thesisId)
-      .eq("user_id", user.id)
-      .maybeSingle()
+    const thesis = await (async () => {
+      if (usingFirestore && firestore) {
+        const snapshot = await firestore.collection("theses").doc(thesisId).get()
+        if (!snapshot.exists) return null
+        const row = (snapshot.data() ?? {}) as Thesis
+        if (row.user_id !== userId) return null
+        return { ...row, id: thesisId }
+      }
+      const { data } = await supabase!
+        .from("theses")
+        .select("*")
+        .eq("id", thesisId)
+        .eq("user_id", userId)
+        .maybeSingle()
+      return data ?? null
+    })()
 
     if (!thesis) {
       return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
     }
 
-    const { data: assumptionsData } = await supabase
-      .from("assumptions")
-      .select("*")
-      .eq("thesis_id", thesisId)
-      .eq("user_id", user.id)
-      .order("sort_order", { ascending: true })
+    const assumptionsData = await (async () => {
+      if (usingFirestore && firestore) {
+        const snapshot = await firestore
+          .collection("assumptions")
+          .where("thesis_id", "==", thesisId)
+          .where("user_id", "==", userId)
+          .orderBy("sort_order", "asc")
+          .get()
+        return snapshot.docs.map((doc) => ({ ...(doc.data() as Assumption), id: doc.id }))
+      }
+      const { data } = await supabase!
+        .from("assumptions")
+        .select("*")
+        .eq("thesis_id", thesisId)
+        .eq("user_id", userId)
+        .order("sort_order", { ascending: true })
+      return data ?? []
+    })()
 
     const assumptions = assumptionsData ?? []
-    const evidenceLines = await buildDocumentEvidencePack(supabase, user.id, thesisId)
+    const evidenceLines = await buildDocumentEvidencePack(
+      usingFirestore && firestore ? firestore : supabase!,
+      userId,
+      thesisId,
+    )
     const userPrompt = buildUserPrompt(thesis, assumptions, evidenceLines, highDepthMode)
 
     let researchBlock = ""
@@ -369,11 +472,25 @@ ${JSON.stringify(firstPassParsed)}`
 
     const analysis = sanitizeAnalysisPayload(finalParsed)
 
-    const { data: insertedUpdate, error: insertError } = await supabase
+    const analysedAt = new Date().toISOString()
+    if (usingFirestore && firestore) {
+      const updateId = crypto.randomUUID()
+      await firestore.collection("thesis_updates").doc(updateId).set({
+        id: updateId,
+        thesis_id: thesisId,
+        user_id: userId,
+        update_type: "ai_analysis",
+        note: JSON.stringify(analysis),
+        created_at: analysedAt,
+      })
+      return NextResponse.json({ analysis, analysedAt })
+    }
+
+    const { data: insertedUpdate, error: insertError } = await supabase!
       .from("thesis_updates")
       .insert({
         thesis_id: thesisId,
-        user_id: user.id,
+        user_id: userId,
         update_type: "ai_analysis",
         note: JSON.stringify(analysis),
       })

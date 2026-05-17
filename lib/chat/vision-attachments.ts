@@ -1,8 +1,16 @@
 import type { ImageBlockParam } from "@anthropic-ai/sdk/resources/messages/messages.js"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
+import { downloadFromFirebaseStorage } from "@/lib/firebase/storage"
 
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg"])
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+
+type VisionBackend = SupabaseClient | Firestore
+
+function isFirestoreBackend(backend: VisionBackend): backend is Firestore {
+  return "collection" in backend
+}
 
 export function isChatVisionEnabled() {
   const raw = process.env.SIGMA_CHAT_VISION_ENABLED?.trim().toLowerCase()
@@ -15,7 +23,7 @@ export function isChatVisionEnabled() {
  * Order matches attachmentIds so the model sees images in user selection order.
  */
 export async function buildVisionContentBlocksForAttachments(
-  supabase: SupabaseClient,
+  backend: VisionBackend,
   userId: string,
   attachmentIds: string[],
 ): Promise<{ blocks: ImageBlockParam[]; loadedIds: string[] }> {
@@ -24,13 +32,54 @@ export async function buildVisionContentBlocksForAttachments(
   }
 
   const deduped = [...new Set(attachmentIds)]
-  const { data: rows, error } = await supabase
-    .from("chat_uploaded_documents")
-    .select("id,bucket,storage_path,mime_type,file_extension,size_bytes")
-    .eq("user_id", userId)
-    .in("id", deduped)
+  let rows: Array<{
+    id: string
+    bucket: string
+    storage_path: string
+    mime_type: string
+    file_extension: string
+    size_bytes: number
+  }> = []
+  if (isFirestoreBackend(backend)) {
+    const snapshots = await Promise.all(
+      deduped.map((id) => backend.collection("chat_uploaded_documents").doc(id).get()),
+    )
+    rows = snapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot) => {
+        const row = (snapshot.data() ?? {}) as Record<string, unknown>
+        return {
+          id: snapshot.id,
+          user_id: typeof row.user_id === "string" ? row.user_id : "",
+          bucket: typeof row.bucket === "string" ? row.bucket : "",
+          storage_path: typeof row.storage_path === "string" ? row.storage_path : "",
+          mime_type: typeof row.mime_type === "string" ? row.mime_type : "",
+          file_extension: typeof row.file_extension === "string" ? row.file_extension : "",
+          size_bytes: typeof row.size_bytes === "number" ? row.size_bytes : 0,
+        }
+      })
+      .filter((row) => row.user_id === userId)
+      .map((row) => ({
+        id: row.id,
+        bucket: row.bucket,
+        storage_path: row.storage_path,
+        mime_type: row.mime_type,
+        file_extension: row.file_extension,
+        size_bytes: row.size_bytes,
+      }))
+  } else {
+    const { data, error } = await backend
+      .from("chat_uploaded_documents")
+      .select("id,bucket,storage_path,mime_type,file_extension,size_bytes")
+      .eq("user_id", userId)
+      .in("id", deduped)
+    if (error || !data?.length) {
+      return { blocks: [], loadedIds: [] }
+    }
+    rows = data as typeof rows
+  }
 
-  if (error || !rows?.length) {
+  if (!rows.length) {
     return { blocks: [], loadedIds: [] }
   }
 
@@ -46,10 +95,15 @@ export async function buildVisionContentBlocksForAttachments(
     const size = typeof row.size_bytes === "number" ? row.size_bytes : 0
     if (size > MAX_IMAGE_BYTES) continue
 
-    const { data: blob, error: dlError } = await supabase.storage.from(row.bucket).download(row.storage_path)
-    if (dlError || !blob) continue
-
-    const buf = Buffer.from(await blob.arrayBuffer())
+    let buf: Buffer
+    try {
+      buf = await downloadFromFirebaseStorage({
+        bucketName: row.bucket,
+        storagePath: row.storage_path,
+      })
+    } catch {
+      continue
+    }
     if (buf.byteLength > MAX_IMAGE_BYTES) continue
 
     let mediaType = (row.mime_type ?? "").toLowerCase().trim()

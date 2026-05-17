@@ -10,8 +10,13 @@ import FinancialRefreshButton from "@/components/thesis/FinancialRefreshButton"
 import { ThesisChallengeBanner } from "@/components/thesis/ThesisChallengeBanner"
 import type { ThesisChallengeEvent } from "@/components/thesis/ThesisChallengeBanner"
 import TrustedSourcesSection from "@/components/thesis/TrustedSourcesSection"
+import { getServerUserId } from "@/lib/data/auth"
+import {
+  loadFinancialSnapshotForTicker,
+  loadThesisPageAlertData,
+  loadThesisPageCoreData,
+} from "@/lib/data/load-thesis-page"
 import { refreshFinancialSnapshot } from "@/lib/financial/refresh"
-import { createAdminClient, createClient } from "@/lib/supabase/server"
 import {
   CORE_FINANCIAL_FIELDS,
   EXTENDED_FINANCIAL_FIELDS,
@@ -309,114 +314,35 @@ function getAnalysisPreview(analysis: ParsedAnalysisNote | null): string {
 
 export default async function ThesisDetailPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = await createClient()
-  const adminSupabase = createAdminClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const userId = await getServerUserId()
 
-  if (!user) {
+  if (!userId) {
     redirect("/login")
-  }
-
-  const { data: thesis } = await supabase
-    .from("theses")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (!thesis) {
-    notFound()
   }
 
   const dailyRefreshLimit = Number.parseInt(
     process.env.FINANCIAL_REFRESH_DAILY_LIMIT_PER_USER ?? "3",
     10,
   )
-  const startOfUtcDay = new Date()
-  startOfUtcDay.setUTCHours(0, 0, 0, 0)
 
-  const [
-    { data: assumptionsData },
-    { data: updatesData },
-    { data: trustedSourcesData },
-    { data: alertRulesData },
-    { data: financialSnapshotData },
-    { count: refreshUsedTodayCount },
-    { data: challengeEventsData },
-  ] = await Promise.all([
-    supabase
-      .from("assumptions")
-      .select("*")
-      .eq("thesis_id", id)
-      .eq("user_id", user.id)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("thesis_updates")
-      .select("id, update_type, note, old_status, new_status, created_at")
-      .eq("thesis_id", id)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("trusted_sources")
-      .select("id, thesis_id, user_id, name, url, source_type, created_at")
-      .eq("thesis_id", id)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("alert_rules")
-      .select(
-        "id, user_id, thesis_id, name, mode, min_confidence, include_keywords, exclude_keywords, is_enabled, created_at, updated_at",
-      )
-      .eq("thesis_id", id)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true }),
-    adminSupabase
-      .from("financial_snapshots")
-      .select("id, ticker, provider, as_of, fetched_at, stale_after, payload, coverage")
-      .eq("ticker", thesis.ticker.trim().toUpperCase())
-      .maybeSingle(),
-    supabase
-      .from("thesis_updates")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("update_type", "financial_refresh")
-      .gte("created_at", startOfUtcDay.toISOString()),
-    supabase
-      .from("events")
-      .select("id, thesis_id, event_detail, created_at")
-      .eq("thesis_id", id)
-      .eq("user_id", user.id)
-      .eq("event_type", "trusted_source_challenge")
-      .eq("is_reviewed", false)
-      .order("created_at", { ascending: false }),
-  ])
+  const coreData = await loadThesisPageCoreData(userId, id)
+  const thesis = coreData.thesis
 
-  const assumptions: Assumption[] = assumptionsData ?? []
-  const updates: ThesisUpdate[] = updatesData ?? []
-  const trustedSources: TrustedSource[] = trustedSourcesData ?? []
-  const alertRulesBase: AlertRule[] = alertRulesData ?? []
-  const alertRuleIds = alertRulesBase.map((rule) => rule.id)
-  const alertRuleSourcesByRule = new Map<string, string[]>()
-
-  if (alertRuleIds.length > 0) {
-    const { data: alertRuleSourceRows } = await supabase
-      .from("alert_rule_sources")
-      .select("alert_rule_id, trusted_source_id")
-      .in("alert_rule_id", alertRuleIds)
-
-    for (const row of alertRuleSourceRows ?? []) {
-      const current = alertRuleSourcesByRule.get(row.alert_rule_id) ?? []
-      current.push(row.trusted_source_id)
-      alertRuleSourcesByRule.set(row.alert_rule_id, current)
-    }
+  if (!thesis) {
+    notFound()
   }
 
-  const alertRules: AlertRuleWithSources[] = alertRulesBase.map((rule) => ({
-    ...rule,
-    sourceIds: alertRuleSourcesByRule.get(rule.id) ?? [],
-  }))
+  const [alertData, financialSnapshotData] = await Promise.all([
+    loadThesisPageAlertData(userId, id),
+    loadFinancialSnapshotForTicker(thesis.ticker),
+  ])
+
+  const assumptions: Assumption[] = coreData.assumptions
+  const updates: ThesisUpdate[] = coreData.updates
+  const trustedSources: TrustedSource[] = alertData.trustedSources
+  const alertRules: AlertRuleWithSources[] = alertData.alertRules
+  const refreshUsedTodayCount = coreData.refreshUsedTodayCount
+  const challengeEventsData = coreData.challengeEvents
   const challengeEvents: ThesisChallengeEvent[] = (challengeEventsData ?? [])
     .filter((event) => event.event_detail !== null)
     .map((event) => ({

@@ -10,7 +10,6 @@ import {
 import { DashboardDeleteThesis } from "@/components/thesis/DashboardDeleteThesis"
 import UpdateStatusModal from "@/components/thesis/UpdateStatusModal"
 import { parseSigmaMonitorSignalForUi } from "@/lib/chat/monitor-logic"
-import { createClient } from "@/lib/supabase/client"
 
 type DashboardThesis = {
   id: string
@@ -180,66 +179,30 @@ export default function Page() {
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createClient()
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const [thesesResult, eventsResult, updatesResult, monitorResult] = await Promise.all([
-        supabase
-          .from("theses")
-          .select(
-            "id, ticker, company_name, status, confidence_level, created_at, updated_at, thesis_statement",
-          )
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("events")
-          .select("id, thesis_id, event_detail, created_at")
-          .eq("user_id", user.id)
-          .eq("is_reviewed", false)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("thesis_updates")
-          .select("thesis_id, note, created_at, new_status")
-          .eq("user_id", user.id)
-          .eq("update_type", "status_change")
-          .not("note", "is", null)
-          .order("created_at", { ascending: false }),
+      const [convictionsResult, monitorResult] = await Promise.all([
+        fetch("/api/convictions", { method: "GET" }),
         fetch("/api/chat/monitor", { method: "GET" })
           .then((response) => response.json())
           .catch(() => ({ monitor: null })),
       ])
 
-      const latestNoteByThesis = new Map<string, { note: string; status: string }>()
-      for (const update of updatesResult.data ?? []) {
-        if (!latestNoteByThesis.has(update.thesis_id) && update.note && update.new_status) {
-          latestNoteByThesis.set(update.thesis_id, { note: update.note, status: update.new_status })
-        }
+      if (convictionsResult.status === 401) {
+        router.push("/login")
+        return
       }
 
-      setTheses(
-        (thesesResult.data ?? []).map((thesis) => ({
-          ...thesis,
-          latest_status_note: latestNoteByThesis.get(thesis.id)?.note ?? null,
-          latest_status_note_status: latestNoteByThesis.get(thesis.id)?.status ?? null,
-        })),
-      )
+      if (!convictionsResult.ok) {
+        setIsLoading(false)
+        return
+      }
 
-      setChallengeEvents(
-        (eventsResult.data ?? []).map((e) => ({
-          id: e.id,
-          thesisId: e.thesis_id,
-          eventDetail: e.event_detail ?? "",
-          createdAt: e.created_at ?? null,
-        })),
-      )
+      const convictionsPayload = (await convictionsResult.json()) as {
+        theses?: DashboardThesis[]
+        challengeEvents?: ThesisChallengeEvent[]
+      }
+
+      setTheses(convictionsPayload.theses ?? [])
+      setChallengeEvents(convictionsPayload.challengeEvents ?? [])
 
       if (monitorResult && typeof monitorResult === "object" && "monitor" in monitorResult && monitorResult.monitor) {
         setMonitorSnapshot(monitorResult.monitor as MonitorSnapshot)

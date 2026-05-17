@@ -1,6 +1,11 @@
 import webpush from "web-push"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Firestore } from "firebase-admin/firestore"
 import type { Database } from "@/types/database"
+import {
+  deletePushSubscriptionById,
+  listPushSubscriptionsByUser,
+} from "@/lib/firebase/alerting"
 import { isWebPushConfigured } from "@/lib/push/vapid"
 
 let vapidInitialized = false
@@ -34,7 +39,7 @@ export type AlertPushPayload = {
  * Invalid endpoints (410/404) are removed from the database.
  */
 export async function sendAlertPushToUser(
-  supabase: SupabaseClient<Database>,
+  backend: SupabaseClient<Database> | Firestore,
   userId: string,
   payload: AlertPushPayload,
 ): Promise<{ sent: number; removed: number }> {
@@ -42,12 +47,17 @@ export async function sendAlertPushToUser(
     return { sent: 0, removed: 0 }
   }
 
-  const { data: rows, error } = await supabase
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
-    .eq("user_id", userId)
+  const rows =
+    "collection" in backend
+      ? await listPushSubscriptionsByUser(backend, userId)
+      : (
+          await backend
+            .from("push_subscriptions")
+            .select("id, endpoint, p256dh, auth")
+            .eq("user_id", userId)
+        ).data ?? []
 
-  if (error || !rows?.length) {
+  if (!rows.length) {
     return { sent: 0, removed: 0 }
   }
 
@@ -89,9 +99,17 @@ export async function sendAlertPushToUser(
           ? Number((err as { statusCode: number }).statusCode)
           : 0
       if (statusCode === 404 || statusCode === 410) {
-        const { error: delError } = await supabase.from("push_subscriptions").delete().eq("id", row.id)
-        if (!delError) {
+        if ("collection" in backend) {
+          await deletePushSubscriptionById(backend, row.id)
           removed += 1
+        } else {
+          const { error: delError } = await backend
+            .from("push_subscriptions")
+            .delete()
+            .eq("id", row.id)
+          if (!delError) {
+            removed += 1
+          }
         }
       } else {
         console.warn(

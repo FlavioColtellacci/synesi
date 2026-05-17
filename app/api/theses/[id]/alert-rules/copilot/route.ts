@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server"
+import { getServerUserId } from "@/lib/data/auth"
+import { isFirebaseBackend } from "@/lib/data/backend"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/admin"
+import {
+  getOwnedThesis as getOwnedFirebaseThesis,
+  listTrustedSourcesByThesis as listFirebaseTrustedSourcesByThesis,
+} from "@/lib/firebase/alerting"
 import { createClient } from "@/lib/supabase/server"
 import { createLlm, getTextModel } from "@/lib/llm"
 import { getWebResearchContext } from "@/lib/web-research"
@@ -223,34 +230,61 @@ export async function POST(
       return NextResponse.json({ error: "Missing intent" }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const userId = await getServerUserId()
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: thesis } = await supabase
-      .from("theses")
-      .select("id, user_id, ticker, company_name, thesis_statement")
-      .eq("id", thesisId)
-      .eq("user_id", user.id)
-      .maybeSingle()
+    let thesis: { ticker: string; company_name: string; thesis_statement: string } | null = null
+    let existingSources: Array<{ name: string; url: string | null; source_type: string }> = []
 
-    if (!thesis) {
-      return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+    if (isFirebaseBackend()) {
+      const firestore = getFirebaseAdminFirestore()
+      const firebaseThesis = await getOwnedFirebaseThesis(firestore, userId, thesisId)
+      if (!firebaseThesis) {
+        return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+      }
+      thesis = {
+        ticker: firebaseThesis.ticker ?? "",
+        company_name: firebaseThesis.company_name ?? "",
+        thesis_statement: firebaseThesis.thesis_statement ?? "",
+      }
+      const firebaseSources = await listFirebaseTrustedSourcesByThesis(firestore, userId, thesisId)
+      existingSources = firebaseSources
+        .slice()
+        .reverse()
+        .map((source) => ({
+          name: source.name,
+          url: source.url,
+          source_type: source.source_type,
+        }))
+    } else {
+      const supabase = await createClient()
+      const { data: supabaseThesis } = await supabase
+        .from("theses")
+        .select("id, user_id, ticker, company_name, thesis_statement")
+        .eq("id", thesisId)
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (!supabaseThesis) {
+        return NextResponse.json({ error: "Thesis not found" }, { status: 404 })
+      }
+      thesis = {
+        ticker: supabaseThesis.ticker ?? "",
+        company_name: supabaseThesis.company_name ?? "",
+        thesis_statement: supabaseThesis.thesis_statement ?? "",
+      }
+      const { data: supabaseSources } = await supabase
+        .from("trusted_sources")
+        .select("name, url, source_type")
+        .eq("thesis_id", thesisId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+      existingSources = supabaseSources ?? []
     }
 
-    const { data: existingSources } = await supabase
-      .from("trusted_sources")
-      .select("name, url, source_type")
-      .eq("thesis_id", thesisId)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-
-    const brave = await gatherBraveContextForAlerts(intent, thesis.ticker ?? "", thesis.company_name ?? "")
+    const brave = await gatherBraveContextForAlerts(intent, thesis.ticker, thesis.company_name)
 
     const system = `You are Sigma (Synesi). You help set up deterministic personalized alerts for an investment thesis.\n\nReturn VALID JSON ONLY (no markdown), matching this exact shape:\n{\n  \"recommendedMode\": \"only_sources\" | \"include_sources\" | \"exclude_sources\",\n  \"recommendedMinConfidence\": \"high\" | \"medium\",\n  \"includeKeywords\": string[],\n  \"excludeKeywords\": string[],\n  \"sources\": Array<{\n    \"sourceType\": \"analyst\" | \"news_outlet\" | \"newsletter\" | \"sec_filing\" | \"other\",\n    \"nameCandidates\": string[],\n    \"urlCandidates\": string[]\n  }>\n}\n\nRules:\n- Provide 1-5 sources.\n- urlCandidates MUST be direct RSS/Atom or feed-like links only.\n- When WEB RESEARCH is included in the user message, STRONGLY PREFER urlCandidates that appear in that research (titles/snippets/URL list) and that look like feeds (rss, atom, /feed, .xml).\n- Never invent URLs. If web search did not surface a feed for an outlet, use empty urlCandidates for that source (downstream logic may add Google News RSS fallbacks).\n- Never output generic homepages, profile pages, or stock quote pages as urlCandidates.\n- includeKeywords/excludeKeywords should be short (1-3 words each) and lowercase-friendly.\n- Be conservative: if unsure, leave lists empty.\n`
 
@@ -258,7 +292,7 @@ export async function POST(
       ? `\n\n${brave.merged}\n`
       : "\n\n(No live web research available; rely on known feed patterns and conservative guesses; empty urlCandidates when uncertain.)\n"
 
-    const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${(existingSources ?? [])
+    const userPrompt = `THESIS:\nTicker: ${thesis.ticker}\nCompany: ${thesis.company_name}\nThesis statement: ${thesis.thesis_statement}\n\nEXISTING TRUSTED SOURCES (already saved):\n${existingSources
       .map((s) => `- ${s.name} (${s.source_type}) ${s.url ?? ""}`.trim())
       .join("\n")}\n\nUSER INTENT (plain language):\n${intent}\n${braveSection}`
 

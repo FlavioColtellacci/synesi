@@ -2,12 +2,18 @@
 
 import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { OAuthProviderButtons } from '@/components/auth/OAuthProviderButtons'
+import { isFirebaseBackend } from '@/lib/data/backend'
+import { getFirebaseClientAuth } from '@/lib/firebase/client'
 import { createClient } from '@/lib/supabase/client'
 import { trackFunnelEvent } from '@/lib/analytics'
 
 export default function SignupPage() {
+  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const firebaseAuth = useMemo(() => getFirebaseClientAuth(), [])
 
   useEffect(() => {
     trackFunnelEvent("signup_start")
@@ -33,24 +39,48 @@ export default function SignupPage() {
     setSuccess(false)
     setIsLoading(true)
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    })
+    try {
+      if (isFirebaseBackend()) {
+        const normalizedEmail = email.trim().toLowerCase()
+        const userCredential = await createUserWithEmailAndPassword(
+          firebaseAuth,
+          normalizedEmail,
+          password
+        )
+        if (fullName.trim()) {
+          await updateProfile(userCredential.user, { displayName: fullName.trim() })
+        }
+        const idToken = await userCredential.user.getIdToken()
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        })
+        if (!response.ok) {
+          throw new Error('Could not create a secure session. Please try again.')
+        }
+        router.push('/app/dashboard')
+      } else {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+          },
+        })
+        if (signUpError) {
+          throw signUpError
+        }
+      }
 
-    if (signUpError) {
-      setError(signUpError.message)
+      setSuccess(true)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not create account.')
+    } finally {
       setIsLoading(false)
-      return
     }
-
-    setSuccess(true)
-    setIsLoading(false)
   }
 
   return (
@@ -126,7 +156,9 @@ export default function SignupPage() {
 
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
       {success ? (
-        <p className="mt-4 text-sm text-synesi-intact">Check your email to confirm your account.</p>
+        <p className="mt-4 text-sm text-synesi-intact">
+          {isFirebaseBackend() ? 'Account created. Redirecting you to your dashboard...' : 'Check your email to confirm your account.'}
+        </p>
       ) : null}
 
       <p className="mt-4 text-center font-[var(--font-sans)] text-sm text-synesi-muted">
