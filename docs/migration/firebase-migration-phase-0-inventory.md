@@ -127,11 +127,11 @@ SDK config captured:
 
 Initialized/updated:
 
-- `firebase.json`
+- `config/firebase/firebase.json`
 - `.firebaserc`
-- `firestore.rules`
-- `firestore.indexes.json`
-- `storage.rules`
+- `config/firebase/firestore.rules`
+- `config/firebase/firestore.indexes.json`
+- `config/firebase/storage.rules`
 
 Current default stance is deny-by-default rules for Firestore and Storage until Phase 2/3 rule rollout.
 

@@ -1,0 +1,19 @@
+{
+  "files.exclude": {
+    "**/.next": true,
+    "**/.next-playwright": true,
+    "**/node_modules": true,
+    "**/test-results": true,
+    "**/playwright-report": true,
+    "**/tsconfig.tsbuildinfo": true,
+    "**/firebase-debug.log": true,
+    "**/.env.vercel.*": true
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json",
+    "tsconfig.json": "tsconfig.tsbuildinfo, next-env.d.ts",
+    ".env.example": ".env.local",
+    "next.config.ts": "vercel.json, proxy.ts, postcss.config.mjs, eslint.config.mjs, components.json"
+  }
+}

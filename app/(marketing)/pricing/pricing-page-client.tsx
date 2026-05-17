@@ -51,7 +51,12 @@ export function PricingPageContent() {
         body: JSON.stringify({ plan }),
       })
 
-      const data: unknown = await response.json()
+      const data = (await response.json().catch(() => null)) as unknown
+
+      if (response.status === 401) {
+        window.location.href = '/login'
+        return
+      }
 
       if (
         !response.ok ||

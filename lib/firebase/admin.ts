@@ -10,14 +10,18 @@ function parseServiceAccountEnv(): ServiceAccount {
   }
 
   try {
-    const parsed = JSON.parse(raw) as ServiceAccount
-    if (!parsed.projectId || !parsed.clientEmail || !parsed.privateKey) {
+    const parsed = JSON.parse(raw) as Record<string, string | undefined>
+    const normalized: ServiceAccount = {
+      projectId: parsed.projectId ?? parsed.project_id,
+      clientEmail: parsed.clientEmail ?? parsed.client_email,
+      privateKey: (parsed.privateKey ?? parsed.private_key)?.replace(/\\n/g, "\n"),
+    }
+
+    if (!normalized.projectId || !normalized.clientEmail || !normalized.privateKey) {
       throw new Error("Service account JSON missing required fields")
     }
-    return {
-      ...parsed,
-      privateKey: parsed.privateKey.replace(/\\n/g, "\n"),
-    }
+
+    return normalized
   } catch (error) {
     throw new Error(
       `Invalid FIREBASE_SERVICE_ACCOUNT JSON: ${error instanceof Error ? error.message : String(error)}`
